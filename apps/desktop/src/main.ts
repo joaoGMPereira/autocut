@@ -40,11 +40,11 @@ function getAppDataDir(): string {
 
 // ─── Service wait ─────────────────────────────────────────────────────────────
 
-function waitForService(url: string, timeoutMs = 30000): Promise<void> {
+function waitForService(url: string, healthPath = '/health', timeoutMs = 30000): Promise<void> {
   return new Promise((resolve, reject) => {
     const start = Date.now();
     function check() {
-      http.get(`${url}/health`, (res) => {
+      http.get(`${url}${healthPath}`, (res) => {
         if (res.statusCode === 200) return resolve();
         retry();
       }).on('error', retry);
@@ -162,8 +162,8 @@ app.whenReady().then(async () => {
   startNextProcess();
 
   try {
-    await waitForService(GO_URL);
-    if (IS_DEV) await waitForService(WEB_URL);
+    await waitForService(GO_URL, '/health');
+    if (IS_DEV) await waitForService(WEB_URL, '/api/health');
   } catch (e) {
     console.error('Services failed to start:', e);
   }
