@@ -1,0 +1,23 @@
+{
+  "name": "@autocut/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "main": "compiled/main.js",
+  "scripts": {
+    "dev": "node scripts/build.mjs && electron compiled/main.js",
+    "build": "node scripts/build.mjs",
+    "dist": "electron-builder --config electron-builder.yml",
+    "dist:mac": "electron-builder --mac --config electron-builder.yml",
+    "dist:win": "electron-builder --win --config electron-builder.yml"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
+    "electron": "^33.0.0",
+    "electron-builder": "^26.0.0",
+    "typescript": "^5.8.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.0"
+  }
+}

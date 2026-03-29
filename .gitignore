@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+release/
+compiled/
+.next/
+standalone-pkg/
+
+# Go binaries
+bin/
+apps/desktop/bin/
+
+# Environment files
+.env*.local
+.env.local
+.env.development.local
+.env.production.local
+
+# Turborepo
+.turbo/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Electron build
+apps/desktop/release/
+
+# Go build artifacts
+server/bin/

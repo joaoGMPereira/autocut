@@ -1,0 +1,69 @@
+appId: com.joaoGMPereira.autocut
+productName: AutoCut
+artifactName: "AutoCut-${version}-${arch}.${ext}"
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - compiled/**
+  - package.json
+
+asar: true
+
+# ─── macOS ────────────────────────────────────────────────────────────────────
+mac:
+  category: public.app-category.video
+  target:
+    - dmg
+    - zip
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  extraResources:
+    - from: bin/server
+      to: server
+
+dmg:
+  sign: false
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+# ─── Windows ──────────────────────────────────────────────────────────────────
+win:
+  artifactName: "AutoCut-${version}-win-${arch}.${ext}"
+  target:
+    - nsis
+    - zip
+  icon: build/icon.ico
+  extraResources:
+    - from: bin/server.exe
+      to: server.exe
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+  allowElevation: false
+  deleteAppDataOnUninstall: false
+  artifactName: "AutoCut-${version}-win-${arch}-setup.${ext}"
+
+# ─── Next.js standalone (produção) ────────────────────────────────────────────
+extraResources:
+  - from: ../web/standalone-pkg
+    to: web-standalone
+    filter:
+      - "**/*"
+
+# ─── Auto-Update ──────────────────────────────────────────────────────────────
+publish:
+  provider: github
+  owner: joaoGMPereira
+  repo: autocut
