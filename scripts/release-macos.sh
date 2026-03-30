@@ -440,7 +440,7 @@ prepare_standalone_package() {
   rm -rf apps/web/standalone-pkg
   rsync -aL apps/web/.next/standalone/ apps/web/standalone-pkg/
 
-  for dep in styled-jsx postcss @next @swc caniuse-lite; do
+  for dep in react react-dom styled-jsx postcss @next @swc caniuse-lite; do
     cp -R apps/web/standalone-pkg/node_modules/.pnpm/next@*/node_modules/$dep \
       apps/web/standalone-pkg/apps/web/node_modules/ 2>/dev/null || true
   done

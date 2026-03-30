@@ -9,15 +9,18 @@ import (
 )
 
 type Config struct {
-	Host string `yaml:"host"`
-	Port int    `yaml:"port"`
-	Dir  string `yaml:"-"`
+	Host    string `yaml:"host"`
+	Port    int    `yaml:"port"`
+	Env     string `yaml:"env"`
+	Dir     string `yaml:"-"`
+	DataDir string `yaml:"data_dir"` // empty = use ~/.autocut/
 }
 
 func Load(dir string) (*Config, error) {
 	cfg := &Config{
 		Host: "127.0.0.1",
 		Port: 4070,
+		Env:  "development",
 		Dir:  dir,
 	}
 

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, shell, utilityProcess } from 'electron';
 import { spawn, ChildProcess } from 'child_process';
 import path from 'path';
 import http from 'http';
@@ -19,7 +19,8 @@ const MAX_RESTARTS = 3;
 
 let mainWindow: BrowserWindow | null = null;
 let goProcess: ChildProcess | null = null;
-let nextProcess: ChildProcess | null = null;
+let nextDevProcess: ChildProcess | null = null;
+let nextProdProcess: Electron.UtilityProcess | null = null;
 let goRestartCount = 0;
 let currentUpdateStatus: UpdateProgress = { status: 'idle' };
 
@@ -98,7 +99,7 @@ function killGoServer(): void {
 
 function startNextProcess(): void {
   if (IS_DEV) {
-    nextProcess = spawn('pnpm', ['--filter', '@autocut/web', 'dev', '--port', String(WEB_PORT)], {
+    nextDevProcess = spawn('pnpm', ['--filter', '@autocut/web', 'dev', '--port', String(WEB_PORT)], {
       cwd: path.join(__dirname, '..', '..', '..'),
       detached: false,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -107,34 +108,36 @@ function startNextProcess(): void {
         NEXT_PUBLIC_GO_URL: GO_URL,
       },
     });
+    nextDevProcess.stdout?.on('data', (d: Buffer) => process.stdout.write(`[next] ${d}`));
+    nextDevProcess.stderr?.on('data', (d: Buffer) => process.stderr.write(`[next] ${d}`));
   } else {
-    // Production: spawn the bundled standalone Next.js server using Electron's
-    // own Node.js runtime (ELECTRON_RUN_AS_NODE=1 makes the binary behave as node).
+    // Production: use utilityProcess.fork() — Electron's official API for running
+    // Node.js scripts in packaged apps. Does not require the RunAsNode fuse.
     const standaloneDir = path.join(process.resourcesPath, 'web-standalone');
     const serverScript = path.join(standaloneDir, 'apps', 'web', 'server.js');
 
-    nextProcess = spawn(process.execPath, [serverScript], {
-      cwd: standaloneDir,
-      detached: false,
-      stdio: ['ignore', 'pipe', 'pipe'],
+    nextProdProcess = utilityProcess.fork(serverScript, [], {
+      stdio: 'pipe',
       env: {
         ...process.env,
-        ELECTRON_RUN_AS_NODE: '1',
         PORT: String(WEB_PORT),
         HOSTNAME: '127.0.0.1',
         NODE_ENV: 'production',
       },
     });
+    nextProdProcess.stdout?.on('data', (d: Buffer) => process.stdout.write(`[next] ${d}`));
+    nextProdProcess.stderr?.on('data', (d: Buffer) => process.stderr.write(`[next] ${d}`));
   }
-
-  nextProcess.stdout?.on('data', (d: Buffer) => process.stdout.write(`[next] ${d}`));
-  nextProcess.stderr?.on('data', (d: Buffer) => process.stderr.write(`[next] ${d}`));
 }
 
 function killNextProcess(): void {
-  if (nextProcess && !nextProcess.killed) {
-    nextProcess.kill('SIGTERM');
-    nextProcess = null;
+  if (nextDevProcess && !nextDevProcess.killed) {
+    nextDevProcess.kill('SIGTERM');
+    nextDevProcess = null;
+  }
+  if (nextProdProcess) {
+    nextProdProcess.kill();
+    nextProdProcess = null;
   }
 }
 
