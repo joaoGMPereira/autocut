@@ -42,7 +42,6 @@ win:
   target:
     - nsis
     - zip
-  icon: build/icon.ico
   extraResources:
     - from: bin/server.exe
       to: server.exe
@@ -67,3 +66,5 @@ publish:
   provider: github
   owner: joaoGMPereira
   repo: autocut
+  releaseType: release
+  private: false

@@ -1,0 +1,46 @@
+{
+  "segments": [
+    {
+      "start": 0.0,
+      "end": 3.2,
+      "text": "Welcome to today's video",
+      "words": [
+        {"word": "Welcome", "start": 0.0, "end": 0.6},
+        {"word": "to", "start": 0.7, "end": 0.9},
+        {"word": "today's", "start": 1.0, "end": 1.5},
+        {"word": "video", "start": 1.6, "end": 2.1}
+      ]
+    },
+    {
+      "start": 3.5,
+      "end": 7.8,
+      "text": "In this segment we cover the main topic",
+      "words": [
+        {"word": "In", "start": 3.5, "end": 3.7},
+        {"word": "this", "start": 3.8, "end": 4.0},
+        {"word": "segment", "start": 4.1, "end": 4.6},
+        {"word": "we", "start": 4.7, "end": 4.9},
+        {"word": "cover", "start": 5.0, "end": 5.4},
+        {"word": "the", "start": 5.5, "end": 5.7},
+        {"word": "main", "start": 5.8, "end": 6.2},
+        {"word": "topic", "start": 6.3, "end": 6.8}
+      ]
+    },
+    {
+      "start": 8.1,
+      "end": 12.4,
+      "text": "Thanks for watching and see you next time",
+      "words": [
+        {"word": "Thanks", "start": 8.1, "end": 8.5},
+        {"word": "for", "start": 8.6, "end": 8.8},
+        {"word": "watching", "start": 8.9, "end": 9.4},
+        {"word": "and", "start": 9.5, "end": 9.7},
+        {"word": "see", "start": 9.8, "end": 10.1},
+        {"word": "you", "start": 10.2, "end": 10.4},
+        {"word": "next", "start": 10.5, "end": 10.9},
+        {"word": "time", "start": 11.0, "end": 11.5}
+      ]
+    }
+  ],
+  "language": "en"
+}
