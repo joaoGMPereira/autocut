@@ -519,17 +519,23 @@ package_and_sign() {
 
   # Se o electron-builder falhar, garantir que o stash é restaurado antes de
   # propagar o erro — caso contrário artefatos da arch anterior são perdidos.
-  # Configuração isolada para builds paralelos (output dir customizado)
+  # Configuração isolada para builds paralelos (output dir e binary path customizados)
   local _eb_config="electron-builder.yml"
   local _output_dir="${RELEASE_OUTPUT_DIR:-release}"
+  local _binary_name="${SERVER_BINARY_NAME:-server}"
   if [[ "$_output_dir" != "release" ]]; then
     # mktemp sem sufixo — BSD mktemp do macOS não suporta XXXXXX.yml
     local _tmp_config
     _tmp_config=$(mktemp /tmp/eb-mac-XXXXXX)
-    sed "s|output: release\$|output: ${_output_dir}|" \
+    # Substituir output dir E o caminho do server binary:
+    # - "from: bin/server" → "from: bin/server-arm64" (ou server-x64)
+    # Isso evita race condition onde arm64 sobrescreve bin/server enquanto x64 está
+    # empacotando — cada worker aponta para seu próprio binário isolado.
+    sed -e "s|output: release\$|output: ${_output_dir}|" \
+        -e "s|from: bin/server\$|from: bin/${_binary_name}|" \
         "$ROOT_DIR/apps/desktop/electron-builder.yml" > "$_tmp_config"
     _eb_config="$_tmp_config"
-    info "Config isolado: output=${_output_dir}"
+    info "Config isolado: output=${_output_dir}, server=bin/${_binary_name}"
   fi
 
   local dist_exit=0
