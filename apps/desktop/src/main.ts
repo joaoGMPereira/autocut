@@ -97,17 +97,35 @@ function killGoServer(): void {
 // ─── Next.js server ───────────────────────────────────────────────────────────
 
 function startNextProcess(): void {
-  if (!IS_DEV) return; // prod: standalone server started separately
+  if (IS_DEV) {
+    nextProcess = spawn('pnpm', ['--filter', '@autocut/web', 'dev', '--port', String(WEB_PORT)], {
+      cwd: path.join(__dirname, '..', '..', '..'),
+      detached: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        NEXT_PUBLIC_GO_URL: GO_URL,
+      },
+    });
+  } else {
+    // Production: spawn the bundled standalone Next.js server using Electron's
+    // own Node.js runtime (ELECTRON_RUN_AS_NODE=1 makes the binary behave as node).
+    const standaloneDir = path.join(process.resourcesPath, 'web-standalone');
+    const serverScript = path.join(standaloneDir, 'apps', 'web', 'server.js');
 
-  nextProcess = spawn('pnpm', ['--filter', '@autocut/web', 'dev', '--port', String(WEB_PORT)], {
-    cwd: path.join(__dirname, '..', '..', '..'),
-    detached: false,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: {
-      ...process.env,
-      NEXT_PUBLIC_GO_URL: GO_URL,
-    },
-  });
+    nextProcess = spawn(process.execPath, [serverScript], {
+      cwd: standaloneDir,
+      detached: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: '1',
+        PORT: String(WEB_PORT),
+        HOSTNAME: '127.0.0.1',
+        NODE_ENV: 'production',
+      },
+    });
+  }
 
   nextProcess.stdout?.on('data', (d: Buffer) => process.stdout.write(`[next] ${d}`));
   nextProcess.stderr?.on('data', (d: Buffer) => process.stderr.write(`[next] ${d}`));
@@ -163,7 +181,7 @@ app.whenReady().then(async () => {
 
   try {
     await waitForService(GO_URL, '/health');
-    if (IS_DEV) await waitForService(WEB_URL, '/api/health');
+    await waitForService(WEB_URL, '/api/health');
   } catch (e) {
     console.error('Services failed to start:', e);
   }

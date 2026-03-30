@@ -10,7 +10,7 @@ interface AppState {
 
 export const useAppStore = create<AppState>((set) => ({
   updateStatus: { status: 'idle' },
-  goUrl: process.env.NEXT_PUBLIC_GO_URL ?? 'http://127.0.0.1:4071',
+  goUrl: process.env.NEXT_PUBLIC_GO_URL ?? 'http://127.0.0.1:4070',
   setUpdateStatus: (status) => set({ updateStatus: status }),
   setGoUrl: (goUrl) => set({ goUrl }),
 }));
