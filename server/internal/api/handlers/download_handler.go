@@ -4,33 +4,42 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 
+	"github.com/joaoGMPereira/autocut/server/internal/database"
 	"github.com/joaoGMPereira/autocut/server/internal/downloader"
 	"github.com/joaoGMPereira/autocut/server/internal/hub"
 )
 
 // DownloadHandler handles video download requests (YouTube + Twitch).
 type DownloadHandler struct {
-	hub  *hub.SSEHub
-	ytDl *downloader.YouTubeDownloader
-	twDl *downloader.TwitchDownloader
-	log  *slog.Logger
+	hub          *hub.SSEHub
+	ytDl         *downloader.YouTubeDownloader
+	twDl         *downloader.TwitchDownloader
+	pipelineRepo *database.PipelineRunRepo
+	log          *slog.Logger
 }
 
 // NewDownloadHandler creates a DownloadHandler.
-func NewDownloadHandler(h *hub.SSEHub, ytDl *downloader.YouTubeDownloader, twDl *downloader.TwitchDownloader) *DownloadHandler {
+func NewDownloadHandler(h *hub.SSEHub, ytDl *downloader.YouTubeDownloader, twDl *downloader.TwitchDownloader, pipelineRepo *database.PipelineRunRepo) *DownloadHandler {
 	return &DownloadHandler{
-		hub:  h,
-		ytDl: ytDl,
-		twDl: twDl,
-		log:  slog.With("component", "api", "handler", "download"),
+		hub:          h,
+		ytDl:         ytDl,
+		twDl:         twDl,
+		pipelineRepo: pipelineRepo,
+		log:          slog.With("component", "api", "handler", "download"),
 	}
 }
 
 type downloadRequest struct {
-	URL       string `json:"url"`
-	Type      string `json:"type"`       // "youtube" | "twitch"
-	OutputDir string `json:"output_dir"`
+	URL           string `json:"url"`
+	Type          string `json:"type"`       // "youtube" | "twitch"
+	OutputDir     string `json:"output_dir"`
+	Quality       string `json:"quality"`        // "720p" | "1080p" | "best" | "" (default 1080p)
+	WithThumbnail bool   `json:"with_thumbnail"` // download thumbnail alongside video
+	WithMetadata  bool   `json:"with_metadata"`  // include title, duration_sec, platform in done event
+	SessionID     string `json:"session_id"`
 }
 
 // PostDownload handles POST /api/download.
@@ -48,8 +57,8 @@ func (h *DownloadHandler) PostDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.OutputDir == "" {
-		writeError(w, http.StatusBadRequest, "missing_field", "output_dir is required")
-		return
+		req.OutputDir = filepath.Join(os.TempDir(), "autocut-downloads")
+		os.MkdirAll(req.OutputDir, 0o755)
 	}
 	if req.Type == "" {
 		req.Type = "youtube"
@@ -80,22 +89,50 @@ func (h *DownloadHandler) runDownload(jobID string, req downloadRequest) {
 			h.hub.Publish(jobID, hub.SSEEvent{Type: "error", Data: map[string]string{"message": err.Error()}})
 			return
 		}
-		h.hub.Publish(jobID, hub.SSEEvent{
-			Type: "done",
-			Data: map[string]string{"video_id": info.VideoID, "file_path": info.FilePath},
-		})
+		data := map[string]interface{}{
+			"video_id":  info.VideoID,
+			"file_path": info.FilePath,
+			"success":   true,
+		}
+		if req.WithMetadata {
+			data["title"] = info.Title
+			data["duration_sec"] = info.Duration.Seconds()
+			data["platform"] = "twitch"
+		}
+		h.hub.Publish(jobID, hub.SSEEvent{Type: "done", Data: data})
+		if req.SessionID != "" {
+			persistStepOutput(h.pipelineRepo, req.SessionID, "download", data)
+		}
 
 	default: // youtube
-		info, err := h.ytDl.Download(req.URL, req.OutputDir)
+		info, err := h.ytDl.DownloadWithOptions(req.URL, req.OutputDir, req.Quality)
 		if err != nil {
 			h.log.Error("youtube download failed", "jobID", jobID, "err", err)
 			h.hub.Publish(jobID, hub.SSEEvent{Type: "error", Data: map[string]string{"message": err.Error()}})
 			return
 		}
-		h.hub.Publish(jobID, hub.SSEEvent{
-			Type: "done",
-			Data: map[string]string{"video_id": info.VideoID, "file_path": info.FilePath},
-		})
+		data := map[string]interface{}{
+			"video_id":  info.VideoID,
+			"file_path": info.FilePath,
+			"success":   true,
+		}
+		if req.WithThumbnail && info.ThumbnailURL != "" {
+			thumbPath := filepath.Join(req.OutputDir, info.VideoID+".thumb.jpg")
+			if err := h.ytDl.DownloadThumbnail(req.URL, thumbPath); err != nil {
+				h.log.Warn("thumbnail download failed", "jobID", jobID, "err", err)
+			} else {
+				data["thumbnail_path"] = thumbPath
+			}
+		}
+		if req.WithMetadata {
+			data["title"] = info.Title
+			data["duration_sec"] = info.Duration.Seconds()
+			data["platform"] = "youtube"
+		}
+		h.hub.Publish(jobID, hub.SSEEvent{Type: "done", Data: data})
+		if req.SessionID != "" {
+			persistStepOutput(h.pipelineRepo, req.SessionID, "download", data)
+		}
 	}
 }
 

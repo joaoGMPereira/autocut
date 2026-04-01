@@ -3,12 +3,15 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"github.com/joaoGMPereira/autocut/server/internal/api/handlers"
 	"github.com/joaoGMPereira/autocut/server/internal/config"
+	"github.com/joaoGMPereira/autocut/server/internal/database"
 	"github.com/joaoGMPereira/autocut/server/internal/hub"
 )
 
@@ -26,6 +29,8 @@ func NewRouter(
 	thumbnailH *handlers.ThumbnailHandler,
 	uploadH *handlers.UploadHandler,
 	setupH *handlers.SetupHandler,
+	pipelineH *handlers.PipelineHandler,
+	metadataH *handlers.MetadataHandler,
 ) http.Handler {
 	mux := http.NewServeMux()
 
@@ -68,6 +73,12 @@ func NewRouter(
 	mux.HandleFunc("POST /api/channels", channelH.PostChannel)
 	mux.HandleFunc("DELETE /api/channels/{id}", channelH.DeleteChannel)
 
+	// ── Channel Config ──────────────────────────────────────────────────────
+	channelConfigRepo := database.NewChannelConfigRepo(db, log)
+	channelConfigH := handlers.NewChannelConfigHandler(channelConfigRepo)
+	mux.HandleFunc("GET /api/channels/{id}/config", channelConfigH.GetConfig)
+	mux.HandleFunc("PUT /api/channels/{id}/config", channelConfigH.UpdateConfig)
+
 	// ── Settings ────────────────────────────────────────────────────────────
 	settingsH := handlers.NewSettingsHandler(db)
 	mux.HandleFunc("GET /api/settings", settingsH.GetSettings)
@@ -78,6 +89,32 @@ func NewRouter(
 	mux.HandleFunc("POST /api/setup/install/{tool}", setupH.PostInstall)
 	mux.HandleFunc("GET /api/setup/install/{tool}/stream", setupH.GetInstallStream)
 	mux.HandleFunc("GET /api/setup/dir", setupH.GetDir)
+	mux.HandleFunc("GET /api/setup/check-update/{tool}", setupH.GetCheckUpdate)
+	mux.HandleFunc("GET /api/setup/whisper/models", setupH.GetWhisperModels)
+	mux.HandleFunc("POST /api/setup/whisper/models/{model}", setupH.PostWhisperModelDownload)
+	mux.HandleFunc("GET /api/setup/whisper/models/{model}/stream", setupH.GetWhisperModelStream)
+
+	// ── Metadata ──────────────────────────────────────────────────────────
+	mux.HandleFunc("GET /api/metadata", metadataH.GetMetadata)
+
+	// ── Pipeline Runs ──────────────────────────────────────────────────────
+	mux.HandleFunc("POST /api/pipeline/runs", pipelineH.PostRun)
+	mux.HandleFunc("GET /api/pipeline/runs/{id}", pipelineH.GetRun)
+	mux.HandleFunc("GET /api/pipeline/runs", pipelineH.ListRuns)
+	mux.HandleFunc("DELETE /api/pipeline/runs/{id}", pipelineH.DeleteRun)
+	mux.HandleFunc("PATCH /api/pipeline/runs/{id}/mode", pipelineH.PatchRunMode)
+	mux.HandleFunc("POST /api/pipeline/runs/{id}/preview", pipelineH.PostRunPreview)
+
+	// ── Static files ────────────────────────────────────────────────────────
+	autoCutDir := os.Getenv("AUTOCUT_DIR")
+	if autoCutDir == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			autoCutDir = filepath.Join(home, ".autocut")
+		} else {
+			autoCutDir = fmt.Sprintf("%s/.autocut", ".")
+		}
+	}
+	mux.Handle("GET /files/", http.StripPrefix("/files/", http.FileServer(http.Dir(autoCutDir))))
 
 	return corsMiddleware(mux)
 }

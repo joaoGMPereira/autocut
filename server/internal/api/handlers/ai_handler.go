@@ -7,28 +7,32 @@ import (
 	"net/http"
 
 	"github.com/joaoGMPereira/autocut/server/internal/ai"
+	"github.com/joaoGMPereira/autocut/server/internal/database"
 	"github.com/joaoGMPereira/autocut/server/internal/hub"
 	"github.com/joaoGMPereira/autocut/server/internal/transcript"
 )
 
 // AIHandler handles AI topic analysis requests.
 type AIHandler struct {
-	hub      *hub.SSEHub
-	detector *ai.TopicTransitionDetector
-	log      *slog.Logger
+	hub          *hub.SSEHub
+	detector     *ai.TopicTransitionDetector
+	pipelineRepo *database.PipelineRunRepo
+	log          *slog.Logger
 }
 
 // NewAIHandler creates an AIHandler.
-func NewAIHandler(h *hub.SSEHub, detector *ai.TopicTransitionDetector) *AIHandler {
+func NewAIHandler(h *hub.SSEHub, detector *ai.TopicTransitionDetector, pipelineRepo *database.PipelineRunRepo) *AIHandler {
 	return &AIHandler{
-		hub:      h,
-		detector: detector,
-		log:      slog.With("component", "api", "handler", "ai"),
+		hub:          h,
+		detector:     detector,
+		pipelineRepo: pipelineRepo,
+		log:          slog.With("component", "api", "handler", "ai"),
 	}
 }
 
 type analyzeRequest struct {
 	TranscriptJSON string `json:"transcript_json"`
+	SessionID      string `json:"session_id"`
 }
 
 // PostAnalyze handles POST /api/analyze.
@@ -52,7 +56,7 @@ func (h *AIHandler) PostAnalyze(w http.ResponseWriter, r *http.Request) {
 
 	jobID := newJobID()
 	h.log.Info("analyze job started", "jobID", jobID, "segments", len(t.Segments))
-	go h.runAnalyze(r.Context(), jobID, t)
+	go h.runAnalyze(r.Context(), jobID, req, t)
 	writeJSON(w, http.StatusAccepted, map[string]string{"job_id": jobID})
 }
 
@@ -65,7 +69,7 @@ func (a transcriptSegmentAdapter) GetStart() float64 { return a.seg.Start.Second
 func (a transcriptSegmentAdapter) GetEnd() float64   { return a.seg.End.Seconds() }
 func (a transcriptSegmentAdapter) GetText() string   { return a.seg.Text }
 
-func (h *AIHandler) runAnalyze(ctx context.Context, jobID string, t transcript.Transcript) {
+func (h *AIHandler) runAnalyze(ctx context.Context, jobID string, req analyzeRequest, t transcript.Transcript) {
 	h.hub.Publish(jobID, hub.SSEEvent{Type: "progress", Data: map[string]string{"status": "analyzing"}})
 
 	// Convert transcript.Segment slice to []ai.TranscriptSegment
@@ -93,13 +97,15 @@ func (h *AIHandler) runAnalyze(ctx context.Context, jobID string, t transcript.T
 		})
 	}
 
-	h.hub.Publish(jobID, hub.SSEEvent{
-		Type: "done",
-		Data: map[string]interface{}{
-			"topics":     len(result.Topics),
-			"highlights": len(result.Highlights),
-		},
-	})
+	data := map[string]interface{}{
+		"topics":     len(result.Topics),
+		"highlights": len(result.Highlights),
+		"success":    true,
+	}
+	h.hub.Publish(jobID, hub.SSEEvent{Type: "done", Data: data})
+	if req.SessionID != "" {
+		persistStepOutput(h.pipelineRepo, req.SessionID, "analyze", data)
+	}
 }
 
 // GetAnalyzeStream handles GET /api/analyze/{id}/stream.

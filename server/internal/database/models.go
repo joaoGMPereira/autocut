@@ -72,16 +72,30 @@ type Upload struct {
 
 // Kotlin: PipelineRunsTable in Tables.kt (no dedicated data class)
 type PipelineRun struct {
-	ID          int64
-	ChannelID   sql.NullInt64
-	URL         string
-	Mode        string
-	Status      string
-	Progress    int
-	CurrentStep string
-	Error       string
-	StartedAt   int64
-	FinishedAt  sql.NullInt64
+	ID              int64         `json:"id"`
+	ChannelID       sql.NullInt64 `json:"channel_id"`
+	URL             string        `json:"url"`
+	Mode            string        `json:"mode"`
+	Status          string        `json:"status"`
+	Progress        int           `json:"progress"`
+	CurrentStep     string        `json:"current_step"`
+	Error           string        `json:"error"`
+	StepOutputsJSON string        `json:"-"`
+	ModeConfigJSON  string        `json:"-"`
+	StartedAt       int64         `json:"started_at"`
+	FinishedAt      sql.NullInt64 `json:"finished_at"`
+}
+
+// PipelineRunStep tracks individual step execution within a pipeline run.
+type PipelineRunStep struct {
+	ID         int64         `json:"id"`
+	RunID      int64         `json:"run_id"`
+	Step       string        `json:"step"`
+	Status     string        `json:"status"`
+	JobID      string        `json:"job_id"`
+	Error      string        `json:"error"`
+	StartedAt  sql.NullInt64 `json:"started_at"`
+	FinishedAt sql.NullInt64 `json:"finished_at"`
 }
 
 // Kotlin: data class ThumbnailBackground in ThumbnailBackgroundRepository.kt

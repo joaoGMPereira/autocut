@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ArrowUpCircle, X } from 'lucide-react';
 import { useSetupCheck } from '@/hooks/useSetupCheck';
 import { SetupGate } from './SetupGate';
 
@@ -16,6 +16,9 @@ export function SetupProvider({ children }: SetupProviderProps) {
     useSetupCheck();
   const [timedOut, setTimedOut] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false);
+
+  const updatableTools = tools.filter((t) => t.updateAvailable);
 
   // 3-second timeout — don't block the app if the backend is offline
   useEffect(() => {
@@ -73,6 +76,36 @@ export function SetupProvider({ children }: SetupProviderProps) {
     return <SetupGate tools={tools} onComplete={handleComplete} />;
   }
 
-  // All good
-  return <>{children}</>;
+  // All good — optionally show update banner
+  const showUpdateBanner =
+    updatableTools.length > 0 && !updateBannerDismissed;
+
+  if (!showUpdateBanner) return <>{children}</>;
+
+  return (
+    <div className="relative h-full">
+      <div className="sticky top-0 z-40 flex items-center gap-2 border-b border-amber-500/20 bg-amber-500/8 px-4 py-2 text-xs text-amber-400">
+        <ArrowUpCircle className="h-3.5 w-3.5 shrink-0" />
+        <span>
+          Update available:{' '}
+          {updatableTools
+            .map((t) => `${t.name} ${t.latestVersion ?? ''}`.trim())
+            .join(', ')}
+          . Go to{' '}
+          <a href="/settings" className="underline underline-offset-2">
+            Settings → Tools
+          </a>{' '}
+          to update.
+        </span>
+        <button
+          onClick={() => setUpdateBannerDismissed(true)}
+          className="ml-auto shrink-0 opacity-60 hover:opacity-100"
+          aria-label="Dismiss"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {children}
+    </div>
+  );
 }

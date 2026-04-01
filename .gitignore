@@ -40,3 +40,4 @@ apps/desktop/release/
 
 # Go build artifacts
 server/bin/
+.gitnexus

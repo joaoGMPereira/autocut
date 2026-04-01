@@ -17,7 +17,7 @@ func TestPostDownloadReturnsJobID(t *testing.T) {
 	h := hub.New()
 	ytDl := downloader.NewYouTubeDownloader("")
 	twDl := downloader.NewTwitchDownloader("")
-	handler := handlers.NewDownloadHandler(h, ytDl, twDl)
+	handler := handlers.NewDownloadHandler(h, ytDl, twDl, nil)
 
 	body := `{"url":"https://youtu.be/test","type":"youtube","output_dir":"/tmp/test-dl"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/download", bytes.NewBufferString(body))
@@ -45,7 +45,7 @@ func TestGetDownloadStreamHeaders(t *testing.T) {
 	h := hub.New()
 	ytDl := downloader.NewYouTubeDownloader("")
 	twDl := downloader.NewTwitchDownloader("")
-	handler := handlers.NewDownloadHandler(h, ytDl, twDl)
+	handler := handlers.NewDownloadHandler(h, ytDl, twDl, nil)
 
 	jobID := "test-stream-id"
 

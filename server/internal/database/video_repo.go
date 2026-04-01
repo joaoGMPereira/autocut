@@ -76,6 +76,25 @@ func (r *VideoRepo) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
+func (r *VideoRepo) ListRecent(ctx context.Context, limit int) ([]Video, error) {
+	rows, err := r.db.QueryContext(ctx,
+		"SELECT "+videoCols+" FROM videos ORDER BY created_at DESC LIMIT ?", limit)
+	if err != nil {
+		return nil, fmt.Errorf("list recent videos: %w", err)
+	}
+	defer rows.Close()
+
+	result := make([]Video, 0)
+	for rows.Next() {
+		v, err := scanVideoRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, *v)
+	}
+	return result, rows.Err()
+}
+
 func scanVideo(row *sql.Row) (*Video, error) {
 	var v Video
 	err := row.Scan(&v.ID, &v.ChannelID, &v.URL, &v.Platform, &v.Title, &v.FilePath, &v.Duration, &v.Status, &v.CreatedAt)

@@ -45,6 +45,24 @@ func (m *mockConfigurator) Dir() *configurator.AutoCutDir {
 	return m.dir
 }
 
+func (m *mockConfigurator) CheckUpdate(_ context.Context, name string) (configurator.UpdateInfo, error) {
+	for _, t := range m.tools {
+		if t.Name == name {
+			return configurator.UpdateInfo{Name: name, CurrentVersion: t.Version}, nil
+		}
+	}
+	return configurator.UpdateInfo{}, &configurator.ErrToolNotFound{Name: name}
+}
+
+func (m *mockConfigurator) WhisperModelStatus() []configurator.WhisperModelInfo {
+	return nil
+}
+
+func (m *mockConfigurator) DownloadWhisperModel(_ context.Context, _ string, logCh chan<- string) error {
+	logCh <- "mock download done"
+	return nil
+}
+
 // mockValidator satisfies configurator.ToolValidator.
 type mockValidator struct {
 	status configurator.ToolStatus
@@ -53,6 +71,7 @@ type mockValidator struct {
 func (v *mockValidator) Name() string                                     { return v.status.Name }
 func (v *mockValidator) IsInstalled() bool                                { return v.status.Installed }
 func (v *mockValidator) ResolvedPath() string                             { return v.status.Path }
+func (v *mockValidator) Version() string                                  { return v.status.Version }
 func (v *mockValidator) Install(_ context.Context, _ chan<- string) error { return nil }
 func (v *mockValidator) Instructions() string                             { return "" }
 func (v *mockValidator) Status() configurator.ToolStatus                  { return v.status }

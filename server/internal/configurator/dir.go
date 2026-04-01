@@ -7,16 +7,18 @@ import (
 
 // AutoCutDir holds all directory paths used by AutoCut.
 type AutoCutDir struct {
-	Root          string // ~/.autocut/
-	BinDir        string // ~/.autocut/bin/
-	ModelsDir     string // ~/.autocut/models/
-	WhisperDir    string // ~/.autocut/models/whisper/
-	TokensDir     string // ~/.autocut/tokens/
-	CacheDir      string // ~/.autocut/cache/
-	ThumbCacheDir string // ~/.autocut/cache/thumbnails/
-	TransCacheDir string // ~/.autocut/cache/transcripts/
-	DownloadsDir  string // ~/.autocut/downloads/
-	ThumbnailsDir string // ~/.autocut/thumbnails/
+	Root           string // ~/.autocut/
+	BinDir         string // ~/.autocut/bin/
+	ModelsDir      string // ~/.autocut/models/
+	WhisperDir     string // ~/.autocut/models/whisper/
+	TokensDir      string // ~/.autocut/tokens/
+	CacheDir       string // ~/.autocut/cache/
+	ThumbCacheDir  string // ~/.autocut/cache/thumbnails/
+	TransCacheDir  string // ~/.autocut/cache/transcripts/
+	DownloadsDir   string // ~/.autocut/downloads/
+	ThumbnailsDir  string // ~/.autocut/thumbnails/
+	SharedMusicDir string // ~/.autocut/shared/music/
+	ConfigDir      string // ~/.autocut/config/
 }
 
 // NewAutoCutDir builds an AutoCutDir rooted at ~/.autocut/.
@@ -38,16 +40,18 @@ func NewAutoCutDirFromRoot(root string) *AutoCutDir {
 // Used by tests to inject a temporary directory without touching HOME.
 func newAutoCutDirFromRoot(root string) *AutoCutDir {
 	return &AutoCutDir{
-		Root:          root,
-		BinDir:        filepath.Join(root, "bin"),
-		ModelsDir:     filepath.Join(root, "models"),
-		WhisperDir:    filepath.Join(root, "models", "whisper"),
-		TokensDir:     filepath.Join(root, "tokens"),
-		CacheDir:      filepath.Join(root, "cache"),
-		ThumbCacheDir: filepath.Join(root, "cache", "thumbnails"),
-		TransCacheDir: filepath.Join(root, "cache", "transcripts"),
-		DownloadsDir:  filepath.Join(root, "downloads"),
-		ThumbnailsDir: filepath.Join(root, "thumbnails"),
+		Root:           root,
+		BinDir:         filepath.Join(root, "bin"),
+		ModelsDir:      filepath.Join(root, "models"),
+		WhisperDir:     filepath.Join(root, "models", "whisper"),
+		TokensDir:      filepath.Join(root, "tokens"),
+		CacheDir:       filepath.Join(root, "cache"),
+		ThumbCacheDir:  filepath.Join(root, "cache", "thumbnails"),
+		TransCacheDir:  filepath.Join(root, "cache", "transcripts"),
+		DownloadsDir:   filepath.Join(root, "downloads"),
+		ThumbnailsDir:  filepath.Join(root, "thumbnails"),
+		SharedMusicDir: filepath.Join(root, "shared", "music"),
+		ConfigDir:      filepath.Join(root, "config"),
 	}
 }
 
@@ -64,6 +68,8 @@ func (d *AutoCutDir) Ensure() error {
 		d.TransCacheDir,
 		d.DownloadsDir,
 		d.ThumbnailsDir,
+		d.SharedMusicDir,
+		d.ConfigDir,
 	}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {

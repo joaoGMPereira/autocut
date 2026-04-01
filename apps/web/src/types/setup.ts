@@ -4,6 +4,15 @@ export interface ToolStatus {
   required: boolean;
   path?: string;
   version?: string;
+  latestVersion?: string;
+  updateAvailable?: boolean;
+}
+
+export interface WhisperModelInfo {
+  name: string;
+  size_mb: number;
+  downloaded: boolean;
+  path: string;
 }
 
 export type InstallEventType = 'log' | 'done' | 'error';
@@ -17,12 +26,13 @@ export type ToolInstallState = 'idle' | 'installing' | 'done' | 'error';
 
 export const AUTO_INSTALL_TOOLS = ['yt-dlp', 'TwitchDownloaderCLI'] as const;
 export const PARTIAL_INSTALL_TOOLS = ['whisper'] as const;
-export const MANUAL_INSTALL_TOOLS = ['ffmpeg', 'ollama', 'convert'] as const;
+export const MANUAL_INSTALL_TOOLS = ['ffmpeg', 'ollama', 'convert', 'brew'] as const;
 
 export const MANUAL_INSTALL_URLS: Record<string, string> = {
   ffmpeg: 'https://ffmpeg.org/download.html',
   ollama: 'https://ollama.com/download',
   convert: 'https://imagemagick.org/script/download.php',
+  brew: 'https://brew.sh',
 };
 
 export function isAutoInstallable(toolName: string): boolean {

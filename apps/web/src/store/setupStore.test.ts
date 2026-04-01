@@ -67,13 +67,13 @@ describe('setupStore', () => {
   });
 
   it('startInstall sets installState to installing', () => {
-    // Mock EventSource
+    // Mock EventSource — must use function keyword to be callable with `new`
     const mockES = {
       onmessage: null as ((e: MessageEvent) => void) | null,
       onerror: null as (() => void) | null,
       close: vi.fn(),
     };
-    global.EventSource = vi.fn().mockImplementation(() => mockES) as unknown as typeof EventSource;
+    global.EventSource = vi.fn(function () { return mockES; }) as unknown as typeof EventSource;
     global.fetch = vi.fn().mockResolvedValue({ ok: true });
 
     useSetupStore.getState().startInstall('http://localhost:4071', 'yt-dlp');

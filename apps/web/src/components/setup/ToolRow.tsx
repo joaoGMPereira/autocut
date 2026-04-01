@@ -7,13 +7,14 @@ import {
   Loader2,
   Download,
   ExternalLink,
+  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAppStore } from '@/store/appStore';
 import { useSetupStore } from '@/store/setupStore';
 import {
-  isAutoInstallable,
+  AUTO_INSTALL_TOOLS,
   MANUAL_INSTALL_URLS,
   type ToolStatus,
 } from '@/types/setup';
@@ -28,6 +29,7 @@ export function ToolRow({ tool }: ToolRowProps) {
   const installStates = useSetupStore((s) => s.installStates);
   const installLogs = useSetupStore((s) => s.installLogs);
   const startInstall = useSetupStore((s) => s.startInstall);
+  const checkUpdate = useSetupStore((s) => s.checkUpdate);
 
   const state = installStates[tool.name] ?? 'idle';
   const logs = installLogs[tool.name] ?? [];
@@ -63,11 +65,12 @@ export function ToolRow({ tool }: ToolRowProps) {
     return 'bg-amber-400/20 text-amber-400';
   };
 
-  const canInstall =
-    isAutoInstallable(tool.name) && !tool.installed && state === 'idle';
+  // All tools support Install() — auto-download (yt-dlp, Twitch) or copy from system PATH (others)
+  const isAutoDownload = (AUTO_INSTALL_TOOLS as readonly string[]).includes(tool.name);
+  const canInstall = !tool.installed && state === 'idle';
   const manualUrl = MANUAL_INSTALL_URLS[tool.name];
-  const showManualLink =
-    !tool.installed && !isAutoInstallable(tool.name) && manualUrl;
+  // Show help link for copy-from-system tools so user knows the prerequisite
+  const showManualLink = canInstall && !isAutoDownload && manualUrl;
 
   return (
     <div className="flex flex-col">
@@ -96,6 +99,12 @@ export function ToolRow({ tool }: ToolRowProps) {
           )}
         </div>
 
+        {tool.updateAvailable && (
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400">
+            ↑ Update available
+          </span>
+        )}
+
         <span
           className={cn(
             'inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold shrink-0',
@@ -104,6 +113,28 @@ export function ToolRow({ tool }: ToolRowProps) {
         >
           {badgeLabel()}
         </span>
+
+        {tool.installed && isAutoDownload && !tool.updateAvailable && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs bg-[#1e1e2e] border-[#2a2a3a] text-[#8888a8]"
+            onClick={() => checkUpdate(goUrl, tool.name)}
+          >
+            <RefreshCw className="h-3 w-3 mr-1" />
+            Check
+          </Button>
+        )}
+
+        {tool.updateAvailable && (
+          <Button
+            size="sm"
+            className="h-7 text-xs bg-[#00D4FF]/10 border border-[#00D4FF]/25 text-[#00D4FF] hover:bg-[#00D4FF]/20"
+            onClick={() => startInstall(goUrl, tool.name)}
+          >
+            Update
+          </Button>
+        )}
 
         {canInstall && (
           <Button
@@ -121,14 +152,14 @@ export function ToolRow({ tool }: ToolRowProps) {
             href={manualUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors shrink-0"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-[#5c5c80] hover:text-muted-foreground transition-colors shrink-0"
           >
-            <ExternalLink className="h-3.5 w-3.5" />
-            Instructions
+            <ExternalLink className="h-3 w-3" />
+            How to install
           </a>
         )}
 
-        {state === 'error' && isAutoInstallable(tool.name) && (
+        {state === 'error' && (
           <Button
             size="sm"
             variant="outline"

@@ -1,6 +1,12 @@
 package configurator
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"time"
+)
 
 // Configurator is the facade over all ToolValidator instances.
 type Configurator struct {
@@ -8,8 +14,8 @@ type Configurator struct {
 	validators []ToolValidator
 }
 
-// New creates a Configurator with the default six validators in canonical order:
-// YtDlp → TwitchCLI → FFmpeg → Whisper → Ollama → ImageMagick.
+// New creates a Configurator with the default validators in canonical order:
+// YtDlp → TwitchCLI → FFmpeg → Whisper → Ollama → ImageMagick → Brew.
 func New(dir *AutoCutDir) *Configurator {
 	return &Configurator{
 		dir: dir,
@@ -20,6 +26,7 @@ func New(dir *AutoCutDir) *Configurator {
 			NewWhisperValidator(dir),
 			NewOllamaValidator(dir),
 			NewImageMagickValidator(dir),
+			NewBrewValidator(),
 		},
 	}
 }
@@ -103,6 +110,78 @@ func (c *Configurator) AllInstalled() bool {
 // Dir returns the AutoCutDir used by this Configurator.
 func (c *Configurator) Dir() *AutoCutDir {
 	return c.dir
+}
+
+// UpdateInfo holds the version comparison result for a tool.
+type UpdateInfo struct {
+	Name            string `json:"name"`
+	CurrentVersion  string `json:"current_version"`
+	LatestVersion   string `json:"latest_version"`
+	UpdateAvailable bool   `json:"update_available"`
+}
+
+// githubRepos maps tool names to their GitHub owner/repo for update checks.
+var githubRepos = map[string]string{
+	"yt-dlp":              "yt-dlp/yt-dlp",
+	"TwitchDownloaderCLI": "lay295/TwitchDownloader",
+}
+
+// CheckUpdate returns version information for the named tool.
+// For tools with a known GitHub repo, it also fetches the latest release tag.
+func (c *Configurator) CheckUpdate(ctx context.Context, name string) (UpdateInfo, error) {
+	v, ok := c.Get(name)
+	if !ok {
+		return UpdateInfo{}, &ErrToolNotFound{Name: name}
+	}
+
+	info := UpdateInfo{
+		Name:           name,
+		CurrentVersion: v.Version(),
+	}
+
+	repo, hasRepo := githubRepos[name]
+	if hasRepo {
+		tag, err := fetchLatestGitHubTag(ctx, repo)
+		if err == nil {
+			info.LatestVersion = tag
+		}
+	}
+
+	info.UpdateAvailable = info.LatestVersion != "" &&
+		info.CurrentVersion != "" &&
+		info.CurrentVersion != info.LatestVersion
+
+	return info, nil
+}
+
+// fetchLatestGitHubTag fetches the tag_name from a GitHub repo's latest release.
+func fetchLatestGitHubTag(ctx context.Context, repo string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	url := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", repo)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("github: status %d", resp.StatusCode)
+	}
+
+	var release struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return "", err
+	}
+	return release.TagName, nil
 }
 
 // ErrToolNotFound is returned when Install is called with an unknown tool name.

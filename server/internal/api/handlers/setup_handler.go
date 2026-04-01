@@ -16,6 +16,9 @@ type ConfiguratorFace interface {
 	Get(name string) (configurator.ToolValidator, bool)
 	Install(ctx context.Context, name string, logCh chan<- string) error
 	Dir() *configurator.AutoCutDir
+	CheckUpdate(ctx context.Context, name string) (configurator.UpdateInfo, error)
+	WhisperModelStatus() []configurator.WhisperModelInfo
+	DownloadWhisperModel(ctx context.Context, model string, logCh chan<- string) error
 }
 
 // SetupHandler handles tool setup and directory inspection routes.
@@ -95,12 +98,75 @@ func (h *SetupHandler) GetInstallStream(w http.ResponseWriter, r *http.Request) 
 func (h *SetupHandler) GetDir(w http.ResponseWriter, r *http.Request) {
 	d := h.cfg.Dir()
 	writeJSON(w, http.StatusOK, map[string]string{
-		"root":          d.Root,
-		"bin_dir":       d.BinDir,
-		"models_dir":    d.ModelsDir,
-		"tokens_dir":    d.TokensDir,
-		"cache_dir":     d.CacheDir,
-		"downloads_dir": d.DownloadsDir,
+		"root":           d.Root,
+		"bin_dir":        d.BinDir,
+		"models_dir":     d.ModelsDir,
+		"tokens_dir":     d.TokensDir,
+		"cache_dir":      d.CacheDir,
+		"downloads_dir":  d.DownloadsDir,
 		"thumbnails_dir": d.ThumbnailsDir,
 	})
+}
+
+// GetCheckUpdate handles GET /api/setup/check-update/{tool}.
+func (h *SetupHandler) GetCheckUpdate(w http.ResponseWriter, r *http.Request) {
+	toolName := r.PathValue("tool")
+	info, err := h.cfg.CheckUpdate(r.Context(), toolName)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "tool_not_found", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, info)
+}
+
+// GetWhisperModels handles GET /api/setup/whisper/models.
+func (h *SetupHandler) GetWhisperModels(w http.ResponseWriter, r *http.Request) {
+	models := h.cfg.WhisperModelStatus()
+	writeJSON(w, http.StatusOK, map[string]any{"models": models})
+}
+
+// PostWhisperModelDownload handles POST /api/setup/whisper/models/{model}.
+func (h *SetupHandler) PostWhisperModelDownload(w http.ResponseWriter, r *http.Request) {
+	model := r.PathValue("model")
+	jobID := "setup-whisper-" + model
+
+	go func() {
+		logCh := make(chan string, 32)
+		ctx := context.Background()
+
+		go func() {
+			for msg := range logCh {
+				h.hub.Publish(jobID, hub.SSEEvent{
+					Type: "log",
+					Data: map[string]any{"message": msg},
+				})
+			}
+		}()
+
+		err := h.cfg.DownloadWhisperModel(ctx, model, logCh)
+		close(logCh)
+
+		if err != nil {
+			slog.Error("whisper model download failed", "component", "api", "handler", "setup",
+				"model", model, "err", err)
+			h.hub.Publish(jobID, hub.SSEEvent{
+				Type: "error",
+				Data: map[string]any{"message": err.Error()},
+			})
+			return
+		}
+
+		h.hub.Publish(jobID, hub.SSEEvent{
+			Type: "done",
+			Data: map[string]any{"success": true},
+		})
+	}()
+
+	writeJSON(w, http.StatusAccepted, map[string]string{"job_id": jobID})
+}
+
+// GetWhisperModelStream handles GET /api/setup/whisper/models/{model}/stream.
+func (h *SetupHandler) GetWhisperModelStream(w http.ResponseWriter, r *http.Request) {
+	model := r.PathValue("model")
+	h.hub.ServeSSE(w, r, "setup-whisper-"+model)
 }

@@ -1,0 +1,25 @@
+{
+  "channels": [
+    {
+      "name": "cortes_inerd",
+      "clientSecretFile": "client_secret_inerd.json",
+      "gradientColorStart": "#FAE70D",
+      "gradientColorEnd": "#F43414",
+      "madeForKids": false
+    },
+    {
+      "name": "cortes_maromba",
+      "clientSecretFile": "client_secret_maromba.json",
+      "gradientColorStart": "#141414",
+      "gradientColorEnd": "#FC1601",
+      "madeForKids": false
+    },
+    {
+      "name": "cortes_react",
+      "clientSecretFile": "client_secret_react.json",
+      "gradientColorStart": "#F27121",
+      "gradientColorEnd": "#8A2387",
+      "madeForKids": false
+    }
+  ]
+}

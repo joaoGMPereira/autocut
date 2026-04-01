@@ -4,19 +4,23 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/joaoGMPereira/autocut/server/internal/database"
 	"github.com/joaoGMPereira/autocut/server/internal/hub"
 	"github.com/joaoGMPereira/autocut/server/internal/processor"
 )
 
 // ProcessorHandler handles FFmpeg cut, shorts, and optimizer requests.
 type ProcessorHandler struct {
-	hub       *hub.SSEHub
-	proc      *processor.FFmpegProcessor
-	shorts    *processor.ShortsGenerator
-	optimizer *processor.VideoOptimizerProcessor
-	log       *slog.Logger
+	hub          *hub.SSEHub
+	proc         *processor.FFmpegProcessor
+	shorts       *processor.ShortsGenerator
+	optimizer    *processor.VideoOptimizerProcessor
+	pipelineRepo *database.PipelineRunRepo
+	log          *slog.Logger
 }
 
 // NewProcessorHandler creates a ProcessorHandler.
@@ -25,23 +29,26 @@ func NewProcessorHandler(
 	proc *processor.FFmpegProcessor,
 	shorts *processor.ShortsGenerator,
 	optimizer *processor.VideoOptimizerProcessor,
+	pipelineRepo *database.PipelineRunRepo,
 ) *ProcessorHandler {
 	return &ProcessorHandler{
-		hub:       h,
-		proc:      proc,
-		shorts:    shorts,
-		optimizer: optimizer,
-		log:       slog.With("component", "api", "handler", "processor"),
+		hub:          h,
+		proc:         proc,
+		shorts:       shorts,
+		optimizer:    optimizer,
+		pipelineRepo: pipelineRepo,
+		log:          slog.With("component", "api", "handler", "processor"),
 	}
 }
 
 // --- Cut ---
 
 type cutRequest struct {
-	Input    string  `json:"input"`
-	StartSec float64 `json:"start_sec"`
-	EndSec   float64 `json:"end_sec"`
-	Output   string  `json:"output"`
+	Input     string  `json:"input"`
+	StartSec  float64 `json:"start_sec"`
+	EndSec    float64 `json:"end_sec"`
+	Output    string  `json:"output"`
+	SessionID string  `json:"session_id"`
 }
 
 // PostCut handles POST /api/cut.
@@ -73,7 +80,11 @@ func (h *ProcessorHandler) runCut(jobID string, req cutRequest) {
 		h.hub.Publish(jobID, hub.SSEEvent{Type: "error", Data: map[string]string{"message": err.Error()}})
 		return
 	}
-	h.hub.Publish(jobID, hub.SSEEvent{Type: "done", Data: map[string]string{"output": req.Output}})
+	data := map[string]interface{}{"output": req.Output, "success": true}
+	h.hub.Publish(jobID, hub.SSEEvent{Type: "done", Data: data})
+	if req.SessionID != "" {
+		persistStepOutput(h.pipelineRepo, req.SessionID, "cut", data)
+	}
 }
 
 // GetCutStream handles GET /api/cut/{id}/stream.
@@ -89,10 +100,11 @@ func (h *ProcessorHandler) GetCutStream(w http.ResponseWriter, r *http.Request) 
 // --- Shorts ---
 
 type shortsRequest struct {
-	Input  string `json:"input"`
-	Output string `json:"output"`
-	Width  int    `json:"width"`
-	Height int    `json:"height"`
+	Input     string `json:"input"`
+	Output    string `json:"output"`
+	Width     int    `json:"width"`
+	Height    int    `json:"height"`
+	SessionID string `json:"session_id"`
 }
 
 // PostShorts handles POST /api/shorts.
@@ -126,7 +138,11 @@ func (h *ProcessorHandler) runShorts(jobID string, req shortsRequest) {
 		h.hub.Publish(jobID, hub.SSEEvent{Type: "error", Data: map[string]string{"message": err.Error()}})
 		return
 	}
-	h.hub.Publish(jobID, hub.SSEEvent{Type: "done", Data: map[string]string{"output": req.Output}})
+	data := map[string]interface{}{"output": req.Output, "success": true}
+	h.hub.Publish(jobID, hub.SSEEvent{Type: "done", Data: data})
+	if req.SessionID != "" {
+		persistStepOutput(h.pipelineRepo, req.SessionID, "shorts", data)
+	}
 }
 
 // GetShortsStream handles GET /api/shorts/{id}/stream.
@@ -145,6 +161,7 @@ type optimizeRequest struct {
 	Input            string  `json:"input"`
 	Output           string  `json:"output"`
 	SilenceThreshold float64 `json:"silence_threshold"`
+	SessionID        string  `json:"session_id"`
 }
 
 // PostOptimize handles POST /api/optimize.
@@ -154,9 +171,13 @@ func (h *ProcessorHandler) PostOptimize(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "invalid_json", err.Error())
 		return
 	}
-	if req.Input == "" || req.Output == "" {
-		writeError(w, http.StatusBadRequest, "missing_field", "input and output are required")
+	if req.Input == "" {
+		writeError(w, http.StatusBadRequest, "missing_field", "input is required")
 		return
+	}
+	if req.Output == "" {
+		ext := filepath.Ext(req.Input)
+		req.Output = strings.TrimSuffix(req.Input, ext) + "_optimized" + ext
 	}
 
 	jobID := newJobID()
@@ -178,15 +199,17 @@ func (h *ProcessorHandler) runOptimize(jobID string, req optimizeRequest) {
 		h.hub.Publish(jobID, hub.SSEEvent{Type: "error", Data: map[string]string{"message": err.Error()}})
 		return
 	}
-	h.hub.Publish(jobID, hub.SSEEvent{
-		Type: "done",
-		Data: map[string]interface{}{
-			"output":           req.Output,
-			"removed_silences": result.RemovedSilences,
-			"original_sec":     result.OriginalDuration.Seconds(),
-			"final_sec":        result.FinalDuration.Seconds(),
-		},
-	})
+	data := map[string]interface{}{
+		"output":           req.Output,
+		"removed_silences": result.RemovedSilences,
+		"original_sec":     result.OriginalDuration.Seconds(),
+		"final_sec":        result.FinalDuration.Seconds(),
+		"success":          true,
+	}
+	h.hub.Publish(jobID, hub.SSEEvent{Type: "done", Data: data})
+	if req.SessionID != "" {
+		persistStepOutput(h.pipelineRepo, req.SessionID, "optimize", data)
+	}
 }
 
 // GetOptimizeStream handles GET /api/optimize/{id}/stream.

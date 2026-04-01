@@ -21,11 +21,22 @@ export function registerIpcHandlers(deps: IpcDeps): void {
   });
   ipcMain.handle('get-alpha-channel', () => alphaEnabled);
 
-  // Native dialog
+  // Native dialogs
   ipcMain.handle('select-directory', async () => {
     const win = deps.getMainWindow();
     const result = await dialog.showOpenDialog(win ?? new BrowserWindow({ show: false }), {
       properties: ['openDirectory'],
+    });
+    return result.canceled ? null : result.filePaths[0];
+  });
+
+  ipcMain.handle('select-file', async () => {
+    const win = deps.getMainWindow();
+    const result = await dialog.showOpenDialog(win ?? new BrowserWindow({ show: false }), {
+      properties: ['openFile'],
+      filters: [
+        { name: 'Video', extensions: ['mp4', 'mkv', 'mov', 'avi', 'webm', 'flv', 'wmv'] },
+      ],
     });
     return result.canceled ? null : result.filePaths[0];
   });

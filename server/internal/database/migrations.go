@@ -12,6 +12,8 @@ type migration struct {
 // Add new migrations to the end with incrementing version numbers.
 var allMigrations = []migration{
 	{version: 1, name: "initial_schema", fn: migrateV1},
+	{version: 2, name: "pipeline_parity", fn: migrateV2},
+	{version: 3, name: "mode_config_json", fn: migrateV3},
 }
 
 // migrateV1 creates all 11 application tables.
@@ -272,6 +274,33 @@ func migrateV1(tx *sql.Tx) error {
 		CREATE INDEX idx_shorts_channel_id        ON shorts(channel_id);
 		CREATE INDEX idx_shorts_status            ON shorts(status);
 		CREATE INDEX idx_quota_usage_date         ON quota_usage(date);
+	`)
+	return err
+}
+
+// migrateV3 adds mode_config_json to pipeline_runs for structured mode configuration storage.
+func migrateV3(tx *sql.Tx) error {
+	_, err := tx.Exec(`ALTER TABLE pipeline_runs ADD COLUMN mode_config_json TEXT NOT NULL DEFAULT '{}';`)
+	return err
+}
+
+// migrateV2 adds step_outputs_json to pipeline_runs and creates pipeline_run_steps.
+func migrateV2(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		ALTER TABLE pipeline_runs ADD COLUMN step_outputs_json TEXT NOT NULL DEFAULT '{}';
+
+		CREATE TABLE pipeline_run_steps (
+			id          INTEGER PRIMARY KEY,
+			run_id      INTEGER NOT NULL REFERENCES pipeline_runs(id) ON DELETE CASCADE,
+			step        TEXT    NOT NULL,
+			status      TEXT    NOT NULL DEFAULT 'pending',
+			job_id      TEXT    NOT NULL DEFAULT '',
+			error       TEXT    NOT NULL DEFAULT '',
+			started_at  INTEGER,
+			finished_at INTEGER
+		);
+
+		CREATE INDEX idx_pipeline_run_steps_run_id ON pipeline_run_steps(run_id);
 	`)
 	return err
 }

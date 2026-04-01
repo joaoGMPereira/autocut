@@ -20,6 +20,7 @@ import (
 	"github.com/joaoGMPereira/autocut/server/internal/downloader"
 	"github.com/joaoGMPereira/autocut/server/internal/hub"
 	"github.com/joaoGMPereira/autocut/server/internal/processor"
+	"github.com/joaoGMPereira/autocut/server/internal/seed"
 	"github.com/joaoGMPereira/autocut/server/internal/thumbnail"
 	"github.com/joaoGMPereira/autocut/server/internal/transcript"
 )
@@ -84,6 +85,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	// ── Seed initial data ────────────────────────────────────────────────────
+	// Idempotent: creates channels, channel configs, OAuth secrets, and music
+	// files from bundled assets if they don't already exist.
+	seedCtx := context.Background()
+	if err := seed.New(db, acDir, logger).Run(seedCtx); err != nil {
+		logger.Warn("seed failed (non-fatal)", "err", err)
+	}
+
 	// Init tool configurator
 	toolCfg := configurator.New(acDir)
 	paths := toolCfg.ResolvedPaths()
@@ -92,45 +101,52 @@ func main() {
 	// ── Wire up dependencies ─────────────────────────────────────────────────
 
 	h := hub.New()
+	pipelineRepo := database.NewPipelineRunRepo(db, logger)
 
 	// Downloader — pass resolved bin paths from configurator
 	ytDl := downloader.NewYouTubeDownloader(paths["yt-dlp"])
 	twDl := downloader.NewTwitchDownloader(paths["TwitchDownloaderCLI"])
-	downloadH := handlers.NewDownloadHandler(h, ytDl, twDl)
+	downloadH := handlers.NewDownloadHandler(h, ytDl, twDl, pipelineRepo)
 
 	// Processor — pass resolved ffmpeg path from configurator
 	ffmpegProc := processor.NewFFmpegProcessor(paths["ffmpeg"])
 	shortsGen := processor.NewShortsGenerator(paths["ffmpeg"])
 	optimizer := processor.NewVideoOptimizerProcessor(paths["ffmpeg"])
-	processorH := handlers.NewProcessorHandler(h, ffmpegProc, shortsGen, optimizer)
+	processorH := handlers.NewProcessorHandler(h, ffmpegProc, shortsGen, optimizer, pipelineRepo)
 
 	// Transcript — pass acDir.TransCacheDir and resolved whisper path
 	whisperTranscriber := transcript.New(transcript.WhisperConfig{
 		BinPath: paths["whisper"],
 	})
 	transcriptCache := transcript.NewCache(acDir.TransCacheDir)
-	transcriptH := handlers.NewTranscriptHandler(h, whisperTranscriber, transcriptCache)
+	transcriptH := handlers.NewTranscriptHandler(h, whisperTranscriber, transcriptCache, pipelineRepo)
 
 	// AI
 	ollamaClient := ai.NewOllamaProvider("http://localhost:11434", 5*time.Minute)
 	detector := ai.NewDetector(ollamaClient, ai.DetectorConfig{})
-	aiH := handlers.NewAIHandler(h, detector)
+	aiH := handlers.NewAIHandler(h, detector, pipelineRepo)
 
 	// Thumbnail — pass resolved ffmpeg and convert (ImageMagick) paths
 	thumbnailGen := thumbnail.New(paths["ffmpeg"], paths["convert"])
-	thumbnailH := handlers.NewThumbnailHandler(thumbnailGen)
+	thumbnailH := handlers.NewThumbnailHandler(thumbnailGen, pipelineRepo)
 
 	// Upload — nil uploader until OAuth is configured
 	// TODO: pass acDir.TokensDir when uploader.NewUploadHandler accepts it
-	uploadH := handlers.NewUploadHandler(h, nil, nil, nil)
+	uploadH := handlers.NewUploadHandler(h, nil, nil, nil, pipelineRepo)
 
 	// Setup handler — wires tool configurator for /api/setup/* routes
 	setupH := handlers.NewSetupHandler(h, toolCfg)
 
+	// Pipeline handler
+	pipelineH := handlers.NewPipelineHandler(pipelineRepo)
+
+	// Metadata handler
+	metadataH := handlers.NewMetadataHandler(ytDl)
+
 	// ── Build router ─────────────────────────────────────────────────────────
 
 	router := api.NewRouter(cfg, db, logger, h,
-		downloadH, processorH, transcriptH, aiH, thumbnailH, uploadH, setupH)
+		downloadH, processorH, transcriptH, aiH, thumbnailH, uploadH, setupH, pipelineH, metadataH)
 
 	addr := fmt.Sprintf("%s:%d", *hostFlag, *portFlag)
 	srv := &http.Server{

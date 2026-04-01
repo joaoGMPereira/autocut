@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useAppStore } from '@/store/appStore';
 import { useSetupStore } from '@/store/setupStore';
 import type { ToolStatus } from '@/types/setup';
+import { AUTO_INSTALL_TOOLS } from '@/types/setup';
 
 interface UseSetupCheckResult {
   isReady: boolean;
@@ -21,12 +22,30 @@ export function useSetupCheck(): UseSetupCheckResult {
   const fetchStatus = useSetupStore((s) => s.fetchStatus);
   const allRequiredInstalled = useSetupStore((s) => s.allRequiredInstalled);
   const missingRequired = useSetupStore((s) => s.missingRequired);
+  const checkUpdate = useSetupStore((s) => s.checkUpdate);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Tracks whether we've already fired update checks this session
+  const updateCheckedRef = useRef(false);
 
   // Initial fetch on mount
   useEffect(() => {
     fetchStatus(goUrl);
   }, [goUrl, fetchStatus]);
+
+  // Once tools are confirmed installed, fire update checks (one-time per session)
+  useEffect(() => {
+    if (loading || updateCheckedRef.current) return;
+    if (!allRequiredInstalled()) return;
+
+    updateCheckedRef.current = true;
+    // Fire-and-forget: non-blocking, won't delay app startup
+    for (const tool of AUTO_INSTALL_TOOLS) {
+      const t = tools.find((x) => x.name === tool);
+      if (t?.installed) {
+        checkUpdate(goUrl, tool);
+      }
+    }
+  }, [loading, tools, goUrl, checkUpdate, allRequiredInstalled]);
 
   // Re-poll every 30s while not all required tools are installed
   useEffect(() => {

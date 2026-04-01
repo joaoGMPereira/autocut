@@ -44,7 +44,10 @@ export function AppSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="flex flex-col w-14 bg-sidebar border-r border-sidebar-border shrink-0 py-3 gap-1">
+    <aside className="flex flex-col w-14 bg-sidebar border-r border-sidebar-border shrink-0 pb-3 gap-1">
+      {/* macOS hiddenInset safe area — 28px drag region above content */}
+      <div className="drag-region h-7 w-full shrink-0" />
+
       {/* Logo */}
       <div className="flex items-center justify-center h-9 mb-1">
         <Scissors className="h-5 w-5 text-sidebar-primary" />
@@ -65,10 +68,10 @@ export function AppSidebar() {
                   href={href}
                   className={cn(
                     'flex items-center justify-center h-9 w-9 rounded-md transition-colors',
-                    'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                    'hover:bg-[#1A1A26] hover:text-[#00D4FF]',
                     isActive
-                      ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                      : 'text-muted-foreground',
+                      ? 'bg-[#1A1A26] text-[#00D4FF]'
+                      : 'text-[#5C5C80]',
                   )}
                 >
                   <Icon className="h-4 w-4" />

@@ -5,20 +5,23 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/joaoGMPereira/autocut/server/internal/database"
 	"github.com/joaoGMPereira/autocut/server/internal/thumbnail"
 )
 
 // ThumbnailHandler handles synchronous thumbnail generation (no SSE).
 type ThumbnailHandler struct {
-	gen *thumbnail.ThumbnailGenerator
-	log *slog.Logger
+	gen          *thumbnail.ThumbnailGenerator
+	pipelineRepo *database.PipelineRunRepo
+	log          *slog.Logger
 }
 
 // NewThumbnailHandler creates a ThumbnailHandler.
-func NewThumbnailHandler(gen *thumbnail.ThumbnailGenerator) *ThumbnailHandler {
+func NewThumbnailHandler(gen *thumbnail.ThumbnailGenerator, pipelineRepo *database.PipelineRunRepo) *ThumbnailHandler {
 	return &ThumbnailHandler{
-		gen: gen,
-		log: slog.With("component", "api", "handler", "thumbnail"),
+		gen:          gen,
+		pipelineRepo: pipelineRepo,
+		log:          slog.With("component", "api", "handler", "thumbnail"),
 	}
 }
 
@@ -29,6 +32,7 @@ type thumbnailRequest struct {
 	FontColor  string `json:"font_color"`
 	FontSize   int    `json:"font_size"`
 	Output     string `json:"output"`
+	SessionID  string `json:"session_id"`
 }
 
 // PostThumbnail handles POST /api/thumbnail (synchronous — no SSE).
@@ -75,4 +79,7 @@ func (h *ThumbnailHandler) PostThumbnail(w http.ResponseWriter, r *http.Request)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"thumbnail_path": req.Output})
+	if req.SessionID != "" {
+		persistStepOutput(h.pipelineRepo, req.SessionID, "thumbnail", map[string]string{"thumbnail_path": req.Output})
+	}
 }

@@ -23,6 +23,9 @@ type ToolValidator interface {
 	// Returns an empty string when the tool is not installed.
 	ResolvedPath() string
 
+	// Version returns the installed version string, or "" if not installed or undetectable.
+	Version() string
+
 	// Install attempts an automated installation, streaming progress to logCh.
 	// Returns a non-nil error when installation fails or is not supported.
 	Install(ctx context.Context, logCh chan<- string) error

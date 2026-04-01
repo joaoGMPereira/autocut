@@ -6,17 +6,19 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/joaoGMPereira/autocut/server/internal/database"
 	"github.com/joaoGMPereira/autocut/server/internal/hub"
 	"github.com/joaoGMPereira/autocut/server/internal/uploader"
 )
 
 // UploadHandler handles YouTube upload requests.
 type UploadHandler struct {
-	hub      *hub.SSEHub
-	uploader *uploader.YouTubeUploader
-	quota    *uploader.QuotaTracker
-	auth     *uploader.OAuthManager
-	log      *slog.Logger
+	hub          *hub.SSEHub
+	uploader     *uploader.YouTubeUploader
+	quota        *uploader.QuotaTracker
+	auth         *uploader.OAuthManager
+	pipelineRepo *database.PipelineRunRepo
+	log          *slog.Logger
 }
 
 // NewUploadHandler creates an UploadHandler.
@@ -25,13 +27,15 @@ func NewUploadHandler(
 	ytUploader *uploader.YouTubeUploader,
 	quota *uploader.QuotaTracker,
 	auth *uploader.OAuthManager,
+	pipelineRepo *database.PipelineRunRepo,
 ) *UploadHandler {
 	return &UploadHandler{
-		hub:      h,
-		uploader: ytUploader,
-		quota:    quota,
-		auth:     auth,
-		log:      slog.With("component", "api", "handler", "upload"),
+		hub:          h,
+		uploader:     ytUploader,
+		quota:        quota,
+		auth:         auth,
+		pipelineRepo: pipelineRepo,
+		log:          slog.With("component", "api", "handler", "upload"),
 	}
 }
 
@@ -41,6 +45,7 @@ type uploadRequest struct {
 	Description string `json:"description"`
 	Privacy     string `json:"privacy"`
 	ChannelID   string `json:"channel_id"`
+	SessionID   string `json:"session_id"`
 }
 
 // GetUploads handles GET /api/upload — returns empty list for now.
@@ -112,10 +117,11 @@ func (h *UploadHandler) runUpload(ctx context.Context, jobID string, req uploadR
 			},
 		})
 		if prog.Done {
-			h.hub.Publish(jobID, hub.SSEEvent{
-				Type: "done",
-				Data: map[string]string{"video_id": prog.VideoID},
-			})
+			data := map[string]interface{}{"video_id": prog.VideoID, "success": true}
+			h.hub.Publish(jobID, hub.SSEEvent{Type: "done", Data: data})
+			if req.SessionID != "" {
+				persistStepOutput(h.pipelineRepo, req.SessionID, "upload", data)
+			}
 			return
 		}
 	}

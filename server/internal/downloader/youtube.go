@@ -81,17 +81,38 @@ func (d *YouTubeDownloader) ExtractMetadata(url string) (*VideoInfo, error) {
 // Output filename: <videoID>.%(ext)s → yt-dlp resolves final extension.
 // Kotlin ref: VideoDownloadDelegate.download()
 func (d *YouTubeDownloader) Download(url, outDir string) (*VideoInfo, error) {
-	d.log.Info("download started", "url", url, "outDir", outDir)
+	return d.DownloadWithOptions(url, outDir, "")
+}
+
+// qualityToFormat maps a quality label to the yt-dlp --format string.
+func qualityToFormat(quality string) string {
+	switch quality {
+	case "720p":
+		return "bestvideo[height<=720]+bestaudio/best[height<=720]"
+	case "1080p":
+		return "bestvideo[height<=1080]+bestaudio/best[height<=1080]"
+	case "best":
+		return "bestvideo+bestaudio/best"
+	default:
+		return "bestvideo[height<=1080]+bestaudio/best"
+	}
+}
+
+// DownloadWithOptions downloads a video to outDir with the given quality
+// preference and returns full VideoInfo.
+func (d *YouTubeDownloader) DownloadWithOptions(url, outDir, quality string) (*VideoInfo, error) {
+	d.log.Info("download started", "url", url, "outDir", outDir, "quality", quality)
 
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create outDir: %w", err)
 	}
 
 	outputTemplate := filepath.Join(outDir, "%(id)s.%(ext)s")
+	format := qualityToFormat(quality)
 
 	info, err := Retry(d.retry, func() (*VideoInfo, error) {
 		_, err := d.executor.Run(d.binPath,
-			"--format", "bestvideo[height<=1080]+bestaudio/best",
+			"--format", format,
 			"--merge-output-format", "mp4",
 			"--output", outputTemplate,
 			"--no-playlist",

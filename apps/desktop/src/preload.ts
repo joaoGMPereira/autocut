@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Native dialogs
   selectDirectory: (): Promise<string | null> => ipcRenderer.invoke('select-directory'),
+  selectFile: (): Promise<string | null> => ipcRenderer.invoke('select-file'),
 
   // Services
   restartGoServer: () => ipcRenderer.invoke('restart-go-server'),

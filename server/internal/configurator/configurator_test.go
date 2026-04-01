@@ -26,6 +26,7 @@ func (m *mockValidator) ResolvedPath() string {
 }
 func (m *mockValidator) Install(_ context.Context, _ chan<- string) error { return nil }
 func (m *mockValidator) Instructions() string                             { return "mock instructions" }
+func (m *mockValidator) Version() string                                  { return "" }
 func (m *mockValidator) Status() ToolStatus {
 	return ToolStatus{
 		Name:      m.name,

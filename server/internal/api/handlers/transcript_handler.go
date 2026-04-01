@@ -5,16 +5,18 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/joaoGMPereira/autocut/server/internal/database"
 	"github.com/joaoGMPereira/autocut/server/internal/hub"
 	"github.com/joaoGMPereira/autocut/server/internal/transcript"
 )
 
 // TranscriptHandler handles video transcription requests.
 type TranscriptHandler struct {
-	hub         *hub.SSEHub
-	transcriber *transcript.WhisperTranscriber
-	cache       *transcript.TranscriptCache
-	log         *slog.Logger
+	hub          *hub.SSEHub
+	transcriber  *transcript.WhisperTranscriber
+	cache        *transcript.TranscriptCache
+	pipelineRepo *database.PipelineRunRepo
+	log          *slog.Logger
 }
 
 // NewTranscriptHandler creates a TranscriptHandler.
@@ -22,18 +24,21 @@ func NewTranscriptHandler(
 	h *hub.SSEHub,
 	transcriber *transcript.WhisperTranscriber,
 	cache *transcript.TranscriptCache,
+	pipelineRepo *database.PipelineRunRepo,
 ) *TranscriptHandler {
 	return &TranscriptHandler{
-		hub:         h,
-		transcriber: transcriber,
-		cache:       cache,
-		log:         slog.With("component", "api", "handler", "transcript"),
+		hub:          h,
+		transcriber:  transcriber,
+		cache:        cache,
+		pipelineRepo: pipelineRepo,
+		log:          slog.With("component", "api", "handler", "transcript"),
 	}
 }
 
 type transcriptRequest struct {
 	VideoPath string `json:"video_path"`
 	Language  string `json:"language"`
+	SessionID string `json:"session_id"`
 }
 
 // PostTranscript handles POST /api/transcript.
@@ -62,10 +67,11 @@ func (h *TranscriptHandler) runTranscript(jobID string, req transcriptRequest) {
 	if err == nil {
 		if cached, ok := h.cache.Get(hash); ok {
 			h.log.Info("transcript cache hit", "jobID", jobID, "hash", hash)
-			h.hub.Publish(jobID, hub.SSEEvent{
-				Type: "done",
-				Data: map[string]interface{}{"segments": len(cached.Segments), "cached": true},
-			})
+			data := map[string]interface{}{"segments": len(cached.Segments), "cached": true, "success": true}
+			h.hub.Publish(jobID, hub.SSEEvent{Type: "done", Data: data})
+			if req.SessionID != "" {
+				persistStepOutput(h.pipelineRepo, req.SessionID, "transcript", data)
+			}
 			return
 		}
 	}
@@ -86,13 +92,15 @@ func (h *TranscriptHandler) runTranscript(jobID string, req transcriptRequest) {
 		}
 	}
 
-	h.hub.Publish(jobID, hub.SSEEvent{
-		Type: "done",
-		Data: map[string]interface{}{
-			"segments": len(t.Segments),
-			"language": t.Language,
-		},
-	})
+	data := map[string]interface{}{
+		"segments": len(t.Segments),
+		"language": t.Language,
+		"success":  true,
+	}
+	h.hub.Publish(jobID, hub.SSEEvent{Type: "done", Data: data})
+	if req.SessionID != "" {
+		persistStepOutput(h.pipelineRepo, req.SessionID, "transcript", data)
+	}
 }
 
 // GetTranscriptStream handles GET /api/transcript/{id}/stream.
