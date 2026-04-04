@@ -45,6 +45,7 @@ const (
 	PhaseSegment    ExecutePhase = "segment"
 	PhaseCut        ExecutePhase = "cut"
 	PhaseAntiDup    ExecutePhase = "anti_dup"
+	PhaseLogo       ExecutePhase = "logo_watermark"
 	PhaseShorts     ExecutePhase = "shorts"
 	PhaseThumbnail  ExecutePhase = "thumbnail"
 	PhaseUpload     ExecutePhase = "upload"
