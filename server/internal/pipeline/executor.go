@@ -289,6 +289,42 @@ func (e *Executor) RunGeneratingClips(ctx context.Context, runID int64) {
 		}
 	}
 
+	// ── Logo Watermark ────────────────────────────────────────────────────────
+	if e.effects != nil && e.chanCfg != nil && run.ChannelID != nil {
+		logoCfg, logoCfgErr := e.chanCfg.GetByChannelIDOrNil(ctx, *run.ChannelID)
+		if logoCfgErr != nil {
+			logger.Warn("GetChannelConfig failed, skipping logo_watermark", "err", logoCfgErr)
+		}
+		if logoCfgErr == nil && logoCfg != nil && logoCfg.BrandingLogoEnabled && logoCfg.BrandingLogoPath.Valid {
+			if stateErr := e.repo.UpdateRunState(ctx, runID, StateGeneratingClips, string(PhaseLogo)); stateErr != nil {
+				logger.Warn("UpdateRunState logo_watermark failed", "err", stateErr)
+			}
+			publishPhaseProgress(e.hub, runID, PhaseLogo, 0, nil)
+			for i, clipPath := range clipPaths {
+				pos := effects.TextPosition(strings.ToLower(logoCfg.BrandingLogoPosition))
+				tmp := clipPath + ".logo.mp4"
+				if oErr := e.effects.Overlay(clipPath, logoCfg.BrandingLogoPath.String, pos,
+					logoCfg.BrandingLogoOpacity, logoCfg.BrandingLogoScale, tmp); oErr != nil {
+					logger.Warn("logo overlay failed, keeping original", "clip", i, "err", oErr)
+					os.Remove(tmp)
+					pct := float64(i+1) / float64(len(clipPaths)) * 100
+					publishPhaseProgress(e.hub, runID, PhaseLogo, pct, map[string]interface{}{
+						"warning": fmt.Sprintf("logo overlay failed for clip %d: %v", i, oErr),
+					})
+					continue
+				}
+				if renErr := os.Rename(tmp, clipPath); renErr != nil {
+					logger.Warn("logo rename failed, keeping original", "clip", i, "err", renErr)
+					os.Remove(tmp)
+					continue
+				}
+				pct := float64(i+1) / float64(len(clipPaths)) * 100
+				publishPhaseProgress(e.hub, runID, PhaseLogo, pct, nil)
+			}
+			publishPhaseProgress(e.hub, runID, PhaseLogo, 100, nil)
+		}
+	}
+
 	// ── Shorts ────────────────────────────────────────────────────────────────
 	if err := e.repo.UpdateRunState(ctx, runID, StateGeneratingClips, string(PhaseShorts)); err != nil {
 		logger.Error("update state failed", "err", err)
