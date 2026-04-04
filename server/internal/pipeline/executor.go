@@ -258,6 +258,34 @@ func (e *Executor) RunGeneratingClips(ctx context.Context, runID int64) {
 	}
 	publishPhaseProgress(e.hub, runID, PhaseCut, 100, nil)
 
+	// ── Anti-Dup ──────────────────────────────────────────────────────────────
+	if e.effects != nil && e.chanCfg != nil && run.ChannelID != nil {
+		cfg, cfgErr := e.chanCfg.GetByChannelIDOrNil(ctx, *run.ChannelID)
+		if cfgErr == nil && cfg != nil && cfg.AntiDuplicateEnabled {
+			if stateErr := e.repo.UpdateRunState(ctx, runID, StateGeneratingClips, string(PhaseAntiDup)); stateErr != nil {
+				logger.Warn("UpdateRunState anti_dup failed", "err", stateErr)
+			}
+			publishPhaseProgress(e.hub, runID, PhaseAntiDup, 0, nil)
+			for i, clipPath := range clipPaths {
+				caption := fmt.Sprintf("run%d-clip%d", runID, i)
+				tmp := clipPath + ".antidup.mp4"
+				if dupErr := e.effects.AntiDup(clipPath, caption, tmp); dupErr != nil {
+					logger.Warn("AntiDup failed, keeping original", "clip", i, "err", dupErr)
+					os.Remove(tmp)
+					continue
+				}
+				if renErr := os.Rename(tmp, clipPath); renErr != nil {
+					logger.Warn("AntiDup rename failed, keeping original", "clip", i, "err", renErr)
+					os.Remove(tmp)
+					continue
+				}
+				publishPhaseProgress(e.hub, runID, PhaseAntiDup,
+					float64(i+1)/float64(len(clipPaths))*100, nil)
+			}
+			publishPhaseProgress(e.hub, runID, PhaseAntiDup, 100, nil)
+		}
+	}
+
 	// ── Shorts ────────────────────────────────────────────────────────────────
 	if err := e.repo.UpdateRunState(ctx, runID, StateGeneratingClips, string(PhaseShorts)); err != nil {
 		logger.Error("update state failed", "err", err)
