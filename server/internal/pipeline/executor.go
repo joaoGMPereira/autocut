@@ -261,6 +261,9 @@ func (e *Executor) RunGeneratingClips(ctx context.Context, runID int64) {
 	// ── Anti-Dup ──────────────────────────────────────────────────────────────
 	if e.effects != nil && e.chanCfg != nil && run.ChannelID != nil {
 		cfg, cfgErr := e.chanCfg.GetByChannelIDOrNil(ctx, *run.ChannelID)
+		if cfgErr != nil {
+			logger.Warn("GetChannelConfig failed, skipping anti_dup", "err", cfgErr)
+		}
 		if cfgErr == nil && cfg != nil && cfg.AntiDuplicateEnabled {
 			if stateErr := e.repo.UpdateRunState(ctx, runID, StateGeneratingClips, string(PhaseAntiDup)); stateErr != nil {
 				logger.Warn("UpdateRunState anti_dup failed", "err", stateErr)
