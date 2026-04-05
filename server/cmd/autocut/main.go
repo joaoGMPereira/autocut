@@ -202,6 +202,7 @@ func runServer(host string, port int, dataDir string) error {
 		nil,         // Uploader: requires per-channel OAuth tokens
 		effectsSvc,  // anti-dup effects
 		chanCfgRepo, // channel config reader
+		processor.NewSubtitleGenerator(""), // subtitle burn
 	)
 	pipelineH := handlers.NewPipelineHandler(pipelineNewRepo, pipelineExec, h, db)
 	metadataH := handlers.NewMetadataHandler(ytDl)

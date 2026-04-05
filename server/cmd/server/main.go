@@ -180,6 +180,7 @@ func main() {
 		nil,         // Uploader: requires per-channel OAuth tokens
 		effectsSvc,  // anti-dup effects
 		chanCfgRepo, // channel config reader
+		processor.NewSubtitleGenerator(""), // subtitle burn
 	)
 	pipelineH := handlers.NewPipelineHandler(pipelineNewRepo, pipelineExec, h, db)
 

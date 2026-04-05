@@ -12,6 +12,8 @@ import (
 
 	"github.com/joaoGMPereira/autocut/server/internal/effects"
 	"github.com/joaoGMPereira/autocut/server/internal/hub"
+	"github.com/joaoGMPereira/autocut/server/internal/processor"
+	"github.com/joaoGMPereira/autocut/server/internal/transcript"
 )
 
 // Executor runs the compute phases for EXECUTING, GENERATING_CLIPS, and UPLOADING states.
@@ -26,8 +28,9 @@ type Executor struct {
 	shorts      ShortsGenerator
 	thumbnail   ThumbnailMaker
 	uploader    Uploader
-	effects     *effects.EffectsService  // nil = anti-dup disabled
-	chanCfg     ChannelConfigReader       // nil = config unavailable
+	effects     *effects.EffectsService        // nil = anti-dup disabled
+	chanCfg     ChannelConfigReader             // nil = config unavailable
+	subtitles   *processor.SubtitleGenerator    // nil = subtitles disabled
 	log         *slog.Logger
 }
 
@@ -45,6 +48,7 @@ func NewExecutor(
 	uploader Uploader,
 	effectsSvc *effects.EffectsService,
 	chanCfg ChannelConfigReader,
+	subtitles *processor.SubtitleGenerator,
 ) *Executor {
 	return &Executor{
 		repo:        repo,
@@ -58,6 +62,7 @@ func NewExecutor(
 		uploader:    uploader,
 		effects:     effectsSvc,
 		chanCfg:     chanCfg,
+		subtitles:   subtitles,
 		log:         slog.With("component", "pipeline.executor"),
 	}
 }
@@ -325,6 +330,60 @@ func (e *Executor) RunGeneratingClips(ctx context.Context, runID int64) {
 		}
 	}
 
+	// ── Subtitles (preview_captions) ─────────────────────────────────────────
+	if e.subtitles != nil && e.chanCfg != nil && run.ChannelID != nil && run.TranscriptPath != "" {
+		subCfg, subCfgErr := e.chanCfg.GetByChannelIDOrNil(ctx, *run.ChannelID)
+		if subCfgErr != nil {
+			logger.Warn("GetChannelConfig failed, skipping preview_captions", "err", subCfgErr)
+		}
+		if subCfgErr == nil && subCfg != nil && subCfg.PreviewCaptionsEnabled {
+			if stateErr := e.repo.UpdateRunState(ctx, runID, StateGeneratingClips, string(PhaseSubtitles)); stateErr != nil {
+				logger.Warn("UpdateRunState preview_captions failed", "err", stateErr)
+			}
+			publishPhaseProgress(e.hub, runID, PhaseSubtitles, 0, nil)
+
+			transcriptData, readErr := os.ReadFile(run.TranscriptPath)
+			if readErr != nil {
+				logger.Warn("read transcript failed, skipping preview_captions", "err", readErr)
+			} else {
+				tr, parseErr := transcript.ParseWhisperJSON(transcriptData)
+				if parseErr != nil {
+					logger.Warn("parse transcript failed, skipping preview_captions", "err", parseErr)
+				} else {
+					styleCfg := mapCaptionStyle(subCfg.PreviewCaptionStyle)
+
+					for i, clipPath := range clipPaths {
+						clipStart := time.Duration(segments[i].StartSec * float64(time.Second))
+						clipEnd := time.Duration(segments[i].EndSec * float64(time.Second))
+						subSegs := filterAndRebaseSegments(tr.Segments, clipStart, clipEnd)
+
+						if len(subSegs) == 0 {
+							pct := float64(i+1) / float64(len(clipPaths)) * 100
+							publishPhaseProgress(e.hub, runID, PhaseSubtitles, pct, nil)
+							continue
+						}
+
+						tmp := clipPath + ".subs.mp4"
+						if burnErr := e.subtitles.GenerateAndBurn(clipPath, subSegs, tmp, styleCfg); burnErr != nil {
+							logger.Warn("subtitle burn failed, keeping original", "clip", i, "err", burnErr)
+							os.Remove(tmp)
+							pct := float64(i+1) / float64(len(clipPaths)) * 100
+							publishPhaseProgress(e.hub, runID, PhaseSubtitles, pct, nil)
+							continue
+						}
+						if renErr := os.Rename(tmp, clipPath); renErr != nil {
+							logger.Warn("subtitle rename failed, keeping original", "clip", i, "err", renErr)
+							os.Remove(tmp)
+						}
+						pct := float64(i+1) / float64(len(clipPaths)) * 100
+						publishPhaseProgress(e.hub, runID, PhaseSubtitles, pct, nil)
+					}
+					publishPhaseProgress(e.hub, runID, PhaseSubtitles, 100, nil)
+				}
+			}
+		}
+	}
+
 	// ── Shorts ────────────────────────────────────────────────────────────────
 	if err := e.repo.UpdateRunState(ctx, runID, StateGeneratingClips, string(PhaseShorts)); err != nil {
 		logger.Error("update state failed", "err", err)
@@ -582,3 +641,44 @@ type uploadProgressInternal struct {
 // (The UploaderAdapter in adapters.go handles the concrete type translation.)
 // This stub is here to satisfy the compiler for future test mocks — no runtime use.
 var _ = time.Second // keep import used
+
+// filterAndRebaseSegments returns transcript segments that overlap [clipStart, clipEnd],
+// with timestamps rebased to clip-local time (0-based).
+func filterAndRebaseSegments(allSegs []transcript.Segment, clipStart, clipEnd time.Duration) []processor.SubtitleSegment {
+	var result []processor.SubtitleSegment
+	for _, seg := range allSegs {
+		if seg.End <= clipStart || seg.Start >= clipEnd {
+			continue
+		}
+		start := seg.Start - clipStart
+		if start < 0 {
+			start = 0
+		}
+		end := seg.End - clipStart
+		if end > clipEnd-clipStart {
+			end = clipEnd - clipStart
+		}
+		result = append(result, processor.SubtitleSegment{
+			Start: start,
+			End:   end,
+			Text:  seg.Text,
+		})
+	}
+	return result
+}
+
+// mapCaptionStyle maps a ChannelConfig.PreviewCaptionStyle string to SubtitleConfig.
+func mapCaptionStyle(style string) processor.SubtitleConfig {
+	cfg := processor.SubtitleConfig{
+		FontName:  "Arial",
+		FontSize:  20,
+		FontColor: "white",
+		Outline:   true,
+		Position:  "bottom",
+	}
+	switch strings.ToUpper(style) {
+	case "BOLD":
+		cfg.FontSize = 28
+	}
+	return cfg
+}
