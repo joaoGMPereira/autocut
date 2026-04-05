@@ -384,6 +384,49 @@ func (e *Executor) RunGeneratingClips(ctx context.Context, runID int64) {
 		}
 	}
 
+	// ── Text Overlay ─────────────────────────────────────────────────────────
+	if e.effects != nil && e.chanCfg != nil && run.ChannelID != nil {
+		txtCfg, txtCfgErr := e.chanCfg.GetByChannelIDOrNil(ctx, *run.ChannelID)
+		if txtCfgErr != nil {
+			logger.Warn("GetChannelConfig failed, skipping text_overlay", "err", txtCfgErr)
+		}
+		if txtCfgErr == nil && txtCfg != nil && txtCfg.PreviewTextOverlayConfigJSON != "" && txtCfg.PreviewTextOverlayConfigJSON != "{}" {
+			toCfg := parseTextOverlayConfig(txtCfg.PreviewTextOverlayConfigJSON)
+			if toCfg.Text != "" {
+				if stateErr := e.repo.UpdateRunState(ctx, runID, StateGeneratingClips, string(PhaseTextOverlay)); stateErr != nil {
+					logger.Warn("UpdateRunState text_overlay failed", "err", stateErr)
+				}
+				publishPhaseProgress(e.hub, runID, PhaseTextOverlay, 0, nil)
+				pos := effects.TextPosition(strings.ToLower(toCfg.Position))
+				fontSize := toCfg.FontSize
+				if fontSize <= 0 {
+					fontSize = 24
+				}
+				color := toCfg.Color
+				if color == "" {
+					color = "white"
+				}
+				for i, clipPath := range clipPaths {
+					tmp := clipPath + ".textoverlay.mp4"
+					if toErr := e.effects.TextOverlay(clipPath, toCfg.Text, toCfg.FontName, fontSize, color, pos, 0, 86400, tmp); toErr != nil {
+						logger.Warn("text overlay failed, keeping original", "clip", i, "err", toErr)
+						os.Remove(tmp)
+						pct := float64(i+1) / float64(len(clipPaths)) * 100
+						publishPhaseProgress(e.hub, runID, PhaseTextOverlay, pct, nil)
+						continue
+					}
+					if renErr := os.Rename(tmp, clipPath); renErr != nil {
+						logger.Warn("text overlay rename failed, keeping original", "clip", i, "err", renErr)
+						os.Remove(tmp)
+					}
+					pct := float64(i+1) / float64(len(clipPaths)) * 100
+					publishPhaseProgress(e.hub, runID, PhaseTextOverlay, pct, nil)
+				}
+				publishPhaseProgress(e.hub, runID, PhaseTextOverlay, 100, nil)
+			}
+		}
+	}
+
 	// ── Shorts ────────────────────────────────────────────────────────────────
 	if err := e.repo.UpdateRunState(ctx, runID, StateGeneratingClips, string(PhaseShorts)); err != nil {
 		logger.Error("update state failed", "err", err)
@@ -665,6 +708,24 @@ func filterAndRebaseSegments(allSegs []transcript.Segment, clipStart, clipEnd ti
 		})
 	}
 	return result
+}
+
+// textOverlayConfig is the parsed form of ChannelConfig.PreviewTextOverlayConfigJSON.
+type textOverlayConfig struct {
+	Text     string `json:"text"`
+	FontName string `json:"font_name"`
+	FontSize int    `json:"font_size"`
+	Color    string `json:"color"`
+	Position string `json:"position"`
+}
+
+// parseTextOverlayConfig parses the PreviewTextOverlayConfigJSON string.
+func parseTextOverlayConfig(raw string) textOverlayConfig {
+	var cfg textOverlayConfig
+	if raw != "" {
+		_ = json.Unmarshal([]byte(raw), &cfg)
+	}
+	return cfg
 }
 
 // mapCaptionStyle maps a ChannelConfig.PreviewCaptionStyle string to SubtitleConfig.

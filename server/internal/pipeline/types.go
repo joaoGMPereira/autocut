@@ -47,6 +47,7 @@ const (
 	PhaseAntiDup    ExecutePhase = "anti_dup"
 	PhaseLogo       ExecutePhase = "logo_watermark"
 	PhaseSubtitles  ExecutePhase = "preview_captions"
+	PhaseTextOverlay ExecutePhase = "text_overlay"
 	PhaseShorts     ExecutePhase = "shorts"
 	PhaseThumbnail  ExecutePhase = "thumbnail"
 	PhaseUpload     ExecutePhase = "upload"
