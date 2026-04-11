@@ -2,7 +2,7 @@
 # validate-parity.sh — reads constitution Feature Parity Tracker and reports status
 # Exit 0 = no violations. Exit 1 = at least one DONE feature has no passing script.
 #
-# Usage: ./validate-parity.sh [--summary]
+# Usage: ./validate-parity.sh
 
 set -e
 
