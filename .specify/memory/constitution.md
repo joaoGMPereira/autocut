@@ -81,7 +81,7 @@ Status values: `TODO` | `IN PROGRESS` | `NEEDS VALIDATION` | `DONE`
 
 | # | Feature | Kotlin Reference | Target | Status |
 |---|---|---|---|---|
-| 1 | Download YouTube | `YouTubeDownloader.kt` + `VideoDownloadDelegate.kt` | Go | TODO |
+| 1 | Download YouTube | `YouTubeDownloader.kt` + `VideoDownloadDelegate.kt` | Go | NEEDS VALIDATION |
 | 2 | Download Twitch VOD | `TwitchDownloader.kt` | Go | TODO |
 | 3 | Download Twitch Clips | `TwitchClipDownloader.kt` | Go | TODO |
 | 4 | Download Twitch Chat | `TwitchChatDownloader.kt` | Go | TODO |
