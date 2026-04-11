@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 )
 
@@ -19,7 +20,7 @@ func NewPipelineRunRepo(db *sql.DB, log *slog.Logger) *PipelineRunRepo {
 	return &PipelineRunRepo{db: db, log: log.With("repo", "pipeline_run")}
 }
 
-const pipelineRunCols = `id, channel_id, url, mode, status, progress, current_step, error, step_outputs_json, mode_config_json, started_at, finished_at`
+const pipelineRunCols = `id, channel_id, url, mode, status, progress, current_step, error, step_outputs_json, mode_config_json, started_at, finished_at, source_run_id`
 
 func (r *PipelineRunRepo) Create(ctx context.Context, p *PipelineRun) (int64, error) {
 	now := time.Now().UnixMilli()
@@ -32,9 +33,9 @@ func (r *PipelineRunRepo) Create(ctx context.Context, p *PipelineRun) (int64, er
 		modeConfig = "{}"
 	}
 	res, err := r.db.ExecContext(ctx,
-		`INSERT INTO pipeline_runs (channel_id, url, mode, status, progress, current_step, error, step_outputs_json, mode_config_json, started_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.ChannelID, p.URL, p.Mode, p.Status, p.Progress, p.CurrentStep, p.Error, stepOutputs, modeConfig, now,
+		`INSERT INTO pipeline_runs (channel_id, url, mode, status, progress, current_step, error, step_outputs_json, mode_config_json, started_at, source_run_id)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.ChannelID, p.URL, p.Mode, p.Status, p.Progress, p.CurrentStep, p.Error, stepOutputs, modeConfig, now, p.SourceRunID,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("insert pipeline_run: %w", err)
@@ -97,33 +98,51 @@ func (r *PipelineRunRepo) ListByChannel(ctx context.Context, channelID int64) ([
 	return result, rows.Err()
 }
 
-// ListAll returns paginated pipeline runs with optional channel_id filter. Returns runs and total count.
-func (r *PipelineRunRepo) ListAll(ctx context.Context, limit, offset int, channelID *int64) ([]PipelineRun, int, error) {
-	var countQuery, dataQuery string
-	var args []interface{}
+// ListRunsFilter holds optional filters for ListAll.
+type ListRunsFilter struct {
+	ChannelID *int64
+	Status    string
+	DateFrom  int64 // unix ms, 0 = no filter
+	DateTo    int64 // unix ms, 0 = no filter
+}
 
-	if channelID != nil {
-		countQuery = "SELECT COUNT(*) FROM pipeline_runs WHERE channel_id = ?"
-		dataQuery = "SELECT " + pipelineRunCols + " FROM pipeline_runs WHERE channel_id = ? ORDER BY started_at DESC LIMIT ? OFFSET ?"
-		args = []interface{}{*channelID}
-	} else {
-		countQuery = "SELECT COUNT(*) FROM pipeline_runs"
-		dataQuery = "SELECT " + pipelineRunCols + " FROM pipeline_runs ORDER BY started_at DESC LIMIT ? OFFSET ?"
+// ListAll returns paginated pipeline runs with optional filters. Returns runs and total count.
+func (r *PipelineRunRepo) ListAll(ctx context.Context, limit, offset int, f ListRunsFilter) ([]PipelineRun, int, error) {
+	var whereClauses []string
+	var filterArgs []interface{}
+
+	if f.ChannelID != nil {
+		whereClauses = append(whereClauses, "channel_id = ?")
+		filterArgs = append(filterArgs, *f.ChannelID)
 	}
+	if f.Status != "" {
+		whereClauses = append(whereClauses, "status = ?")
+		filterArgs = append(filterArgs, f.Status)
+	}
+	if f.DateFrom != 0 {
+		whereClauses = append(whereClauses, "started_at >= ?")
+		filterArgs = append(filterArgs, f.DateFrom)
+	}
+	if f.DateTo != 0 {
+		whereClauses = append(whereClauses, "started_at <= ?")
+		filterArgs = append(filterArgs, f.DateTo)
+	}
+
+	whereSQL := ""
+	if len(whereClauses) > 0 {
+		whereSQL = " WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
+	countQuery := "SELECT COUNT(*) FROM pipeline_runs" + whereSQL
+	dataQuery := "SELECT " + pipelineRunCols + " FROM pipeline_runs" + whereSQL + " ORDER BY started_at DESC LIMIT ? OFFSET ?"
 
 	var total int
-	if channelID != nil {
-		if err := r.db.QueryRowContext(ctx, countQuery, *channelID).Scan(&total); err != nil {
-			return nil, 0, fmt.Errorf("count pipeline_runs: %w", err)
-		}
-	} else {
-		if err := r.db.QueryRowContext(ctx, countQuery).Scan(&total); err != nil {
-			return nil, 0, fmt.Errorf("count pipeline_runs: %w", err)
-		}
+	if err := r.db.QueryRowContext(ctx, countQuery, filterArgs...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count pipeline_runs: %w", err)
 	}
 
-	queryArgs := append(args, limit, offset)
-	rows, err := r.db.QueryContext(ctx, dataQuery, queryArgs...)
+	dataArgs := append(filterArgs, limit, offset)
+	rows, err := r.db.QueryContext(ctx, dataQuery, dataArgs...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list pipeline_runs: %w", err)
 	}
@@ -196,8 +215,21 @@ func (r *PipelineRunRepo) Finish(ctx context.Context, id int64, status string, e
 }
 
 // Delete removes a pipeline run and its steps (via CASCADE).
+// source_run_id is a self-referential FK without ON DELETE SET NULL, so we
+// must clear any references before deleting to avoid FOREIGN KEY constraint errors.
 func (r *PipelineRunRepo) Delete(ctx context.Context, id int64) error {
-	res, err := r.db.ExecContext(ctx, "DELETE FROM pipeline_runs WHERE id = ?", id)
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx for delete pipeline_run %d: %w", id, err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx,
+		"UPDATE pipeline_runs SET source_run_id = NULL WHERE source_run_id = ?", id); err != nil {
+		return fmt.Errorf("clear source_run_id refs for pipeline_run %d: %w", id, err)
+	}
+
+	res, err := tx.ExecContext(ctx, "DELETE FROM pipeline_runs WHERE id = ?", id)
 	if err != nil {
 		return fmt.Errorf("delete pipeline_run %d: %w", id, err)
 	}
@@ -205,7 +237,7 @@ func (r *PipelineRunRepo) Delete(ctx context.Context, id int64) error {
 	if n == 0 {
 		return sql.ErrNoRows
 	}
-	return nil
+	return tx.Commit()
 }
 
 // CreateStep inserts a new pipeline run step.
@@ -235,7 +267,7 @@ func (r *PipelineRunRepo) UpdateStep(ctx context.Context, id int64, status strin
 
 func scanPipelineRun(row *sql.Row) (*PipelineRun, error) {
 	var p PipelineRun
-	err := row.Scan(&p.ID, &p.ChannelID, &p.URL, &p.Mode, &p.Status, &p.Progress, &p.CurrentStep, &p.Error, &p.StepOutputsJSON, &p.ModeConfigJSON, &p.StartedAt, &p.FinishedAt)
+	err := row.Scan(&p.ID, &p.ChannelID, &p.URL, &p.Mode, &p.Status, &p.Progress, &p.CurrentStep, &p.Error, &p.StepOutputsJSON, &p.ModeConfigJSON, &p.StartedAt, &p.FinishedAt, &p.SourceRunID)
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +276,7 @@ func scanPipelineRun(row *sql.Row) (*PipelineRun, error) {
 
 func scanPipelineRunRows(rows *sql.Rows) (*PipelineRun, error) {
 	var p PipelineRun
-	err := rows.Scan(&p.ID, &p.ChannelID, &p.URL, &p.Mode, &p.Status, &p.Progress, &p.CurrentStep, &p.Error, &p.StepOutputsJSON, &p.ModeConfigJSON, &p.StartedAt, &p.FinishedAt)
+	err := rows.Scan(&p.ID, &p.ChannelID, &p.URL, &p.Mode, &p.Status, &p.Progress, &p.CurrentStep, &p.Error, &p.StepOutputsJSON, &p.ModeConfigJSON, &p.StartedAt, &p.FinishedAt, &p.SourceRunID)
 	if err != nil {
 		return nil, err
 	}

@@ -44,6 +44,20 @@ func (c *Configurator) WhisperModelStatus() []WhisperModelInfo {
 	return models
 }
 
+// BestWhisperModelPath returns the path of the highest-quality installed model,
+// or "" if no model has been downloaded yet.
+// Models are checked in descending quality order: large → medium → small → base → tiny.
+func (c *Configurator) BestWhisperModelPath() string {
+	for i := len(knownWhisperModels) - 1; i >= 0; i-- {
+		m := knownWhisperModels[i]
+		p := c.dir.WhisperModelPath(fmt.Sprintf("ggml-%s.bin", m.Name))
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
+}
+
 // DownloadWhisperModel downloads the named model to WhisperDir, streaming progress to logCh.
 func (c *Configurator) DownloadWhisperModel(ctx context.Context, model string, logCh chan<- string) error {
 	valid := false

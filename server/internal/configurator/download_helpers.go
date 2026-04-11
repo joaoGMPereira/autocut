@@ -293,6 +293,31 @@ func (w *chanWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// discoverLocalDylib returns the path to libwhisper.1.dylib on the system, or empty string.
+func discoverLocalDylib() string {
+	candidates := []string{
+		"/opt/homebrew/lib/libwhisper.1.dylib",
+		"/usr/local/lib/libwhisper.1.dylib",
+	}
+	for _, p := range candidates {
+		if statExists(p) {
+			return p
+		}
+	}
+	return ""
+}
+
+// copyToLibWithProgress copies a file from src into dir.LibDir/filename, logging progress.
+func copyToLibWithProgress(dir *AutoCutDir, filename, src string, logCh chan<- string) error {
+	dst := dir.LibPath(filename)
+	logCh <- fmt.Sprintf("Copying %s → %s", src, dst)
+	if err := copyFile(src, dst); err != nil {
+		return fmt.Errorf("copy %s: %w", filename, err)
+	}
+	logCh <- fmt.Sprintf("Installed %s", filename)
+	return nil
+}
+
 // installViaBrewAndCopy runs `brew install formula`, streams its output to
 // logCh, then searches binCandidates in PATH and well-known paths and copies
 // the first match to dir.BinPath(binName).

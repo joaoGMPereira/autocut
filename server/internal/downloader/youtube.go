@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -107,6 +109,20 @@ func (d *YouTubeDownloader) DownloadWithOptions(url, outDir, quality string) (*V
 		return nil, fmt.Errorf("create outDir: %w", err)
 	}
 
+	// Cache check: reuse existing file if already downloaded.
+	if videoID := extractYouTubeVideoID(url); videoID != "" {
+		if cached := findVideoFile(outDir, videoID); cached != "" {
+			d.log.Info("download cache hit — reusing existing file", "videoID", videoID, "filePath", cached)
+			meta, err := d.ExtractMetadata(url)
+			if err != nil {
+				d.log.Warn("metadata unavailable for cached file", "err", err, "videoID", videoID)
+				meta = &VideoInfo{VideoID: videoID}
+			}
+			meta.FilePath = cached
+			return meta, nil
+		}
+	}
+
 	outputTemplate := filepath.Join(outDir, "%(id)s.%(ext)s")
 	format := qualityToFormat(quality)
 
@@ -204,6 +220,28 @@ func findVideoFile(outDir, videoID string) string {
 		if _, err := os.Stat(candidate); err == nil {
 			return candidate
 		}
+	}
+	return ""
+}
+
+// extractYouTubeVideoID parses a YouTube URL and returns the video ID.
+// Supports youtube.com (?v=...) and youtu.be (/<id>) URL forms.
+// Returns "" on any error or if no ID is found.
+func extractYouTubeVideoID(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	switch u.Hostname() {
+	case "www.youtube.com", "youtube.com", "m.youtube.com":
+		return u.Query().Get("v")
+	case "youtu.be":
+		// Path is "/<id>"; trim the leading slash and take the first segment.
+		p := strings.TrimPrefix(u.Path, "/")
+		if idx := strings.IndexByte(p, '/'); idx != -1 {
+			p = p[:idx]
+		}
+		return p
 	}
 	return ""
 }

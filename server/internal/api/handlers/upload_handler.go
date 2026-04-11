@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/joaoGMPereira/autocut/server/internal/database"
 	"github.com/joaoGMPereira/autocut/server/internal/hub"
@@ -18,6 +19,7 @@ type UploadHandler struct {
 	quota        *uploader.QuotaTracker
 	auth         *uploader.OAuthManager
 	pipelineRepo *database.PipelineRunRepo
+	strategy     *uploader.UploadStrategy
 	log          *slog.Logger
 }
 
@@ -35,8 +37,17 @@ func NewUploadHandler(
 		quota:        quota,
 		auth:         auth,
 		pipelineRepo: pipelineRepo,
-		log:          slog.With("component", "api", "handler", "upload"),
+		// FP-014: default to sequential strategy (capacity=1) so uploads don't
+		// stomp each other. Callers may override via WithStrategy.
+		strategy: uploader.NewUploadStrategy("sequential", 1),
+		log:      slog.With("component", "api", "handler", "upload"),
 	}
+}
+
+// WithStrategy overrides the concurrency strategy used for uploads.
+func (h *UploadHandler) WithStrategy(s *uploader.UploadStrategy) *UploadHandler {
+	h.strategy = s
+	return h
 }
 
 type uploadRequest struct {
@@ -46,6 +57,9 @@ type uploadRequest struct {
 	Privacy     string `json:"privacy"`
 	ChannelID   string `json:"channel_id"`
 	SessionID   string `json:"session_id"`
+	// FP-013: scheduled publish time (RFC3339). When set, video is uploaded as
+	// private and YouTube publishes it automatically at this time.
+	PublishAt string `json:"publish_at"`
 }
 
 // GetUploads handles GET /api/upload — returns empty list for now.
@@ -54,6 +68,7 @@ func (h *UploadHandler) GetUploads(w http.ResponseWriter, r *http.Request) {
 }
 
 // PostUpload handles POST /api/upload.
+// TODO: Read upload_strategy + upload_parallel_count from settings and use UploadStrategy for batch uploads
 func (h *UploadHandler) PostUpload(w http.ResponseWriter, r *http.Request) {
 	if h.uploader == nil {
 		writeError(w, http.StatusServiceUnavailable, "not_configured", "YouTube uploader not configured — complete OAuth setup first")
@@ -84,6 +99,14 @@ func (h *UploadHandler) PostUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UploadHandler) runUpload(ctx context.Context, jobID string, req uploadRequest) {
+	// FP-014: Acquire a concurrency slot before starting the actual YouTube API call.
+	// In sequential mode (capacity=1) this ensures uploads run one at a time.
+	// In parallel mode this limits simultaneous uploads to the configured count.
+	if h.strategy != nil {
+		h.strategy.Acquire()
+		defer h.strategy.Release()
+	}
+
 	h.hub.Publish(jobID, hub.SSEEvent{Type: "progress", Data: map[string]interface{}{
 		"bytes_sent": 0, "total_bytes": 0, "percent": 0,
 	}})
@@ -93,6 +116,22 @@ func (h *UploadHandler) runUpload(ctx context.Context, jobID string, req uploadR
 		Title:       req.Title,
 		Description: req.Description,
 		Privacy:     req.Privacy,
+	}
+
+	// FP-013: wire publish_at → YouTube Data API scheduled upload.
+	// When set, the video is uploaded as "private" and YouTube publishes it
+	// at the specified time (status.publishAt in the videos.insert call).
+	if req.PublishAt != "" {
+		t, err := time.Parse(time.RFC3339, req.PublishAt)
+		if err != nil {
+			h.log.Warn("upload: invalid publish_at, ignoring schedule",
+				"jobID", jobID, "publish_at", req.PublishAt, "err", err)
+		} else {
+			ytReq.ScheduleAt = &t
+			// privacyStatus() in youtube.go already sets "private" when ScheduleAt != nil,
+			// and Upload() sets vid.Status.PublishAt to the RFC3339 timestamp.
+			h.log.Info("upload scheduled", "jobID", jobID, "publish_at", req.PublishAt)
+		}
 	}
 
 	ch, err := h.uploader.Upload(ctx, ytReq)

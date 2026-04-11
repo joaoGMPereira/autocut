@@ -8,6 +8,7 @@ export interface WizardStepDef {
 }
 
 const DEFAULT_STEPS: WizardStepDef[] = [
+  { id: 'channel', label: 'Canal' },
   { id: 'url', label: 'URL' },
   { id: 'mode', label: 'Modo' },
   { id: 'execute', label: 'Executar' },
@@ -26,6 +27,8 @@ interface WizardState {
   // Pending data collected across steps before run creation
   pendingUrl: string;
   pendingModeConfig: ModeConfig | null;
+  pendingChannelId: number | null;
+  sourceRunId: number | null;
 
   visibleSteps: () => WizardStepDef[];
   currentStepDef: () => WizardStepDef | undefined;
@@ -38,6 +41,8 @@ interface WizardState {
   setStepHidden: (stepId: string, hidden: boolean) => void;
   setPendingUrl: (url: string) => void;
   setPendingModeConfig: (config: ModeConfig) => void;
+  setPendingChannelId: (id: number | null) => void;
+  setSourceRunId: (id: number | null) => void;
   resetWizard: () => void;
 }
 
@@ -48,6 +53,8 @@ export const useWizardStore = create<WizardState>((set, get) => ({
   maxReached: 0,
   pendingUrl: '',
   pendingModeConfig: null,
+  pendingChannelId: null,
+  sourceRunId: null,
 
   visibleSteps: () => get().steps.filter((s) => !s.hidden),
 
@@ -102,6 +109,10 @@ export const useWizardStore = create<WizardState>((set, get) => ({
 
   setPendingModeConfig: (config) => set({ pendingModeConfig: config }),
 
+  setPendingChannelId: (id) => set({ pendingChannelId: id }),
+
+  setSourceRunId: (id) => set({ sourceRunId: id }),
+
   setStepHidden: (stepId, hidden) => {
     set((state) => ({
       steps: state.steps.map((s) => (s.id === stepId ? { ...s, hidden } : s)),
@@ -116,5 +127,7 @@ export const useWizardStore = create<WizardState>((set, get) => ({
       maxReached: 0,
       pendingUrl: '',
       pendingModeConfig: null,
+      pendingChannelId: null,
+      sourceRunId: null,
     }),
 }));

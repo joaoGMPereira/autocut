@@ -24,7 +24,7 @@ else
   $(error ARCH inválido: '$(ARCH)'. Use 'arm64' ou 'x64'.)
 endif
 
-.PHONY: help dev run wolf-build wolf-build-debug wolf-build-windows \
+.PHONY: help dev run migrate wolf-build wolf-build-debug wolf-build-windows \
         release release-unsigned release-macos release-macos-arch release-windows \
         bump-version publish kill clean install
 
@@ -43,8 +43,15 @@ help:
 
 # ─── Desenvolvimento ──────────────────────────────────────────────────────────
 
+## Aplicar migrações de DB no dir de dev (idempotente — seguro rodar sempre)
+migrate: wolf-build-debug
+	@echo "▶ Running DB migrations ($$HOME/.autocut-dev)..."
+	@mkdir -p $$HOME/.autocut-dev
+	@apps/desktop/bin/server -dir $$HOME/.autocut-dev -migrate-only
+	@echo "✔ Migrations complete"
+
 ## Dev com Electron — build do desktop + abre o app (que gerencia web + server)
-dev: wolf-build-debug
+dev: migrate
 	@echo "▶ Starting AutoCut dev environment..."
 	@trap 'make kill' INT TERM; \
 	GO_DIR=$$HOME/.autocut-dev \
@@ -52,7 +59,7 @@ dev: wolf-build-debug
 	wait
 
 ## Dev sem Electron — Go + Next.js no browser
-run: wolf-build-debug
+run: migrate
 	@echo "▶ Starting Go + Next.js (no Electron)..."
 	@trap 'make kill' INT TERM; \
 	apps/desktop/bin/server \

@@ -491,10 +491,31 @@ func (v *WhisperValidator) ResolvedPath() string {
 }
 
 func (v *WhisperValidator) Install(ctx context.Context, logCh chan<- string) error {
-	if statExists(v.dir.BinPath("whisper-cli")) {
+	dylibDest := v.dir.LibPath("libwhisper.1.dylib")
+	dylibPresent := statExists(dylibDest)
+
+	// Ensure the dylib is in ~/.autocut/lib/ (needed at runtime).
+	if !dylibPresent {
+		if src := discoverLocalDylib(); src != "" {
+			logCh <- "Found libwhisper.1.dylib on system, installing..."
+			if err := copyToLibWithProgress(v.dir, "libwhisper.1.dylib", src, logCh); err != nil {
+				return err
+			}
+			dylibPresent = true
+		}
+	}
+
+	// If both binary and dylib are present, nothing left to do.
+	if statExists(v.dir.BinPath("whisper-cli")) && dylibPresent {
 		logCh <- "whisper already in ~/.autocut/bin/"
 		return nil
 	}
+
+	// If only the binary was already there but dylib was just installed, we're done.
+	if statExists(v.dir.BinPath("whisper-cli")) {
+		return nil
+	}
+
 	// Try PATH first.
 	if systemPath := lookFirst("whisper-cli", "whisper", "whisper-cpp"); systemPath != "" {
 		return copyToBinWithProgress(v.dir, "whisper-cli", systemPath, logCh)
@@ -536,6 +557,15 @@ func (v *WhisperValidator) Status() ToolStatus {
 	// Auto-symlink: prefer whisper-cli name as the canonical bin/ entry
 	if systemPath := lookFirst("whisper-cli", "whisper"); systemPath != "" {
 		autoCopyBackground(v.dir, "whisper-cli", systemPath)
+	}
+	// Auto-install dylib if the binary is present but the dylib is missing.
+	if statExists(v.dir.BinPath("whisper-cli")) && !statExists(v.dir.LibPath("libwhisper.1.dylib")) {
+		if src := discoverLocalDylib(); src != "" {
+			dir := v.dir
+			go func() {
+				_ = copyFile(src, dir.LibPath("libwhisper.1.dylib"))
+			}()
+		}
 	}
 	return ToolStatus{
 		Name:      v.Name(),

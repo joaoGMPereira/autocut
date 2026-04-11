@@ -84,6 +84,7 @@ type PipelineRun struct {
 	ModeConfigJSON  string        `json:"-"`
 	StartedAt       int64         `json:"started_at"`
 	FinishedAt      sql.NullInt64 `json:"finished_at"`
+	SourceRunID     sql.NullInt64 `json:"source_run_id,omitempty"`
 }
 
 // PipelineRunStep tracks individual step execution within a pipeline run.
@@ -110,81 +111,90 @@ type ThumbnailBackground struct {
 
 // Kotlin: ChannelConfigTable in Tables.kt + delegates
 type ChannelConfig struct {
-	ID        int64
-	ChannelID int64
+	ID        int64 `json:"id"`
+	ChannelID int64 `json:"channel_id"`
 
 	// Gradient colors (thumbnail generation)
-	GradientColorStart string
-	GradientColorEnd   string
+	GradientColorStart string `json:"gradient_color_start"`
+	GradientColorEnd   string `json:"gradient_color_end"`
 
 	// Thumbnail text styling
-	ThumbnailFontFamily  string
-	ThumbnailTextColor1  string
-	ThumbnailTextColor2  string
-	ThumbnailTextColor3  string
+	ThumbnailFontFamily  string `json:"thumbnail_font_family"`
+	ThumbnailTextColor1  string `json:"thumbnail_text_color1"`
+	ThumbnailTextColor2  string `json:"thumbnail_text_color2"`
+	ThumbnailTextColor3  string `json:"thumbnail_text_color3"`
 
 	// YouTube metadata defaults
-	MadeForKids              bool
-	DefaultCategoryID        int
-	DefaultPlaylistIDCortes  sql.NullString
-	DefaultPlaylistIDShorts  sql.NullString
-	DefaultTags              string
-	ShortsTitleHashtags      string
-	VideoDescriptionHashtags string
+	MadeForKids              bool           `json:"made_for_kids"`
+	DefaultCategoryID        int            `json:"default_category_id"`
+	DefaultPlaylistIDCortes  sql.NullString `json:"default_playlist_id_cortes"`
+	DefaultPlaylistIDShorts  sql.NullString `json:"default_playlist_id_shorts"`
+	DefaultTags              string         `json:"default_tags"`
+	ShortsTitleHashtags      string         `json:"shorts_title_hashtags"`
+	VideoDescriptionHashtags string         `json:"video_description_hashtags"`
 
 	// Anti-duplicate configuration
-	AntiDuplicateEnabled bool
-	AntiDuplicateMode    string
+	AntiDuplicateEnabled bool   `json:"anti_duplicate_enabled"`
+	AntiDuplicateMode    string `json:"anti_duplicate_mode"`
 
 	// Speed configuration
-	SpeedEnabled bool
-	SpeedFactor  float64
+	SpeedEnabled bool    `json:"speed_enabled"`
+	SpeedFactor  float64 `json:"speed_factor"`
 
 	// Visual configuration
-	VisualCropEnabled         bool
-	VisualCropPercent         float64
-	VisualZoomEnabled         bool
-	VisualZoomAmount          float64
-	VisualColorGradingEnabled bool
-	VisualBrightness          float64
-	VisualSaturation          float64
-	VisualContrast            float64
+	VisualCropEnabled         bool    `json:"visual_crop_enabled"`
+	VisualCropPercent         float64 `json:"visual_crop_percent"`
+	VisualZoomEnabled         bool    `json:"visual_zoom_enabled"`
+	VisualZoomAmount          float64 `json:"visual_zoom_amount"`
+	VisualColorGradingEnabled bool    `json:"visual_color_grading_enabled"`
+	VisualBrightness          float64 `json:"visual_brightness"`
+	VisualSaturation          float64 `json:"visual_saturation"`
+	VisualContrast            float64 `json:"visual_contrast"`
 
 	// Branding configuration
-	BrandingLogoEnabled            bool
-	BrandingLogoPath               sql.NullString
-	BrandingLogoPosition           string
-	BrandingLogoOpacity            float64
-	BrandingLogoScale              float64
-	BrandingIntroEnabled           bool
-	BrandingIntroPath              sql.NullString
-	BrandingGenerateIntroFromLogo  bool
-	BrandingIntroDuration          float64
-	BrandingOutroEnabled           bool
-	BrandingOutroPath              sql.NullString
+	BrandingLogoEnabled           bool           `json:"branding_logo_enabled"`
+	BrandingLogoPath              sql.NullString `json:"branding_logo_path"`
+	BrandingLogoPosition          string         `json:"branding_logo_position"`
+	BrandingLogoOpacity           float64        `json:"branding_logo_opacity"`
+	BrandingLogoScale             float64        `json:"branding_logo_scale"`
+	BrandingIntroEnabled          bool           `json:"branding_intro_enabled"`
+	BrandingIntroPath             sql.NullString `json:"branding_intro_path"`
+	BrandingGenerateIntroFromLogo bool           `json:"branding_generate_intro_from_logo"`
+	BrandingIntroDuration         float64        `json:"branding_intro_duration"`
+	BrandingOutroEnabled          bool           `json:"branding_outro_enabled"`
+	BrandingOutroPath             sql.NullString `json:"branding_outro_path"`
 
 	// Audio configuration
-	AudioMusicEnabled bool
-	AudioMusicPath    sql.NullString
-	AudioMusicVolume  float64
-	AudioRandomMusic  bool
-	AudioMusicFolder  string
+	AudioMusicEnabled bool           `json:"audio_music_enabled"`
+	AudioMusicPath    sql.NullString `json:"audio_music_path"`
+	AudioMusicVolume  float64        `json:"audio_music_volume"`
+	AudioRandomMusic  bool           `json:"audio_random_music"`
+	AudioMusicFolder  string         `json:"audio_music_folder"`
 
 	// Pinned comment
-	PinnedCommentTemplate string
+	PinnedCommentTemplate string `json:"pinned_comment_template"`
 
 	// Preview/caption configuration
-	PreviewCaptionsEnabled         bool
-	PreviewCaptionStyle            string
-	PreviewCaptionTextStyleJSON    string
-	PreviewVideoOverlayConfigJSON  string
-	PreviewTextOverlayConfigJSON   string
+	PreviewCaptionsEnabled        bool   `json:"preview_captions_enabled"`
+	PreviewCaptionStyle           string `json:"preview_caption_style"`
+	PreviewCaptionTextStyleJSON   string `json:"preview_caption_text_style_json"`
+	PreviewVideoOverlayConfigJSON string `json:"preview_video_overlay_config_json"`
+	PreviewTextOverlayConfigJSON  string `json:"preview_text_overlay_config_json"`
 
 	// Max highlights
-	MaxHighlights sql.NullInt64
+	MaxHighlights sql.NullInt64 `json:"max_highlights"`
 
-	CreatedAt int64
-	UpdatedAt int64
+	CreatedAt int64 `json:"created_at"`
+	UpdatedAt int64 `json:"updated_at"`
+}
+
+// MusicBlacklistEntry represents a per-channel music pattern to exclude.
+// FP-009: music_blacklist table.
+type MusicBlacklistEntry struct {
+	ID        int64  `json:"id"`
+	ChannelID int64  `json:"channel_id"`
+	Pattern   string `json:"pattern"`
+	CreatedAt string `json:"created_at"`
 }
 
 // Kotlin: AppSettingsTable in Tables.kt

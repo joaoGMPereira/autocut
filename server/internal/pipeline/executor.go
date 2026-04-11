@@ -264,6 +264,13 @@ func (e *Executor) RunGeneratingClips(ctx context.Context, runID int64) {
 	publishPhaseProgress(e.hub, runID, PhaseCut, 100, nil)
 
 	// ── Anti-Dup ──────────────────────────────────────────────────────────────
+	// maxEffectDurationSec is the maximum clip duration for which FFmpeg-based
+	// per-clip effects (anti_dup, logo, captions, text_overlay) are applied.
+	// Clips longer than this threshold cause FFmpeg to OOM-kill the Go process
+	// (internal filter-graph memory scales with duration × resolution).
+	// Matches the LL-031 guard used for the shorts phase.
+	const maxEffectDurationSec = 120.0
+
 	if e.effects != nil && e.chanCfg != nil && run.ChannelID != nil {
 		cfg, cfgErr := e.chanCfg.GetByChannelIDOrNil(ctx, *run.ChannelID)
 		if cfgErr != nil {
@@ -275,6 +282,18 @@ func (e *Executor) RunGeneratingClips(ctx context.Context, runID int64) {
 			}
 			publishPhaseProgress(e.hub, runID, PhaseAntiDup, 0, nil)
 			for i, clipPath := range clipPaths {
+				// Skip clips that exceed the duration guard — re-encoding a long
+				// clip for anti_dup (drawtext filter) triggers FFmpeg OOM (LL-033).
+				if i < len(segments) {
+					dur := segments[i].EndSec - segments[i].StartSec
+					if dur > maxEffectDurationSec {
+						logger.Warn("skipping anti_dup for clip exceeding max duration",
+							"clip", i, "duration_sec", dur, "max_sec", maxEffectDurationSec)
+						publishPhaseProgress(e.hub, runID, PhaseAntiDup,
+							float64(i+1)/float64(len(clipPaths))*100, nil)
+						continue
+					}
+				}
 				caption := fmt.Sprintf("run%d-clip%d", runID, i)
 				tmp := clipPath + ".antidup.mp4"
 				if dupErr := e.effects.AntiDup(clipPath, caption, tmp); dupErr != nil {
@@ -306,6 +325,18 @@ func (e *Executor) RunGeneratingClips(ctx context.Context, runID int64) {
 			}
 			publishPhaseProgress(e.hub, runID, PhaseLogo, 0, nil)
 			for i, clipPath := range clipPaths {
+				// Skip clips that exceed the duration guard — logo overlay on a
+				// long clip re-encodes the full video and triggers OOM (LL-033).
+				if i < len(segments) {
+					dur := segments[i].EndSec - segments[i].StartSec
+					if dur > maxEffectDurationSec {
+						logger.Warn("skipping logo_watermark for clip exceeding max duration",
+							"clip", i, "duration_sec", dur, "max_sec", maxEffectDurationSec)
+						pct := float64(i+1) / float64(len(clipPaths)) * 100
+						publishPhaseProgress(e.hub, runID, PhaseLogo, pct, nil)
+						continue
+					}
+				}
 				pos := effects.TextPosition(strings.ToLower(logoCfg.BrandingLogoPosition))
 				tmp := clipPath + ".logo.mp4"
 				if oErr := e.effects.Overlay(clipPath, logoCfg.BrandingLogoPath.String, pos,
@@ -353,6 +384,18 @@ func (e *Executor) RunGeneratingClips(ctx context.Context, runID int64) {
 					styleCfg := mapCaptionStyle(subCfg.PreviewCaptionStyle)
 
 					for i, clipPath := range clipPaths {
+						// Skip clips that exceed the duration guard — subtitle burn on
+						// a long clip re-encodes the full video and triggers OOM (LL-033).
+						if i < len(segments) {
+							dur := segments[i].EndSec - segments[i].StartSec
+							if dur > maxEffectDurationSec {
+								logger.Warn("skipping preview_captions for clip exceeding max duration",
+									"clip", i, "duration_sec", dur, "max_sec", maxEffectDurationSec)
+								pct := float64(i+1) / float64(len(clipPaths)) * 100
+								publishPhaseProgress(e.hub, runID, PhaseSubtitles, pct, nil)
+								continue
+							}
+						}
 						clipStart := time.Duration(segments[i].StartSec * float64(time.Second))
 						clipEnd := time.Duration(segments[i].EndSec * float64(time.Second))
 						subSegs := filterAndRebaseSegments(tr.Segments, clipStart, clipEnd)
@@ -407,6 +450,18 @@ func (e *Executor) RunGeneratingClips(ctx context.Context, runID int64) {
 					color = "white"
 				}
 				for i, clipPath := range clipPaths {
+					// Skip clips that exceed the duration guard — text overlay on
+					// a long clip re-encodes the full video and triggers OOM (LL-033).
+					if i < len(segments) {
+						dur := segments[i].EndSec - segments[i].StartSec
+						if dur > maxEffectDurationSec {
+							logger.Warn("skipping text_overlay for clip exceeding max duration",
+								"clip", i, "duration_sec", dur, "max_sec", maxEffectDurationSec)
+							pct := float64(i+1) / float64(len(clipPaths)) * 100
+							publishPhaseProgress(e.hub, runID, PhaseTextOverlay, pct, nil)
+							continue
+						}
+					}
 					tmp := clipPath + ".textoverlay.mp4"
 					if toErr := e.effects.TextOverlay(clipPath, toCfg.Text, toCfg.FontName, fontSize, color, pos, 0, 86400, tmp); toErr != nil {
 						logger.Warn("text overlay failed, keeping original", "clip", i, "err", toErr)

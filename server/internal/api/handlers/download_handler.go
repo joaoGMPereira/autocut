@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -34,11 +35,12 @@ func NewDownloadHandler(h *hub.SSEHub, ytDl *downloader.YouTubeDownloader, twDl 
 
 type downloadRequest struct {
 	URL           string `json:"url"`
-	Type          string `json:"type"`       // "youtube" | "twitch"
+	Type          string `json:"type"`           // "youtube" | "twitch"
 	OutputDir     string `json:"output_dir"`
 	Quality       string `json:"quality"`        // "720p" | "1080p" | "best" | "" (default 1080p)
 	WithThumbnail bool   `json:"with_thumbnail"` // download thumbnail alongside video
 	WithMetadata  bool   `json:"with_metadata"`  // include title, duration_sec, platform in done event
+	DownloadChat  bool   `json:"download_chat"`  // download Twitch chat (Twitch VODs only)
 	SessionID     string `json:"session_id"`
 }
 
@@ -67,13 +69,13 @@ func (h *DownloadHandler) PostDownload(w http.ResponseWriter, r *http.Request) {
 	jobID := newJobID()
 	h.log.Info("download job started", "jobID", jobID, "type", req.Type, "url", req.URL)
 
-	go h.runDownload(jobID, req)
+	go h.runDownload(context.Background(), jobID, req)
 
 	writeJSON(w, http.StatusAccepted, map[string]string{"job_id": jobID})
 }
 
 // runDownload executes the download in a goroutine and publishes SSE events.
-func (h *DownloadHandler) runDownload(jobID string, req downloadRequest) {
+func (h *DownloadHandler) runDownload(ctx context.Context, jobID string, req downloadRequest) {
 	h.hub.Publish(jobID, hub.SSEEvent{Type: "progress", Data: map[string]string{"status": "starting"}})
 
 	h.hub.Publish(jobID, hub.SSEEvent{
@@ -98,6 +100,22 @@ func (h *DownloadHandler) runDownload(jobID string, req downloadRequest) {
 			data["title"] = info.Title
 			data["duration_sec"] = info.Duration.Seconds()
 			data["platform"] = "twitch"
+		}
+		if req.DownloadChat {
+			chatDir := filepath.Join(req.OutputDir, "chat")
+			if err := os.MkdirAll(chatDir, 0o755); err != nil {
+				h.log.Warn("chat dir create failed", "jobID", jobID, "err", err)
+			} else {
+				chatOutputPath := filepath.Join(chatDir, info.VideoID+".json")
+				if chatErr := h.twDl.DownloadChat(ctx, req.URL, chatOutputPath); chatErr != nil {
+					h.log.Warn("chat download failed (non-fatal)", "jobID", jobID, "err", chatErr)
+				} else {
+					h.hub.Publish(jobID, hub.SSEEvent{
+						Type: "chat_downloaded",
+						Data: map[string]string{"chat_path": chatOutputPath},
+					})
+				}
+			}
 		}
 		h.hub.Publish(jobID, hub.SSEEvent{Type: "done", Data: data})
 		if req.SessionID != "" {

@@ -79,3 +79,14 @@ type TranscriptSegment interface {
 	GetEnd() float64   // segment end in seconds
 	GetText() string   // raw transcribed text
 }
+
+// EngagementScore holds the result of a short's engagement analysis.
+// Kotlin ref: ShortsOllamaDelegate.EngagementResult (combined score + factors)
+type EngagementScore struct {
+	// Score is the composite engagement score in the range [0, 100].
+	Score float64 `json:"score"`
+	// Factors lists human-readable strings describing each contributing signal.
+	Factors []string `json:"factors"`
+	// HighlightID is the source highlight's ID, or 0 when not from a highlight.
+	HighlightID int64 `json:"highlight_id"`
+}

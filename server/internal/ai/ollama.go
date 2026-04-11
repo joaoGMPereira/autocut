@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/joaoGMPereira/autocut/server/internal/toolerr"
 )
 
 // ollamaGenerateResponse is the per-line JSON shape from Ollama's NDJSON stream.
@@ -64,11 +66,11 @@ func (c *OllamaClient) GenerateStream(ctx context.Context, req GenerateRequest) 
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("ollama: do request: %w", err)
+		return nil, &toolerr.ToolErr{Tool: "ollama", Op: "request", Cause: err}
 	}
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
-		return nil, fmt.Errorf("ollama: unexpected status %d", resp.StatusCode)
+		return nil, &toolerr.ToolErr{Tool: "ollama", Op: "request", Cause: fmt.Errorf("unexpected status %d", resp.StatusCode)}
 	}
 
 	ch := make(chan string, 32)

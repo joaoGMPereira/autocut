@@ -9,6 +9,7 @@ import (
 type AutoCutDir struct {
 	Root           string // ~/.autocut/
 	BinDir         string // ~/.autocut/bin/
+	LibDir         string // ~/.autocut/lib/
 	ModelsDir      string // ~/.autocut/models/
 	WhisperDir     string // ~/.autocut/models/whisper/
 	TokensDir      string // ~/.autocut/tokens/
@@ -42,6 +43,7 @@ func newAutoCutDirFromRoot(root string) *AutoCutDir {
 	return &AutoCutDir{
 		Root:           root,
 		BinDir:         filepath.Join(root, "bin"),
+		LibDir:         filepath.Join(root, "lib"),
 		ModelsDir:      filepath.Join(root, "models"),
 		WhisperDir:     filepath.Join(root, "models", "whisper"),
 		TokensDir:      filepath.Join(root, "tokens"),
@@ -60,6 +62,7 @@ func (d *AutoCutDir) Ensure() error {
 	dirs := []string{
 		d.Root,
 		d.BinDir,
+		d.LibDir,
 		d.ModelsDir,
 		d.WhisperDir,
 		d.TokensDir,
@@ -82,6 +85,11 @@ func (d *AutoCutDir) Ensure() error {
 // BinPath returns the full path for a binary inside BinDir.
 func (d *AutoCutDir) BinPath(tool string) string {
 	return filepath.Join(d.BinDir, tool)
+}
+
+// LibPath returns the full path for a library file inside LibDir.
+func (d *AutoCutDir) LibPath(file string) string {
+	return filepath.Join(d.LibDir, file)
 }
 
 // WhisperModelPath returns the full path for a Whisper model file.

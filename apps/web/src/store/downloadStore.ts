@@ -18,6 +18,7 @@ interface DownloadPayload {
   quality?: string;
   with_thumbnail?: boolean;
   with_metadata?: boolean;
+  download_chat?: boolean;
   session_id?: string;
 }
 
@@ -26,7 +27,9 @@ interface DownloadState {
   startDownload: (goUrl: string, payload: DownloadPayload) => Promise<string>;
 }
 
-type SseEvent = { type: 'log' | 'done' | 'error'; data: { message?: string; success?: boolean } };
+type SseEvent =
+  | { type: 'log' | 'done' | 'error'; data: { message?: string; success?: boolean } }
+  | { type: 'chat_downloaded'; data: { chat_path: string } };
 
 export const useDownloadStore = create<DownloadState>((set) => ({
   jobs: {},
@@ -62,6 +65,18 @@ export const useDownloadStore = create<DownloadState>((set) => ({
               jobs: { ...state.jobs, [job_id]: { ...job, logs: [...job.logs, event.data.message ?? ''] } },
             };
           });
+        } else if (event.type === 'chat_downloaded') {
+          log.info('chat downloaded', { job_id, chat_path: event.data.chat_path });
+          set((state) => {
+            const job = state.jobs[job_id];
+            if (!job) return state;
+            return {
+              jobs: {
+                ...state.jobs,
+                [job_id]: { ...job, result: { ...job.result, chat_path: event.data.chat_path } },
+              },
+            };
+          });
         } else if (event.type === 'done') {
           es.close();
           log.info('download completed', { job_id });
@@ -69,7 +84,7 @@ export const useDownloadStore = create<DownloadState>((set) => ({
             const job = state.jobs[job_id];
             if (!job) return state;
             return {
-              jobs: { ...state.jobs, [job_id]: { ...job, status: 'done', result: event.data as Record<string, unknown> } },
+              jobs: { ...state.jobs, [job_id]: { ...job, status: 'done', result: { ...job.result, ...(event.data as Record<string, unknown>) } } },
             };
           });
         } else if (event.type === 'error') {

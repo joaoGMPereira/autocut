@@ -128,6 +128,7 @@ func (g *SubtitleGenerator) BurnSubtitles(videoPath, srtPath, output string, cfg
 	vf := fmt.Sprintf("subtitles=%s:force_style='%s'", srtPath, style)
 
 	args := []string{
+		"-loglevel", "error",
 		"-i", videoPath,
 		"-vf", vf,
 		"-c:a", "copy",

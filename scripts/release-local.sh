@@ -244,7 +244,7 @@ if [[ "$RESUME" == "true" ]]; then
     BUILD_ARM64=false
     success "macOS arm64 — artefato já existe, pulando build"
   fi
-  if [[ "$BUILD_X64" == "true" && -f "$RELEASE_DIR/AutoCut-${VERSION}.dmg" ]]; then
+  if [[ "$BUILD_X64" == "true" && -f "$RELEASE_DIR/AutoCut-${VERSION}-x64.dmg" ]]; then
     RESULT_X64="success"
     BUILD_X64=false
     success "macOS x64 — artefato já existe, pulando build"

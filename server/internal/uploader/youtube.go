@@ -268,6 +268,82 @@ func (u *YouTubeUploader) PinComment(videoID, text string) error {
 	return nil
 }
 
+// RemoteVideoInfo holds the fields returned by ListVideos.
+// FP-015: used to populate the remote_videos cache table.
+type RemoteVideoInfo struct {
+	YoutubeID   string
+	Title       string
+	Description string
+	Tags        []string
+	CategoryID  string
+	PublishedAt time.Time
+}
+
+// ListVideos fetches the authenticated channel's uploaded videos, page by page.
+// Pass an empty pageToken to start from the first page; the returned nextPageToken
+// is empty when the last page has been reached.
+// FP-015: drives the remote_videos cache refresh.
+func (u *YouTubeUploader) ListVideos(pageToken string, maxResults int64) ([]RemoteVideoInfo, string, error) {
+	if maxResults <= 0 || maxResults > 50 {
+		maxResults = 50
+	}
+
+	// Step 1: fetch the channel's "uploads" playlist ID.
+	chanResp, err := u.svc.Channels.List([]string{"contentDetails"}).Mine(true).Do()
+	if err != nil {
+		return nil, "", fmt.Errorf("fetch channel uploads playlist: %w", err)
+	}
+	if len(chanResp.Items) == 0 {
+		return nil, "", fmt.Errorf("no channel found for authenticated user")
+	}
+	uploadsID := chanResp.Items[0].ContentDetails.RelatedPlaylists.Uploads
+
+	// Step 2: list playlist items.
+	plCall := u.svc.PlaylistItems.List([]string{"snippet", "contentDetails"}).
+		PlaylistId(uploadsID).
+		MaxResults(maxResults)
+	if pageToken != "" {
+		plCall = plCall.PageToken(pageToken)
+	}
+	plResp, err := plCall.Do()
+	if err != nil {
+		return nil, "", fmt.Errorf("list uploads playlist items: %w", err)
+	}
+
+	videoIDs := make([]string, 0, len(plResp.Items))
+	for _, item := range plResp.Items {
+		videoIDs = append(videoIDs, item.ContentDetails.VideoId)
+	}
+	if len(videoIDs) == 0 {
+		return nil, plResp.NextPageToken, nil
+	}
+
+	// Step 3: fetch full snippet for each video ID to get tags + categoryId.
+	vidResp, err := u.svc.Videos.List([]string{"snippet"}).Id(videoIDs...).Do()
+	if err != nil {
+		return nil, "", fmt.Errorf("fetch video snippets: %w", err)
+	}
+
+	infos := make([]RemoteVideoInfo, 0, len(vidResp.Items))
+	for _, v := range vidResp.Items {
+		var pubAt time.Time
+		if v.Snippet.PublishedAt != "" {
+			pubAt, _ = time.Parse(time.RFC3339, v.Snippet.PublishedAt)
+		}
+		infos = append(infos, RemoteVideoInfo{
+			YoutubeID:   v.Id,
+			Title:       v.Snippet.Title,
+			Description: v.Snippet.Description,
+			Tags:        v.Snippet.Tags,
+			CategoryID:  v.Snippet.CategoryId,
+			PublishedAt: pubAt,
+		})
+	}
+
+	u.log.Info("videos listed", "count", len(infos), "nextPageToken", plResp.NextPageToken)
+	return infos, plResp.NextPageToken, nil
+}
+
 // --- helpers ---------------------------------------------------------------
 
 // progressReader wraps an io.Reader and sends UploadProgress events to ch.

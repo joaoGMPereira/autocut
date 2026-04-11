@@ -1,0 +1,38 @@
+'use client';
+
+import { usePipelineStore } from '@/store/pipelineStore';
+
+export function DownloadInfoCard() {
+  const phaseProgress = usePipelineStore((s) => s.phaseProgress);
+
+  if (!phaseProgress || phaseProgress.phase !== 'download') return null;
+
+  const pct = Math.round(phaseProgress.percentDone);
+  const speed = phaseProgress.speedKbs != null
+    ? phaseProgress.speedKbs > 1024
+      ? `${(phaseProgress.speedKbs / 1024).toFixed(1)} MB/s`
+      : `${phaseProgress.speedKbs.toFixed(0)} KB/s`
+    : null;
+  const eta = phaseProgress.etaSec != null
+    ? phaseProgress.etaSec > 60
+      ? `${Math.floor(phaseProgress.etaSec / 60)}m ${phaseProgress.etaSec % 60}s`
+      : `${phaseProgress.etaSec}s`
+    : null;
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-3 text-sm space-y-2">
+      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Download</p>
+      <div className="w-full h-1.5 bg-zinc-700 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-cyan-400 rounded-full transition-all duration-300"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <div className="flex items-center justify-between text-xs text-zinc-400">
+        <span>{pct}%</span>
+        <span>{speed ?? ''}</span>
+        <span>{eta ? `ETA ${eta}` : ''}</span>
+      </div>
+    </div>
+  );
+}

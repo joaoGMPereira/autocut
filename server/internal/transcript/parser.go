@@ -7,35 +7,29 @@ import (
 	"time"
 )
 
-// whisperSegmentJSON mirrors the whisper.cpp --output-json-full segment shape.
-// Kotlin ref: TranscriptJsonParser.parseWhisperJson — Kotlin reads "transcription"[].offsets.from/to ms;
-// whisper --output-json (not full) uses "segments"[].start/end as float64 seconds.
-// We target the simpler --output-json format used by whisper CLI wrappers.
+// whisperSegmentJSON mirrors the whisper.cpp --output-json segment shape.
+// Kotlin ref: TranscriptJsonParser.parseWhisperJson — reads "transcription"[].offsets.from/to ms.
+// whisper.cpp native JSON uses "transcription" at the top level with millisecond offsets.
 type whisperSegmentJSON struct {
-	Start float64            `json:"start"`
-	End   float64            `json:"end"`
-	Text  string             `json:"text"`
-	Words []whisperWordJSON  `json:"words"`
-}
-
-type whisperWordJSON struct {
-	Word  string  `json:"word"`
-	Start float64 `json:"start"`
-	End   float64 `json:"end"`
+	Offsets struct {
+		From int `json:"from"` // milliseconds
+		To   int `json:"to"`   // milliseconds
+	} `json:"offsets"`
+	Text string `json:"text"`
 }
 
 type whisperOutputJSON struct {
-	Segments []whisperSegmentJSON `json:"segments"`
+	Transcription []whisperSegmentJSON `json:"transcription"`
 }
 
-// ParseWhisperJSON parses the JSON emitted by whisper CLI with --output-json.
+// ParseWhisperJSON parses the JSON emitted by whisper-cli with --output-json.
 //
-// Expected shape:
+// Expected shape (whisper.cpp native format):
 //
-//	{"segments": [{"start": 0.0, "end": 1.5, "text": "hello", "words": [...]}]}
+//	{"transcription": [{"offsets": {"from": 0, "to": 1500}, "text": "hello"}]}
 //
-// Returns error if the JSON is malformed or the "segments" key is absent.
-// An empty segments array is valid and returns a Transcript with 0 segments.
+// Returns error if the JSON is malformed or the "transcription" key is absent.
+// An empty transcription array is valid and returns a Transcript with 0 segments.
 func ParseWhisperJSON(data []byte) (*Transcript, error) {
 	if len(data) == 0 {
 		return nil, errors.New("ParseWhisperJSON: empty input")
@@ -46,21 +40,20 @@ func ParseWhisperJSON(data []byte) (*Transcript, error) {
 		return nil, fmt.Errorf("ParseWhisperJSON: unmarshal: %w", err)
 	}
 
-	// Validate that "segments" key was present (not just zero-value absent).
-	// We use a secondary check by re-unmarshalling into a map.
+	// Validate that "transcription" key was present (not just zero-value absent).
 	var probe map[string]json.RawMessage
 	if err := json.Unmarshal(data, &probe); err == nil {
-		if _, ok := probe["segments"]; !ok {
-			return nil, errors.New("ParseWhisperJSON: missing \"segments\" key")
+		if _, ok := probe["transcription"]; !ok {
+			return nil, errors.New("ParseWhisperJSON: missing \"transcription\" key")
 		}
 	}
 
-	segments := make([]Segment, 0, len(raw.Segments))
+	segments := make([]Segment, 0, len(raw.Transcription))
 	var maxEnd time.Duration
 
-	for _, s := range raw.Segments {
-		start := floatSecsToDuration(s.Start)
-		end := floatSecsToDuration(s.End)
+	for _, s := range raw.Transcription {
+		start := msToDuration(s.Offsets.From)
+		end := msToDuration(s.Offsets.To)
 
 		seg := Segment{
 			Start:      start,
@@ -88,7 +81,7 @@ func ParseWhisperJSON(data []byte) (*Transcript, error) {
 	}, nil
 }
 
-// floatSecsToDuration converts a float64 seconds value to time.Duration.
-func floatSecsToDuration(secs float64) time.Duration {
-	return time.Duration(secs * float64(time.Second))
+// msToDuration converts a millisecond integer to time.Duration.
+func msToDuration(ms int) time.Duration {
+	return time.Duration(ms) * time.Millisecond
 }

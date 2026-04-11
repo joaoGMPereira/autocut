@@ -14,6 +14,12 @@ var allMigrations = []migration{
 	{version: 1, name: "initial_schema", fn: migrateV1},
 	{version: 2, name: "pipeline_parity", fn: migrateV2},
 	{version: 3, name: "mode_config_json", fn: migrateV3},
+	{version: 4, name: "music_blacklist", fn: migrateV4},
+	{version: 5, name: "queue_columns", fn: migrateV5},
+	{version: 6, name: "remote_videos", fn: migrateV6},
+	{version: 7, name: "video_comments", fn: migrateV7},
+	{version: 8, name: "pipeline_source_run_id", fn: migrateV8},
+	{version: 9, name: "pipeline_rewrite", fn: migrateV9},
 }
 
 // migrateV1 creates all 11 application tables.
@@ -284,6 +290,32 @@ func migrateV3(tx *sql.Tx) error {
 	return err
 }
 
+// migrateV4 creates the music_blacklist table for per-channel music pattern exclusion.
+// FP-009: music blacklist management.
+func migrateV4(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		CREATE TABLE IF NOT EXISTS music_blacklist (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+			pattern    TEXT    NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE INDEX IF NOT EXISTS idx_music_blacklist_channel_id ON music_blacklist(channel_id);
+	`)
+	return err
+}
+
+// migrateV5 adds queue_order and publish_at columns to uploads for FP-012/FP-013.
+// queue_order: integer position in the upload queue (default 0).
+// publish_at: ISO8601 scheduled publish time (nullable TEXT).
+func migrateV5(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		ALTER TABLE uploads ADD COLUMN queue_order INTEGER NOT NULL DEFAULT 0;
+		ALTER TABLE uploads ADD COLUMN publish_at  TEXT;
+	`)
+	return err
+}
+
 // migrateV2 adds step_outputs_json to pipeline_runs and creates pipeline_run_steps.
 func migrateV2(tx *sql.Tx) error {
 	_, err := tx.Exec(`
@@ -301,6 +333,125 @@ func migrateV2(tx *sql.Tx) error {
 		);
 
 		CREATE INDEX idx_pipeline_run_steps_run_id ON pipeline_run_steps(run_id);
+	`)
+	return err
+}
+
+// migrateV6 creates the remote_videos table for FP-015 (Mass Update).
+// Caches YouTube video metadata fetched via API; 1h TTL enforced at query layer.
+func migrateV6(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		CREATE TABLE IF NOT EXISTS remote_videos (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			channel_id   INTEGER NOT NULL,
+			youtube_id   TEXT    NOT NULL,
+			title        TEXT,
+			description  TEXT,
+			tags         TEXT,
+			category_id  INTEGER,
+			published_at DATETIME,
+			fetched_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(channel_id, youtube_id)
+		);
+		CREATE INDEX IF NOT EXISTS idx_remote_videos_channel  ON remote_videos(channel_id);
+		CREATE INDEX IF NOT EXISTS idx_remote_videos_fetched  ON remote_videos(fetched_at);
+		CREATE INDEX IF NOT EXISTS idx_remote_videos_pub      ON remote_videos(published_at);
+	`)
+	return err
+}
+
+// migrateV8 adds source_run_id to pipeline_runs to support the "Refazer" feature.
+// When source_run_id is set, the pipeline reuses the video file from the original run
+// instead of downloading it again.
+func migrateV8(tx *sql.Tx) error {
+	_, err := tx.Exec(`ALTER TABLE pipeline_runs ADD COLUMN source_run_id INTEGER REFERENCES pipeline_runs(id);`)
+	return err
+}
+
+// migrateV9 replaces the old pipeline_runs / pipeline_run_steps tables with
+// the new state-machine schema (state, active_phase, highlights, clips).
+func migrateV9(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		-- Drop old tables (cascades handled by FK ON DELETE)
+		DROP TABLE IF EXISTS pipeline_run_steps;
+		DROP TABLE IF EXISTS pipeline_runs;
+
+		-- New pipeline_runs: state-machine driven
+		CREATE TABLE pipeline_runs (
+			id               INTEGER PRIMARY KEY,
+			channel_id       INTEGER REFERENCES channels(id) ON DELETE SET NULL,
+			url              TEXT    NOT NULL DEFAULT '',
+			mode             TEXT    NOT NULL DEFAULT 'ai',
+			state            TEXT    NOT NULL DEFAULT 'WAITING_URL',
+			active_phase     TEXT    NOT NULL DEFAULT '',
+			error            TEXT    NOT NULL DEFAULT '',
+			mode_config_json TEXT    NOT NULL DEFAULT '{}',
+			video_path       TEXT    NOT NULL DEFAULT '',
+			transcript_path  TEXT    NOT NULL DEFAULT '',
+			started_at       INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000),
+			finished_at      INTEGER
+		);
+		CREATE INDEX idx_pipeline_runs_channel ON pipeline_runs(channel_id);
+		CREATE INDEX idx_pipeline_runs_state   ON pipeline_runs(state);
+
+		-- AI highlight review data
+		CREATE TABLE pipeline_highlights (
+			id           INTEGER PRIMARY KEY,
+			run_id       INTEGER NOT NULL REFERENCES pipeline_runs(id) ON DELETE CASCADE,
+			start_sec    REAL    NOT NULL DEFAULT 0,
+			end_sec      REAL    NOT NULL DEFAULT 0,
+			adj_start_sec REAL   NOT NULL DEFAULT 0,
+			adj_end_sec  REAL    NOT NULL DEFAULT 0,
+			score        REAL    NOT NULL DEFAULT 0,
+			text         TEXT    NOT NULL DEFAULT '',
+			reason       TEXT    NOT NULL DEFAULT '',
+			is_selected  INTEGER NOT NULL DEFAULT 1,
+			created_at   INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000)
+		);
+		CREATE INDEX idx_pipeline_highlights_run ON pipeline_highlights(run_id);
+
+		-- Generated clips with metadata and upload tracking
+		CREATE TABLE pipeline_clips (
+			id              INTEGER PRIMARY KEY,
+			run_id          INTEGER NOT NULL REFERENCES pipeline_runs(id) ON DELETE CASCADE,
+			highlight_id    INTEGER REFERENCES pipeline_highlights(id) ON DELETE SET NULL,
+			file_path       TEXT    NOT NULL DEFAULT '',
+			thumbnail_path  TEXT    NOT NULL DEFAULT '',
+			title           TEXT    NOT NULL DEFAULT '',
+			description     TEXT    NOT NULL DEFAULT '',
+			tags            TEXT    NOT NULL DEFAULT '',
+			thumbnail_style TEXT    NOT NULL DEFAULT 'default',
+			is_selected     INTEGER NOT NULL DEFAULT 1,
+			start_sec       REAL    NOT NULL DEFAULT 0,
+			end_sec         REAL    NOT NULL DEFAULT 0,
+			duration_sec    REAL    NOT NULL DEFAULT 0,
+			upload_status   TEXT    NOT NULL DEFAULT 'pending',
+			youtube_id      TEXT    NOT NULL DEFAULT '',
+			created_at      INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000)
+		);
+		CREATE INDEX idx_pipeline_clips_run       ON pipeline_clips(run_id);
+		CREATE INDEX idx_pipeline_clips_highlight ON pipeline_clips(highlight_id);
+	`)
+	return err
+}
+
+// migrateV7 creates the video_comments table for FP-016 (Comment Sync).
+// Persists top-level YouTube comment threads per video; comment_id is globally unique.
+func migrateV7(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		CREATE TABLE IF NOT EXISTS video_comments (
+			id               INTEGER PRIMARY KEY AUTOINCREMENT,
+			youtube_video_id TEXT    NOT NULL,
+			channel_id       INTEGER NOT NULL,
+			comment_id       TEXT    NOT NULL UNIQUE,
+			author           TEXT,
+			text             TEXT,
+			likes            INTEGER DEFAULT 0,
+			published_at     DATETIME,
+			synced_at        DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE INDEX IF NOT EXISTS idx_video_comments_channel ON video_comments(channel_id);
+		CREATE INDEX IF NOT EXISTS idx_video_comments_video   ON video_comments(youtube_video_id);
 	`)
 	return err
 }

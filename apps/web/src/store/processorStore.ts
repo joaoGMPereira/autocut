@@ -11,7 +11,48 @@ export interface ProcessorJob {
   result?: Record<string, unknown>;
 }
 
+export interface ShortsConfig {
+  addBlurBackground: boolean;
+  addCaptions: boolean;
+  transcriptPath: string;
+  language: 'pt' | 'en' | 'es';
+  generateThumbnails: boolean;
+  minDuration: number;
+  maxDuration: number;
+}
+
+export interface ShortResult {
+  output: string;
+  thumbnail_path: string;
+  engagement_score: number;
+  engagement_factors: string[];
+  duration_sec?: number;
+}
+
+const DEFAULT_SHORTS_CONFIG: ShortsConfig = {
+  addBlurBackground: false,
+  addCaptions: false,
+  transcriptPath: '',
+  language: 'pt',
+  generateThumbnails: false,
+  minDuration: 0,
+  maxDuration: 0,
+};
+
 type SseEvent = { type: 'log' | 'done' | 'error'; data: { message?: string; success?: boolean } };
+
+type SseShortsEvent = {
+  type: 'log' | 'done' | 'error';
+  data: {
+    message?: string;
+    success?: boolean;
+    output?: string;
+    thumbnail_path?: string;
+    engagement_score?: number;
+    engagement_factors?: string[];
+    duration_sec?: number;
+  };
+};
 
 interface ProcessorState {
   cutJobs: Record<string, ProcessorJob>;
@@ -19,13 +60,29 @@ interface ProcessorState {
   optimizeJobs: Record<string, ProcessorJob>;
   transcriptJobs: Record<string, ProcessorJob>;
   analyzeJobs: Record<string, ProcessorJob>;
+  shortsConfig: ShortsConfig;
+  shortsResults: Record<string, ShortResult[]>;
+  setShortsConfig: (patch: Partial<ShortsConfig>) => void;
   startCut: (
     goUrl: string,
     payload: { input: string; start_sec: number; end_sec: number; output: string; session_id?: string },
   ) => Promise<string>;
   startShorts: (
     goUrl: string,
-    payload: { input: string; output: string; width: number; height: number; session_id?: string },
+    payload: {
+      input: string;
+      output: string;
+      width: number;
+      height: number;
+      add_blur_background?: boolean;
+      add_captions?: boolean;
+      transcript_path?: string;
+      language?: string;
+      generate_thumbnails?: boolean;
+      min_duration?: number;
+      max_duration?: number;
+      session_id?: string;
+    },
   ) => Promise<string>;
   startOptimize: (
     goUrl: string,
@@ -128,12 +185,110 @@ function makeSseAction<TPayload>(
   };
 }
 
+function makeShortsSseAction(
+  set: (fn: (state: ProcessorState) => Partial<ProcessorState>) => void,
+): ProcessorState['startShorts'] {
+  return async (goUrl, payload) => {
+    log.info('starting shorts', { payload });
+
+    const res = await fetch(`${goUrl}/api/shorts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(`Failed: ${res.status}`);
+    const { job_id } = (await res.json()) as { job_id: string };
+
+    log.info('shorts job created', { job_id });
+
+    set((state) => ({
+      shortsJobs: { ...state.shortsJobs, [job_id]: { status: 'running', logs: [] } },
+      shortsResults: { ...state.shortsResults, [job_id]: [] },
+    }));
+
+    const es = new EventSource(`${goUrl}/api/shorts/${job_id}/stream`);
+
+    es.onmessage = (e) => {
+      try {
+        const event = JSON.parse(e.data) as SseShortsEvent;
+
+        if (event.type === 'log') {
+          set((state) => {
+            const job = state.shortsJobs[job_id];
+            if (!job) return state;
+            return {
+              shortsJobs: { ...state.shortsJobs, [job_id]: { ...job, logs: [...job.logs, event.data.message ?? ''] } },
+            };
+          });
+        } else if (event.type === 'done') {
+          es.close();
+          log.info('shorts completed', { job_id, output: event.data.output });
+
+          const result: ShortResult = {
+            output: event.data.output ?? '',
+            thumbnail_path: event.data.thumbnail_path ?? '',
+            engagement_score: event.data.engagement_score ?? 0,
+            engagement_factors: event.data.engagement_factors ?? [],
+            duration_sec: event.data.duration_sec,
+          };
+
+          set((state) => {
+            const job = state.shortsJobs[job_id];
+            if (!job) return state;
+            const existing = state.shortsResults[job_id] ?? [];
+            return {
+              shortsJobs: { ...state.shortsJobs, [job_id]: { ...job, status: 'done', result: event.data as Record<string, unknown> } },
+              shortsResults: { ...state.shortsResults, [job_id]: [...existing, result] },
+            };
+          });
+        } else if (event.type === 'error') {
+          es.close();
+          log.error('shorts failed', { job_id, message: event.data.message });
+          set((state) => {
+            const job = state.shortsJobs[job_id];
+            if (!job) return state;
+            return {
+              shortsJobs: {
+                ...state.shortsJobs,
+                [job_id]: {
+                  ...job,
+                  status: 'error',
+                  logs: [...job.logs, `Error: ${event.data.message ?? 'Unknown'}`],
+                },
+              },
+            };
+          });
+        }
+      } catch {
+        log.error('failed to parse SSE event for shorts', { job_id });
+      }
+    };
+
+    es.onerror = () => {
+      es.close();
+      log.error('SSE connection error for shorts', { job_id });
+      set((state) => {
+        const job = state.shortsJobs[job_id];
+        if (!job) return state;
+        return { shortsJobs: { ...state.shortsJobs, [job_id]: { ...job, status: 'error' } } };
+      });
+    };
+
+    return job_id;
+  };
+}
+
 export const useProcessorStore = create<ProcessorState>((set) => ({
   cutJobs: {},
   shortsJobs: {},
   optimizeJobs: {},
   transcriptJobs: {},
   analyzeJobs: {},
+  shortsConfig: DEFAULT_SHORTS_CONFIG,
+  shortsResults: {},
+
+  setShortsConfig: (patch) =>
+    set((state) => ({ shortsConfig: { ...state.shortsConfig, ...patch } })),
 
   startCut: makeSseAction<{ input: string; start_sec: number; end_sec: number; output: string; session_id?: string }>(
     'cut',
@@ -141,9 +296,7 @@ export const useProcessorStore = create<ProcessorState>((set) => ({
     set as (fn: (state: ProcessorState) => Partial<ProcessorState>) => void,
   ),
 
-  startShorts: makeSseAction<{ input: string; output: string; width: number; height: number; session_id?: string }>(
-    'shorts',
-    'shortsJobs',
+  startShorts: makeShortsSseAction(
     set as (fn: (state: ProcessorState) => Partial<ProcessorState>) => void,
   ),
 

@@ -54,35 +54,28 @@ func (m *mockExecutor) Run(name string, args ...string) ([]byte, error) {
 	}
 }
 
-// handleWhisper finds --output-dir in args and writes a minimal whisper JSON.
+// handleWhisper finds --output-file in args and writes a minimal whisper JSON.
+// whisper-cli writes {outputBase}.json using the native "transcription" format.
 func (m *mockExecutor) handleWhisper(_ string, args []string) error {
-	outputDir := ""
-	audioPath := ""
+	outputBase := ""
 	for i, a := range args {
-		if a == "--output-dir" && i+1 < len(args) {
-			outputDir = args[i+1]
-		}
-		// First arg is the audio path (before any flags)
-		if i == 0 {
-			audioPath = a
+		if a == "--output-file" && i+1 < len(args) {
+			outputBase = args[i+1]
 		}
 	}
-	if outputDir == "" {
-		return fmt.Errorf("mockExecutor: --output-dir not found in whisper args %v", args)
+	if outputBase == "" {
+		return fmt.Errorf("mockExecutor: --output-file not found in whisper args %v", args)
 	}
 
-	seg := whisperSegmentJSON{
-		Start: 0.0,
-		End:   2.0,
-		Text:  "mock transcription",
-	}
-	out := whisperOutputJSON{Segments: []whisperSegmentJSON{seg}}
+	// Write whisper.cpp native JSON: "transcription"[].offsets.{from, to} in ms.
+	seg := whisperSegmentJSON{}
+	seg.Offsets.From = 0
+	seg.Offsets.To = 2000
+	seg.Text = "mock transcription"
+	out := whisperOutputJSON{Transcription: []whisperSegmentJSON{seg}}
 	data, _ := json.Marshal(out)
 
-	base := filepath.Base(audioPath)
-	ext := filepath.Ext(base)
-	stem := base[:len(base)-len(ext)]
-	jsonPath := filepath.Join(outputDir, stem+".json")
+	jsonPath := outputBase + ".json"
 	return os.WriteFile(jsonPath, data, 0o644)
 }
 
@@ -144,6 +137,53 @@ func TestTranscribeShortVideo(t *testing.T) {
 		if c.name == "ffmpeg" {
 			t.Errorf("unexpected ffmpeg call for short video: %v", c.args)
 		}
+	}
+}
+
+// TestTranscribeMP4Input verifies that when a non-WAV file (e.g. MP4) is given,
+// transcribeSingle first extracts audio to WAV via ffmpeg before calling whisper.
+func TestTranscribeMP4Input(t *testing.T) {
+	mock := &mockExecutor{
+		ffprobeResp: ffprobeJSON(600), // 10-min video, single chunk
+	}
+
+	cfg := WhisperConfig{
+		BinPath:       "whisper-mock",
+		ModelPath:     "/models/base.bin",
+		Language:      "en",
+		ChunkDuration: 25 * time.Minute,
+	}
+	tr := newWithExecutor(cfg, mock)
+
+	dir := t.TempDir()
+	audioPath := filepath.Join(dir, "video.mp4")
+	if err := os.WriteFile(audioPath, []byte("fake-mp4"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := tr.Transcribe(audioPath)
+	if err != nil {
+		t.Fatalf("Transcribe failed: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil transcript")
+	}
+
+	// The extraction ffmpeg call must have been made with -ar 16000 and -ac 1.
+	found := false
+	for _, c := range mock.calls {
+		if c.name != "ffmpeg" {
+			continue
+		}
+		joined := strings.Join(c.args, " ")
+		if strings.Contains(joined, "-ar") && strings.Contains(joined, "16000") &&
+			strings.Contains(joined, "-ac") && strings.Contains(joined, "1") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected ffmpeg audio-extraction call with -ar 16000 -ac 1, none found")
 	}
 }
 

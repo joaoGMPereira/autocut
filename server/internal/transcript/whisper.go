@@ -7,7 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/joaoGMPereira/autocut/server/internal/toolerr"
 )
 
 // WhisperTranscriber runs whisper.cpp against audio/video files.
@@ -73,21 +76,51 @@ func (w *WhisperTranscriber) transcribeSingle(audioPath string, offset time.Dura
 		}
 	}()
 
-	args := w.buildWhisperArgs(audioPath, tmpDir)
-	w.log.Info("running whisper", "op", "transcript", "path", audioPath, "offset", offset)
-
-	if _, err := w.exec.Run(w.cfg.BinPath, args...); err != nil {
-		return nil, fmt.Errorf("transcribeSingle: whisper exec: %w", err)
-	}
-
-	// whisper writes {input_basename}.json inside --output-dir
+	// Compute stem from the original input for output-JSON lookup.
 	base := filepath.Base(audioPath)
 	ext := filepath.Ext(base)
 	stem := base[:len(base)-len(ext)]
+
+	// whisper.cpp (standard Homebrew build) cannot decode MP4/MKV/etc.
+	// Extract to 16 kHz mono PCM WAV so whisper can always read the input.
+	audioForWhisper := audioPath
+	if strings.ToLower(ext) != ".wav" {
+		wavPath := filepath.Join(tmpDir, stem+".wav")
+		if _, err := w.exec.Run("ffmpeg",
+			"-i", audioPath, "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", "-y", wavPath,
+		); err != nil {
+			return nil, &toolerr.ToolErr{Tool: "ffmpeg", Op: "extract audio", Cause: err}
+		}
+		if fi, e := os.Stat(wavPath); e == nil {
+			w.log.Info("audio extracted to WAV", "op", "transcript", "path", wavPath, "size", fi.Size())
+		}
+		audioForWhisper = wavPath
+	}
+
+	args := w.buildWhisperArgs(audioForWhisper, tmpDir)
+	w.log.Info("running whisper", "op", "transcript", "path", audioPath, "offset", offset)
+
+	out, err := w.exec.Run(w.cfg.BinPath, args...)
+	w.log.Debug("whisper output", "op", "transcript", "output", string(out))
+	if err != nil {
+		return nil, &toolerr.ToolErr{Tool: "whisper", Op: "transcribe", Cause: err}
+	}
+
+	// whisper writes {stem}.json inside --output-dir
+	// For non-WAV: audioForWhisper = tmpDir/stem.wav → whisper writes tmpDir/stem.json ✓
+	// For WAV:     audioForWhisper = audioPath        → whisper writes tmpDir/stem.json ✓
 	jsonPath := filepath.Join(tmpDir, stem+".json")
 
 	data, err := os.ReadFile(jsonPath)
 	if err != nil {
+		// Log all files in tmpDir to diagnose unexpected output naming.
+		if entries, de := os.ReadDir(tmpDir); de == nil {
+			names := make([]string, len(entries))
+			for i, e := range entries {
+				names[i] = e.Name()
+			}
+			w.log.Error("tmpDir contents after whisper", "files", names)
+		}
 		return nil, fmt.Errorf("transcribeSingle: read output JSON %q: %w", jsonPath, err)
 	}
 
@@ -151,7 +184,7 @@ func (w *WhisperTranscriber) transcribeChunked(audioPath string, totalDur time.D
 			"offset", offset, "dur", dur)
 
 		if _, err := w.exec.Run("ffmpeg", ffArgs...); err != nil {
-			return nil, fmt.Errorf("transcribeChunked: ffmpeg chunk %d: %w", i, err)
+			return nil, &toolerr.ToolErr{Tool: "ffmpeg", Op: "chunk audio", Cause: err}
 		}
 
 		chunkTranscript, err := w.transcribeSingle(chunkPath, offset)
@@ -173,8 +206,15 @@ func (w *WhisperTranscriber) transcribeChunked(audioPath string, totalDur time.D
 }
 
 // buildWhisperArgs constructs the argument slice for the whisper binary.
+// Uses --output-file <dir/stem> (without extension) so whisper writes <dir/stem>.json.
+// Note: --output-dir is NOT supported by the Homebrew whisper-cpp build.
 // Kotlin ref: TranscriptWhisperDelegate.buildWhisperArgs
 func (w *WhisperTranscriber) buildWhisperArgs(audioPath, outputDir string) []string {
+	base := filepath.Base(audioPath)
+	ext := filepath.Ext(base)
+	stem := base[:len(base)-len(ext)]
+	outputBase := filepath.Join(outputDir, stem)
+
 	args := []string{audioPath}
 	if w.cfg.ModelPath != "" {
 		args = append(args, "--model", w.cfg.ModelPath)
@@ -182,7 +222,7 @@ func (w *WhisperTranscriber) buildWhisperArgs(audioPath, outputDir string) []str
 	if w.cfg.Language != "" {
 		args = append(args, "--language", w.cfg.Language)
 	}
-	args = append(args, "--output-json", "--output-dir", outputDir)
+	args = append(args, "--output-json", "--output-file", outputBase)
 	return args
 }
 

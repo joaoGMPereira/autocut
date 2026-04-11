@@ -2,6 +2,8 @@ package downloader
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -149,5 +151,59 @@ func TestExtractMetadata_ReturnsErrorOnExecutorFailure(t *testing.T) {
 	_, err := d.ExtractMetadata("https://www.youtube.com/watch?v=xyz")
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+// TestDownloadWithOptions_ReusesExistingFile verifies that DownloadWithOptions skips
+// the yt-dlp download invocation when the output file already exists in outDir.
+func TestDownloadWithOptions_ReusesExistingFile(t *testing.T) {
+	outDir := t.TempDir()
+	// Pre-create the file that yt-dlp would have produced.
+	cachedPath := filepath.Join(outDir, "dQw4w9WgXcQ.mp4")
+	if err := os.WriteFile(cachedPath, []byte("fake video"), 0o644); err != nil {
+		t.Fatalf("create fake file: %v", err)
+	}
+
+	mock := &MockExecutor{response: []byte(ytDlpFixture)}
+	d := NewYouTubeDownloader("yt-dlp").withExecutor(mock)
+	d.retry = RetryConfig{MaxAttempts: 1, InitialDelay: 0}
+
+	const testURL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+	info, err := d.DownloadWithOptions(testURL, outDir, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Only one executor call: ExtractMetadata — NOT the download.
+	if len(mock.calls) != 1 {
+		t.Errorf("expected exactly 1 executor call (ExtractMetadata), got %d: %v", len(mock.calls), mock.calls)
+	}
+	// The returned path must point to the pre-existing file.
+	if info.FilePath != cachedPath {
+		t.Errorf("FilePath: want %q, got %q", cachedPath, info.FilePath)
+	}
+	if info.VideoID != "dQw4w9WgXcQ" {
+		t.Errorf("VideoID: want dQw4w9WgXcQ, got %q", info.VideoID)
+	}
+}
+
+// TestDownloadWithOptions_DownloadsWhenNotCached verifies that DownloadWithOptions
+// calls yt-dlp for the download when no cached file exists.
+func TestDownloadWithOptions_DownloadsWhenNotCached(t *testing.T) {
+	outDir := t.TempDir() // empty — no pre-existing file
+
+	mock := &MockExecutor{response: []byte(ytDlpFixture)}
+	d := NewYouTubeDownloader("yt-dlp").withExecutor(mock)
+	d.retry = RetryConfig{MaxAttempts: 1, InitialDelay: 0}
+
+	const testURL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+	_, err := d.DownloadWithOptions(testURL, outDir, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Must have at least 2 calls: download + ExtractMetadata.
+	if len(mock.calls) < 2 {
+		t.Errorf("expected at least 2 executor calls (download + metadata), got %d", len(mock.calls))
 	}
 }

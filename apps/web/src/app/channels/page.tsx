@@ -2,9 +2,13 @@
 
 import { Anton } from 'next/font/google';
 import { useEffect, useState } from 'react';
+import { MessageSquare, Settings2 } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { useChannelStore } from '@/store/channelStore';
+import type { Channel } from '@/store/channelStore';
 import { Button } from '@/components/ui/button';
+import { ChannelConfigSheet } from '@/components/channels/ChannelConfigSheet';
+import { CommentSyncSheet } from '@/components/channels/CommentSyncSheet';
 
 const anton = Anton({ weight: '400', subsets: ['latin'], display: 'swap' });
 
@@ -17,6 +21,8 @@ export default function ChannelsPage() {
   const [newChannelId, setNewChannelId] = useState('');
   const [addError, setAddError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [configChannel, setConfigChannel] = useState<Channel | null>(null);
+  const [commentsChannel, setCommentsChannel] = useState<Channel | null>(null);
 
   useEffect(() => {
     void fetchChannels(goUrl);
@@ -135,6 +141,24 @@ export default function ChannelsPage() {
                   {ch.YouTubeChannelID}
                 </span>
                 <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCommentsChannel(ch)}
+                  aria-label={`Comments for ${ch.Name}`}
+                >
+                  <MessageSquare className="size-4" />
+                  Comments
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConfigChannel(ch)}
+                  aria-label={`Configure ${ch.Name}`}
+                >
+                  <Settings2 className="size-4" />
+                  Configure
+                </Button>
+                <Button
                   variant="destructive"
                   size="sm"
                   onClick={() => void handleRemove(ch.ID)}
@@ -145,6 +169,28 @@ export default function ChannelsPage() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* Channel config sheet */}
+      {configChannel && (
+        <ChannelConfigSheet
+          channel={configChannel}
+          open={configChannel !== null}
+          onClose={(open) => {
+            if (!open) setConfigChannel(null);
+          }}
+        />
+      )}
+
+      {/* Comment sync sheet */}
+      {commentsChannel && (
+        <CommentSyncSheet
+          channel={commentsChannel}
+          open={commentsChannel !== null}
+          onClose={(open) => {
+            if (!open) setCommentsChannel(null);
+          }}
+        />
       )}
     </div>
   );

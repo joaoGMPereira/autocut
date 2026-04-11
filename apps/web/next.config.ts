@@ -12,7 +12,7 @@ const nextConfig: NextConfig = {
   transpilePackages: ['@autocut/shared'],
   images: { unoptimized: true },
   devIndicators: false,
-  allowedDevOrigins: ['127.0.0.1', 'localhost'],
+  allowedDevOrigins: ['127.0.0.1', 'localhost', '[::1]'],
 };
 
 export default nextConfig;

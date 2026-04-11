@@ -113,6 +113,7 @@ func (s *EffectsService) SpeedZones(videoPath string, segments []SpeedSegment, o
 	filterParts = append(filterParts, concat)
 
 	args := []string{
+		"-loglevel", "error",
 		"-i", videoPath,
 		"-filter_complex", strings.Join(filterParts, ";"),
 		"-map", "[outv]",
@@ -176,7 +177,7 @@ func (s *EffectsService) Transition(clipPaths []string, transType TransitionType
 // FP-005: also chains acrossfade filters for audio to prevent silent output.
 func (s *EffectsService) transitionXfade(clipPaths []string, durationSec float64, outputPath string) error {
 	// Build -i args
-	args := []string{}
+	args := []string{"-loglevel", "error"}
 	for _, p := range clipPaths {
 		args = append(args, "-i", p)
 	}
@@ -341,7 +342,7 @@ func (s *EffectsService) transitionDipBlack(clipPaths []string, durationSec floa
 			vf.WriteString(fmt.Sprintf("fade=t=out:st=%.3f:d=%.3f", fadeOutStart, durationSec))
 		}
 
-		clipArgs := []string{"-i", clip}
+		clipArgs := []string{"-loglevel", "error", "-i", clip}
 		if vf.Len() > 0 {
 			clipArgs = append(clipArgs, "-vf", vf.String())
 		}
@@ -367,6 +368,7 @@ func (s *EffectsService) transitionDipBlack(clipPaths []string, durationSec floa
 	defer os.Remove(listFile)
 
 	mergeArgs := []string{
+		"-loglevel", "error",
 		"-f", "concat", "-safe", "0", "-i", listFile,
 		"-c", "copy", "-y", outputPath,
 	}
@@ -430,6 +432,7 @@ func (s *EffectsService) TextOverlay(
 	sb.WriteString(fmt.Sprintf(":enable='between(t,%.3f,%.3f)'", startSec, endSec))
 
 	args := []string{
+		"-loglevel", "error",
 		"-i", videoPath,
 		"-vf", sb.String(),
 		"-c:a", "copy",
@@ -489,6 +492,7 @@ func (s *EffectsService) Overlay(
 	)
 
 	args := []string{
+		"-loglevel", "error",
 		"-i", videoPath,
 		"-i", imagePath,
 		"-filter_complex", filterComplex,
@@ -543,6 +547,7 @@ func (s *EffectsService) VideoOverlayVideo(
 	filterChain.WriteString(fmt.Sprintf(";[0:v]%[1]soverlay=%s:%s%s[v]", ovRef, x, y, enableFilter))
 
 	args := []string{
+		"-loglevel", "error",
 		"-y",
 		"-i", videoPath,
 		"-i", overlayPath,

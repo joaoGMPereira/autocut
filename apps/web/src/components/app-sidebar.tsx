@@ -15,6 +15,8 @@ import {
   Users,
   Settings,
   Clapperboard,
+  Sparkles,
+  Gauge,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -35,7 +37,9 @@ const navItems: NavItem[] = [
   { label: 'Thumbnail',    href: '/thumbnail',  icon: Image },
   { label: 'Metadata',     href: '/metadata',   icon: FileText },
   { label: 'Mass Update',  href: '/mass-update', icon: Brain },
+  { label: 'Highlights',   href: '/highlights', icon: Sparkles },
   { label: 'Queue',        href: '/queue',      icon: Upload },
+  { label: 'Quota',        href: '/quota',      icon: Gauge },
   { label: 'Channels',     href: '/channels',   icon: Users },
   { label: 'Settings',     href: '/settings',   icon: Settings },
 ];

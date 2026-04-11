@@ -269,3 +269,105 @@ func startOfDayMillis() int64 {
 	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	return start.UnixMilli()
 }
+
+// ── Queue methods (FP-012/FP-013) ────────────────────────────────────────────
+
+// QueueRow is a lightweight projection used by the queue endpoints.
+// It includes queue_order and publish_at which are not in the main uploadCols scan.
+type QueueRow struct {
+	ID               int64
+	ChannelID        int64
+	LocalVideoPath   sql.NullString
+	MetadataJSON     string
+	UploadConfigJSON string
+	Status           string
+	QueueOrder       int
+	PublishAt        sql.NullString
+	CreatedAt        int64
+}
+
+// ListQueue returns uploads with status in (queued, running, failed) ordered by queue_order.
+func (r *UploadRepo) ListQueue(ctx context.Context) ([]QueueRow, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, channel_id, local_video_path, metadata_json, upload_config_json,
+		       status, queue_order, publish_at, created_at
+		FROM uploads
+		WHERE status IN ('queued', 'running', 'failed')
+		ORDER BY queue_order ASC, id ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list queue: %w", err)
+	}
+	defer rows.Close()
+
+	var result []QueueRow
+	for rows.Next() {
+		var q QueueRow
+		if err := rows.Scan(
+			&q.ID, &q.ChannelID, &q.LocalVideoPath, &q.MetadataJSON, &q.UploadConfigJSON,
+			&q.Status, &q.QueueOrder, &q.PublishAt, &q.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan queue row: %w", err)
+		}
+		result = append(result, q)
+	}
+	return result, rows.Err()
+}
+
+// CreateQueued inserts a new upload with status='queued'.
+// clip_id is set to 0 (no clip association for queue-originated uploads).
+func (r *UploadRepo) CreateQueued(ctx context.Context, channelID int64, videoPath, metadataJSON, uploadConfigJSON string, queueOrder int) (int64, error) {
+	now := time.Now().UnixMilli()
+	res, err := r.db.ExecContext(ctx, `
+		INSERT INTO uploads (
+			clip_id, channel_id, youtube_id, youtube_url, status,
+			error, video_type, local_video_path, metadata_json, upload_config_json,
+			original_video_name, source_video_url, source_clip_url,
+			shorts_generated, queue_order, created_at
+		) VALUES (0, ?, '', '', 'queued', '', 'long_form', ?, ?, ?, '', '', '', 0, ?, ?)
+	`, channelID, videoPath, metadataJSON, uploadConfigJSON, queueOrder, now)
+	if err != nil {
+		return 0, fmt.Errorf("create queued upload: %w", err)
+	}
+	return res.LastInsertId()
+}
+
+// SetSchedule updates publish_at and privacy (stored inside upload_config_json) for a queued upload.
+func (r *UploadRepo) SetSchedule(ctx context.Context, id int64, publishAt, uploadConfigJSON string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE uploads SET publish_at = ?, upload_config_json = ? WHERE id = ?`,
+		publishAt, uploadConfigJSON, id,
+	)
+	if err != nil {
+		return fmt.Errorf("set schedule upload %d: %w", id, err)
+	}
+	return nil
+}
+
+// ListScheduled returns queued uploads that have a publish_at set.
+func (r *UploadRepo) ListScheduled(ctx context.Context) ([]QueueRow, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, channel_id, local_video_path, metadata_json, upload_config_json,
+		       status, queue_order, publish_at, created_at
+		FROM uploads
+		WHERE publish_at IS NOT NULL AND status = 'queued'
+		ORDER BY publish_at ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list scheduled: %w", err)
+	}
+	defer rows.Close()
+
+	var result []QueueRow
+	for rows.Next() {
+		var q QueueRow
+		if err := rows.Scan(
+			&q.ID, &q.ChannelID, &q.LocalVideoPath, &q.MetadataJSON, &q.UploadConfigJSON,
+			&q.Status, &q.QueueOrder, &q.PublishAt, &q.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan scheduled row: %w", err)
+		}
+		result = append(result, q)
+	}
+	return result, rows.Err()
+}

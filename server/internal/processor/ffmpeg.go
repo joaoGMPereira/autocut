@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/joaoGMPereira/autocut/server/internal/toolerr"
 )
 
 // FFmpegProcessor wraps FFmpeg for common video operations.
@@ -72,7 +74,7 @@ func (p *FFmpegProcessor) CutClip(input string, start, end time.Duration, output
 	p.log.Debug("CutClip", "op", "cut", "input", input, "start", start, "end", end)
 	if _, err := p.exec.Run(p.binPath, args...); err != nil {
 		p.log.Error("CutClip failed", "err", err, "input", input)
-		return fmt.Errorf("cut clip: %w", err)
+		return &toolerr.ToolErr{Tool: "ffmpeg", Op: "cut clip", Cause: err}
 	}
 	return nil
 }
@@ -92,7 +94,7 @@ func (p *FFmpegProcessor) ExtractFrame(input string, at time.Duration, output st
 	p.log.Debug("ExtractFrame", "op", "frame", "input", input, "at", at)
 	if _, err := p.exec.Run(p.binPath, args...); err != nil {
 		p.log.Error("ExtractFrame failed", "err", err, "input", input)
-		return fmt.Errorf("extract frame: %w", err)
+		return &toolerr.ToolErr{Tool: "ffmpeg", Op: "extract frame", Cause: err}
 	}
 	return nil
 }
@@ -132,7 +134,7 @@ func (p *FFmpegProcessor) MergeClips(inputs []string, output string) error {
 	p.log.Debug("MergeClips", "op", "merge", "count", len(inputs))
 	if _, err := p.exec.Run(p.binPath, args...); err != nil {
 		p.log.Error("MergeClips failed", "err", err)
-		return fmt.Errorf("merge clips: %w", err)
+		return &toolerr.ToolErr{Tool: "ffmpeg", Op: "merge clips", Cause: err}
 	}
 	return nil
 }
@@ -189,7 +191,7 @@ func (p *FFmpegProcessor) ApplySpeedZones(input string, zones []SpeedZone, outpu
 	p.log.Debug("ApplySpeedZones", "op", "speed", "zones", len(zones))
 	if _, err := p.exec.Run(p.binPath, args...); err != nil {
 		p.log.Error("ApplySpeedZones failed", "err", err)
-		return fmt.Errorf("apply speed zones: %w", err)
+		return &toolerr.ToolErr{Tool: "ffmpeg", Op: "speed zones", Cause: err}
 	}
 	return nil
 }
@@ -213,7 +215,7 @@ func (p *FFmpegProcessor) RemoveSilence(input string, threshold float64, minDura
 	if err != nil {
 		// silencedetect exits non-zero when it prints to stderr; tolerate it if output is present.
 		if len(out) == 0 {
-			return fmt.Errorf("silence detect: %w", err)
+			return &toolerr.ToolErr{Tool: "ffmpeg", Op: "silence detect", Cause: err}
 		}
 	}
 
@@ -226,7 +228,7 @@ func (p *FFmpegProcessor) RemoveSilence(input string, threshold float64, minDura
 		// No silences — copy file directly.
 		cpArgs := []string{"-i", input, "-c", "copy", "-y", output}
 		if _, err := p.exec.Run(p.binPath, cpArgs...); err != nil {
-			return fmt.Errorf("copy (no silences): %w", err)
+			return &toolerr.ToolErr{Tool: "ffmpeg", Op: "copy", Cause: err}
 		}
 		return nil
 	}
@@ -255,7 +257,7 @@ func (p *FFmpegProcessor) RemoveSilence(input string, threshold float64, minDura
 		}
 		if _, err := p.exec.Run(p.binPath, segArgs...); err != nil {
 			p.log.Error("RemoveSilence segment cut failed", "err", err, "seg", i)
-			return fmt.Errorf("remove silence segment %d: %w", i, err)
+			return &toolerr.ToolErr{Tool: "ffmpeg", Op: "silence cut", Cause: err}
 		}
 		abs, _ := filepath.Abs(tmpOut)
 		listEntries = append(listEntries, fmt.Sprintf("file '%s'", abs))
@@ -282,7 +284,7 @@ func (p *FFmpegProcessor) RemoveSilence(input string, threshold float64, minDura
 	p.log.Debug("RemoveSilence merge", "op", "silence_merge", "segments", len(keeps))
 	if _, err := p.exec.Run(p.binPath, mergeArgs...); err != nil {
 		p.log.Error("RemoveSilence merge failed", "err", err)
-		return fmt.Errorf("remove silence merge: %w", err)
+		return &toolerr.ToolErr{Tool: "ffmpeg", Op: "silence merge", Cause: err}
 	}
 	return nil
 }

@@ -31,11 +31,25 @@ func NewRouter(
 	setupH *handlers.SetupHandler,
 	pipelineH *handlers.PipelineHandler,
 	metadataH *handlers.MetadataHandler,
+	statsH *handlers.StatsHandler,
+	effectsH *handlers.EffectsHandler,
+	backgroundH *handlers.BackgroundHandler,
+	queueH *handlers.QueueHandler,
+	youtubeH *handlers.YouTubeHandler,
+	quotaH *handlers.QuotaHandler,
+	oauthH *handlers.OAuthHandler,
 ) http.Handler {
 	mux := http.NewServeMux()
 
 	// ── Health ──────────────────────────────────────────────────────────────
 	mux.HandleFunc("GET /health", handleHealth)
+
+	// ── Stats ────────────────────────────────────────────────────────────────
+	mux.HandleFunc("GET /api/stats", statsH.GetStats)
+
+	// ── Quota ────────────────────────────────────────────────────────────────
+	mux.HandleFunc("GET /api/quota/history", quotaH.GetQuotaHistory)
+	mux.HandleFunc("POST /api/quota/reset", quotaH.PostQuotaReset)
 
 	// ── Download ────────────────────────────────────────────────────────────
 	mux.HandleFunc("POST /api/download", download.PostDownload)
@@ -67,6 +81,16 @@ func NewRouter(
 	mux.HandleFunc("POST /api/upload", uploadH.PostUpload)
 	mux.HandleFunc("GET /api/upload/{id}/stream", uploadH.GetUploadStream)
 
+	// ── Resolve data directory (needed for channel config logo storage) ──────
+	autoCutDir := os.Getenv("AUTOCUT_DIR")
+	if autoCutDir == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			autoCutDir = filepath.Join(home, ".autocut")
+		} else {
+			autoCutDir = fmt.Sprintf("%s/.autocut", ".")
+		}
+	}
+
 	// ── Channels ────────────────────────────────────────────────────────────
 	channelH := handlers.NewChannelHandler(db)
 	mux.HandleFunc("GET /api/channels", channelH.GetChannels)
@@ -75,9 +99,19 @@ func NewRouter(
 
 	// ── Channel Config ──────────────────────────────────────────────────────
 	channelConfigRepo := database.NewChannelConfigRepo(db, log)
-	channelConfigH := handlers.NewChannelConfigHandler(channelConfigRepo)
+	musicBlacklistRepo := database.NewMusicBlacklistRepo(db, log)
+	channelConfigH := handlers.NewChannelConfigHandler(channelConfigRepo, musicBlacklistRepo, autoCutDir)
 	mux.HandleFunc("GET /api/channels/{id}/config", channelConfigH.GetConfig)
 	mux.HandleFunc("PUT /api/channels/{id}/config", channelConfigH.UpdateConfig)
+	mux.HandleFunc("POST /api/channels/{id}/config/logo", channelConfigH.PostLogo)
+	mux.HandleFunc("GET /api/channels/{id}/music-blacklist", channelConfigH.GetMusicBlacklist)
+	mux.HandleFunc("POST /api/channels/{id}/music-blacklist", channelConfigH.PostMusicBlacklist)
+	mux.HandleFunc("DELETE /api/channels/{id}/music-blacklist/{pattern_id}", channelConfigH.DeleteMusicBlacklist)
+
+	// ── Thumbnail Backgrounds (FP-007) ──────────────────────────────────────
+	mux.HandleFunc("GET /api/channels/{id}/backgrounds", backgroundH.ListBackgrounds)
+	mux.HandleFunc("POST /api/channels/{id}/backgrounds", backgroundH.UploadBackground)
+	mux.HandleFunc("DELETE /api/channels/{id}/backgrounds/{bg_id}", backgroundH.DeleteBackground)
 
 	// ── Settings ────────────────────────────────────────────────────────────
 	settingsH := handlers.NewSettingsHandler(db)
@@ -97,23 +131,60 @@ func NewRouter(
 	// ── Metadata ──────────────────────────────────────────────────────────
 	mux.HandleFunc("GET /api/metadata", metadataH.GetMetadata)
 
-	// ── Pipeline Runs ──────────────────────────────────────────────────────
+	// ── Effects Pipeline ────────────────────────────────────────────────────
+	mux.HandleFunc("POST /api/effects/anti-dup", effectsH.PostAntiDup)
+	mux.HandleFunc("POST /api/effects/speed", effectsH.PostSpeed)
+	mux.HandleFunc("POST /api/effects/transition", effectsH.PostTransition)
+	mux.HandleFunc("POST /api/effects/text", effectsH.PostText)
+	mux.HandleFunc("POST /api/effects/overlay", effectsH.PostOverlay)
+	mux.HandleFunc("GET /api/effects/{id}/stream", effectsH.GetEffectStream)
+
+	// ── Pipeline Runs (rewritten v9 state-machine) ─────────────────────────
 	mux.HandleFunc("POST /api/pipeline/runs", pipelineH.PostRun)
-	mux.HandleFunc("GET /api/pipeline/runs/{id}", pipelineH.GetRun)
 	mux.HandleFunc("GET /api/pipeline/runs", pipelineH.ListRuns)
+	mux.HandleFunc("GET /api/pipeline/runs/{id}", pipelineH.GetRun)
 	mux.HandleFunc("DELETE /api/pipeline/runs/{id}", pipelineH.DeleteRun)
-	mux.HandleFunc("PATCH /api/pipeline/runs/{id}/mode", pipelineH.PatchRunMode)
-	mux.HandleFunc("POST /api/pipeline/runs/{id}/preview", pipelineH.PostRunPreview)
+	mux.HandleFunc("GET /api/pipeline/runs/{id}/stream", pipelineH.GetRunStream)
+	mux.HandleFunc("POST /api/pipeline/runs/{id}/advance", pipelineH.PostAdvance)
+	mux.HandleFunc("POST /api/pipeline/runs/{id}/gates/review-highlights", pipelineH.PostGateReviewHighlights)
+	mux.HandleFunc("POST /api/pipeline/runs/{id}/gates/thumbnail-config", pipelineH.PostGateThumbnailConfig)
+	mux.HandleFunc("POST /api/pipeline/runs/{id}/gates/review-metadata", pipelineH.PostGateReviewMetadata)
+	mux.HandleFunc("POST /api/pipeline/runs/{id}/gates/review-clips", pipelineH.PostGateReviewClips)
+	mux.HandleFunc("POST /api/pipeline/runs/{id}/gates/upload-confirm", pipelineH.PostGateUploadConfirm)
+	mux.HandleFunc("POST /api/pipeline/runs/{id}/cancel", pipelineH.PostCancel)
+	mux.HandleFunc("GET /api/pipeline/runs/{id}/highlights", pipelineH.GetHighlights)
+	mux.HandleFunc("GET /api/pipeline/runs/{id}/clips", pipelineH.GetClips)
+
+	// ── Queue (FP-012 + FP-013) ─────────────────────────────────────────────
+	// Note: static sub-paths (save-local, bulk-schedule, schedule) are registered
+	// before wildcard {id} patterns — Go 1.22 mux selects the more specific match.
+	mux.HandleFunc("GET /api/queue", queueH.GetQueue)
+	mux.HandleFunc("POST /api/queue", queueH.PostQueue)
+	mux.HandleFunc("POST /api/queue/save-local", queueH.PostQueueSaveLocal)
+	mux.HandleFunc("POST /api/queue/bulk-schedule", queueH.PostQueueBulkSchedule)
+	mux.HandleFunc("GET /api/queue/schedule", queueH.GetQueueSchedule)
+	mux.HandleFunc("DELETE /api/queue/{id}", queueH.DeleteQueue)
+	mux.HandleFunc("POST /api/queue/{id}/retry", queueH.PostQueueRetry)
+	mux.HandleFunc("POST /api/queue/{id}/schedule", queueH.PostQueueSchedule)
+
+	// ── YouTube (FP-015 Mass Update + FP-016 Comment Sync) ──────────────────
+	mux.HandleFunc("GET /api/videos/remote", youtubeH.GetRemoteVideos)
+	mux.HandleFunc("POST /api/videos/mass-update", youtubeH.PostMassUpdate)
+	mux.HandleFunc("GET /api/videos/mass-update/{id}/stream", youtubeH.GetMassUpdateStream)
+	mux.HandleFunc("POST /api/channels/{id}/comments/sync", youtubeH.PostCommentSync)
+	mux.HandleFunc("GET /api/channels/{id}/comments/sync/{job_id}/stream", youtubeH.GetCommentSyncStream)
+	mux.HandleFunc("GET /api/channels/{id}/comments", youtubeH.GetComments)
+
+	// ── OAuth Profiles (FP-010) ──────────────────────────────────────────────
+	mux.HandleFunc("GET /api/oauth/profiles", oauthH.ListProfiles)
+	mux.HandleFunc("POST /api/oauth/profiles", oauthH.UploadProfile)
+	mux.HandleFunc("DELETE /api/oauth/profiles/{id}", oauthH.DeleteProfile)
+	mux.HandleFunc("POST /api/oauth/profiles/{id}/set-default", oauthH.SetDefaultProfile)
+	mux.HandleFunc("POST /api/channels/{id}/auth", oauthH.InitOAuthFlow)
+	mux.HandleFunc("POST /api/channels/{id}/auth/callback", oauthH.HandleOAuthCallback)
+	mux.HandleFunc("POST /api/channels/{id}/auth/refresh", oauthH.RefreshToken)
 
 	// ── Static files ────────────────────────────────────────────────────────
-	autoCutDir := os.Getenv("AUTOCUT_DIR")
-	if autoCutDir == "" {
-		if home, err := os.UserHomeDir(); err == nil {
-			autoCutDir = filepath.Join(home, ".autocut")
-		} else {
-			autoCutDir = fmt.Sprintf("%s/.autocut", ".")
-		}
-	}
 	mux.Handle("GET /files/", http.StripPrefix("/files/", http.FileServer(http.Dir(autoCutDir))))
 
 	return corsMiddleware(mux)
@@ -129,8 +200,9 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 // Electron loads the renderer via 127.0.0.1 while browsers use localhost —
 // both must be allowed because they are treated as distinct origins by CORS.
 var devOrigins = map[string]bool{
-	"http://localhost:3201":   true,
-	"http://127.0.0.1:3201":  true,
+	"http://localhost:3201":  true,
+	"http://127.0.0.1:3201": true,
+	"http://[::1]:3201":     true,
 }
 
 func corsMiddleware(next http.Handler) http.Handler {
@@ -148,7 +220,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 		if allowed {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 		}
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		w.Header().Set("Vary", "Origin")
 

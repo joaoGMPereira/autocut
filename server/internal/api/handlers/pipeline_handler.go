@@ -4,440 +4,458 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strconv"
-	"strings"
-	"time"
 
-	"github.com/joaoGMPereira/autocut/server/internal/database"
+	"github.com/joaoGMPereira/autocut/server/internal/hub"
+	"github.com/joaoGMPereira/autocut/server/internal/pipeline"
 )
 
-// PipelineHandler handles pipeline run CRUD.
+// PipelineHandler handles all pipeline run CRUD, gate advances, and SSE streaming.
 type PipelineHandler struct {
-	repo *database.PipelineRunRepo
+	repo *pipeline.Repo
+	exec *pipeline.Executor
+	hub  *hub.SSEHub
+	db   *sql.DB
 	log  *slog.Logger
 }
 
 // NewPipelineHandler creates a PipelineHandler.
-func NewPipelineHandler(repo *database.PipelineRunRepo) *PipelineHandler {
+func NewPipelineHandler(
+	repo *pipeline.Repo,
+	exec *pipeline.Executor,
+	h *hub.SSEHub,
+	db *sql.DB,
+) *PipelineHandler {
 	return &PipelineHandler{
 		repo: repo,
+		exec: exec,
+		hub:  h,
+		db:   db,
 		log:  slog.With("component", "api", "handler", "pipeline"),
 	}
 }
 
-type postRunRequest struct {
-	URL       string          `json:"url"`
-	Mode      string          `json:"mode"`
-	ChannelID *int64          `json:"channel_id,omitempty"`
-	Config    json.RawMessage `json:"config,omitempty"`
-}
+// ── POST /api/pipeline/runs ───────────────────────────────────────────────────
 
-// PostRun handles POST /api/pipeline/runs.
 func (h *PipelineHandler) PostRun(w http.ResponseWriter, r *http.Request) {
-	var req postRunRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", err.Error())
-		return
-	}
-	if req.URL == "" {
-		writeError(w, http.StatusBadRequest, "missing_field", "url is required")
-		return
-	}
-
-	modeConfigJSON := "{}"
-	if len(req.Config) > 0 && string(req.Config) != "null" {
-		modeConfigJSON = string(req.Config)
-	}
-
-	run := &database.PipelineRun{
-		URL:            req.URL,
-		Mode:           req.Mode,
-		Status:         "pending",
-		ModeConfigJSON: modeConfigJSON,
-	}
-	if req.ChannelID != nil {
-		run.ChannelID = sql.NullInt64{Int64: *req.ChannelID, Valid: true}
-	}
-
-	id, err := h.repo.Create(r.Context(), run)
+	runID, err := h.repo.CreateRun(r.Context(), nil, "", pipeline.StateWaitingURL)
 	if err != nil {
-		h.log.Error("create pipeline run", "err", err)
-		writeError(w, http.StatusInternalServerError, "db_error", err.Error())
+		h.log.Error("create run failed", "err", err)
+		writeError(w, http.StatusInternalServerError, "db_error", "failed to create run")
 		return
 	}
-
-	writeJSON(w, http.StatusCreated, map[string]int64{"run_id": id})
-}
-
-type patchRunModeRequest struct {
-	Mode   string          `json:"mode"`
-	Config json.RawMessage `json:"config,omitempty"`
-}
-
-// PatchRunMode handles PATCH /api/pipeline/runs/{id}/mode.
-func (h *PipelineHandler) PatchRunMode(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_id", "id must be an integer")
-		return
-	}
-
-	var req patchRunModeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", err.Error())
-		return
-	}
-
-	modeConfigJSON := "{}"
-	if len(req.Config) > 0 && string(req.Config) != "null" {
-		modeConfigJSON = string(req.Config)
-	}
-
-	if err := h.repo.UpdateMode(r.Context(), id, req.Mode, modeConfigJSON); err != nil {
-		h.log.Error("update pipeline run mode", "id", id, "err", err)
-		writeError(w, http.StatusInternalServerError, "db_error", err.Error())
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// GetRun handles GET /api/pipeline/runs/{id}.
-func (h *PipelineHandler) GetRun(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_id", "id must be an integer")
-		return
-	}
-
-	run, steps, err := h.repo.GetWithSteps(r.Context(), id)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			writeError(w, http.StatusNotFound, "not_found", "pipeline run not found")
-			return
-		}
-		h.log.Error("get pipeline run", "id", id, "err", err)
-		writeError(w, http.StatusInternalServerError, "db_error", err.Error())
-		return
-	}
-
-	// Parse step_outputs_json into a map for the response
-	var stepOutputs map[string]interface{}
-	if err := json.Unmarshal([]byte(run.StepOutputsJSON), &stepOutputs); err != nil {
-		stepOutputs = map[string]interface{}{}
-	}
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"run":          run,
-		"step_outputs": stepOutputs,
-		"steps":        steps,
+	writeJSON(w, http.StatusCreated, map[string]interface{}{
+		"run_id": runID,
+		"state":  pipeline.StateWaitingURL,
+		"job_id": pipeline.PipelineJobID(runID),
 	})
 }
 
-// ListRuns handles GET /api/pipeline/runs.
+// ── GET /api/pipeline/runs ────────────────────────────────────────────────────
+
 func (h *PipelineHandler) ListRuns(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-
 	limit := 20
+	offset := 0
 	if v := q.Get("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			limit = n
 		}
 	}
-
-	offset := 0
 	if v := q.Get("offset"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
 			offset = n
 		}
 	}
-
 	var channelID *int64
 	if v := q.Get("channel_id"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 			channelID = &n
 		}
 	}
-
-	runs, total, err := h.repo.ListAll(r.Context(), limit, offset, channelID)
+	runs, total, err := h.repo.ListRuns(r.Context(), limit, offset, channelID)
 	if err != nil {
-		h.log.Error("list pipeline runs", "err", err)
-		writeError(w, http.StatusInternalServerError, "db_error", err.Error())
+		h.log.Error("list runs failed", "err", err)
+		writeError(w, http.StatusInternalServerError, "db_error", "failed to list runs")
 		return
 	}
-
 	if runs == nil {
-		runs = []database.PipelineRun{}
+		runs = []*pipeline.Run{}
 	}
-
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"runs":  runs,
 		"total": total,
 	})
 }
 
-// DeleteRun handles DELETE /api/pipeline/runs/{id}.
-func (h *PipelineHandler) DeleteRun(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+// ── GET /api/pipeline/runs/{id} ───────────────────────────────────────────────
+
+func (h *PipelineHandler) GetRun(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseRunID(w, r)
+	if !ok {
+		return
+	}
+	run, err := h.repo.GetRun(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_id", "id must be an integer")
+		h.log.Error("get run failed", "runID", id, "err", err)
+		writeError(w, http.StatusNotFound, "not_found", "run not found")
 		return
 	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"run": run})
+}
 
-	if err := h.repo.Delete(r.Context(), id); err != nil {
-		if err == sql.ErrNoRows {
-			writeError(w, http.StatusNotFound, "not_found", "pipeline run not found")
-			return
-		}
-		h.log.Error("delete pipeline run", "id", id, "err", err)
-		writeError(w, http.StatusInternalServerError, "db_error", err.Error())
+// ── DELETE /api/pipeline/runs/{id} ───────────────────────────────────────────
+
+func (h *PipelineHandler) DeleteRun(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseRunID(w, r)
+	if !ok {
 		return
 	}
-
+	if err := h.repo.DeleteRun(r.Context(), id); err != nil {
+		h.log.Error("delete run failed", "runID", id, "err", err)
+		writeError(w, http.StatusInternalServerError, "db_error", "failed to delete run")
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// stepOutputs is a helper type for deserialising StepOutputsJSON.
-type stepOutputs struct {
-	Download struct {
-		FilePath string `json:"file_path"`
-	} `json:"download"`
+// ── GET /api/pipeline/runs/{id}/stream ───────────────────────────────────────
+
+func (h *PipelineHandler) GetRunStream(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseRunID(w, r)
+	if !ok {
+		return
+	}
+	h.hub.ServeSSE(w, r, pipeline.PipelineJobID(id))
 }
 
-// previewSpeedConfig mirrors the frontend SpeedConfig for preview filter generation.
-type previewSpeedConfig struct {
-	Enabled bool    `json:"enabled"`
-	Factor  float64 `json:"factor"`
-}
+// ── POST /api/pipeline/runs/{id}/advance ─────────────────────────────────────
 
-// previewVisualConfig mirrors the frontend VisualConfig for preview filter generation.
-type previewVisualConfig struct {
-	CropEnabled  bool    `json:"cropEnabled"`
-	CropPercent  float64 `json:"cropPercent"`
-	ZoomEnabled  bool    `json:"zoomEnabled"`
-	ZoomAmount   float64 `json:"zoomAmount"`
-	ColorGrading bool    `json:"colorGrading"`
-	Brightness   float64 `json:"brightness"`
-	Saturation   float64 `json:"saturation"`
-	Contrast     float64 `json:"contrast"`
-}
-
-// previewModeConfig holds the fields from mode_config_json needed for preview filter generation.
-type previewModeConfig struct {
-	AntiDuplicate     bool                `json:"antiDuplicate"`
-	AntiDuplicateMode string              `json:"antiDuplicateMode"` // "subtle" | "aggressive"
-	Speed             previewSpeedConfig  `json:"speed"`
-	Visual            previewVisualConfig `json:"visual"`
-}
-
-// buildPreviewFilters returns ffmpeg -vf and -af filter strings based on the mode config.
-// Returns empty strings when no anti-duplication is configured (fast -c copy path).
-func buildPreviewFilters(cfg previewModeConfig) (vf, af string) {
-	if !cfg.AntiDuplicate {
+// PostAdvance handles:
+// WAITING_URL  → EventURLSubmitted  (body: {url, channel_id})
+// WAITING_MODE → EventModeSubmitted (body: {mode_config: {...}})
+func (h *PipelineHandler) PostAdvance(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseRunID(w, r)
+	if !ok {
 		return
 	}
 
-	// Legacy format: old ModeConfig without nested Speed/Visual sub-configs.
-	// Detected when Speed.Factor == 0 and Visual.CropPercent == 0.
-	isLegacy := cfg.Speed.Factor == 0 && cfg.Visual.CropPercent == 0
-
-	var (
-		speedFactor     float64
-		cropPct         float64
-		zoomAmt         float64
-		applyColor      bool
-		colorBrightness float64
-		colorSaturation float64
-		colorContrast   float64
-	)
-
-	if isLegacy {
-		switch cfg.AntiDuplicateMode {
-		case "aggressive":
-			speedFactor, cropPct = 1.05, 3.0
-			applyColor, colorBrightness, colorSaturation, colorContrast = true, 0.03, 1.05, 1.02
-		default: // subtle
-			speedFactor, cropPct = 1.02, 2.0
-		}
-	} else {
-		if cfg.Speed.Enabled && cfg.Speed.Factor > 1.0 {
-			speedFactor = cfg.Speed.Factor
-		}
-		if cfg.Visual.CropEnabled && cfg.Visual.CropPercent > 0 {
-			cropPct = cfg.Visual.CropPercent
-		}
-		if cfg.Visual.ZoomEnabled && cfg.Visual.ZoomAmount > 1.0 {
-			zoomAmt = cfg.Visual.ZoomAmount
-		}
-		if cfg.Visual.ColorGrading {
-			applyColor = true
-			colorBrightness = cfg.Visual.Brightness
-			colorSaturation = cfg.Visual.Saturation
-			if colorSaturation == 0 {
-				colorSaturation = 1.0
-			}
-			colorContrast = cfg.Visual.Contrast
-			if colorContrast == 0 {
-				colorContrast = 1.0
-			}
-		}
-	}
-
-	var vFilters []string
-
-	// crop=w:h:x:y — keep center (1-cropPct/100) of frame
-	if cropPct > 0 {
-		f := 1.0 - cropPct/100.0
-		half := cropPct / 200.0
-		vFilters = append(vFilters, fmt.Sprintf(
-			"crop=iw*%.4f:ih*%.4f:iw*%.4f:ih*%.4f", f, f, half, half))
-	}
-
-	// Zoom: scale up then crop back to preserve output dimensions
-	if zoomAmt > 1.0 {
-		z := zoomAmt
-		vFilters = append(vFilters, fmt.Sprintf("scale=iw*%.4f:ih*%.4f", z, z))
-		vFilters = append(vFilters, fmt.Sprintf(
-			"crop=iw/%.4f:ih/%.4f:(iw-iw/%.4f)/2:(ih-ih/%.4f)/2", z, z, z, z))
-	}
-
-	// Color grading via eq filter
-	if applyColor {
-		vFilters = append(vFilters, fmt.Sprintf(
-			"eq=brightness=%.4f:saturation=%.4f:contrast=%.4f",
-			colorBrightness, colorSaturation, colorContrast))
-	}
-
-	// Speed: setpts for video, atempo for audio
-	if speedFactor > 1.0 {
-		vFilters = append(vFilters, fmt.Sprintf("setpts=PTS/%.4f", speedFactor))
-		af = fmt.Sprintf("atempo=%.4f", speedFactor)
-	}
-
-	vf = strings.Join(vFilters, ",")
-	return
-}
-
-// autoCutDir returns the AutoCut working directory, honouring the AUTOCUT_DIR
-// environment variable and falling back to ~/.autocut.
-func autoCutDir() (string, error) {
-	if d := os.Getenv("AUTOCUT_DIR"); d != "" {
-		return d, nil
-	}
-	home, err := os.UserHomeDir()
+	run, err := h.repo.GetRun(r.Context(), id)
 	if err != nil {
-		return "", fmt.Errorf("resolve home dir: %w", err)
-	}
-	return filepath.Join(home, ".autocut"), nil
-}
-
-// PostRunPreview handles POST /api/pipeline/runs/{id}/preview.
-// It extracts the first 30 seconds of the downloaded source video and saves it
-// as a preview under ~/.autocut/previews/{id}.mp4.
-func (h *PipelineHandler) PostRunPreview(w http.ResponseWriter, r *http.Request) {
-	// 1. Parse {id}
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_id", "id must be an integer")
+		h.log.Error("get run failed", "runID", id, "err", err)
+		writeError(w, http.StatusNotFound, "not_found", "run not found")
 		return
 	}
 
-	// 2. Load run via h.repo.GetByID
-	run, err := h.repo.GetByID(r.Context(), id)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			writeError(w, http.StatusNotFound, "not_found", "pipeline run not found")
+	var req pipeline.AdvanceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+
+	switch run.State {
+	case pipeline.StateWaitingURL:
+		if req.URL == "" {
+			writeError(w, http.StatusBadRequest, "missing_field", "url is required")
 			return
 		}
-		h.log.Error("get pipeline run for preview", "id", id, "err", err)
-		writeError(w, http.StatusInternalServerError, "db_error", err.Error())
-		return
-	}
-
-	// 3. Parse StepOutputsJSON → find download.file_path
-	var outputs stepOutputs
-	if run.StepOutputsJSON != "" {
-		if err := json.Unmarshal([]byte(run.StepOutputsJSON), &outputs); err != nil {
-			h.log.Warn("parse step_outputs_json", "id", id, "err", err)
+		if err := h.repo.UpdateRunURL(r.Context(), id, req.URL, req.ChannelID); err != nil {
+			h.log.Error("update run url failed", "runID", id, "err", err)
+			writeError(w, http.StatusInternalServerError, "db_error", "failed to update url")
+			return
 		}
-	}
-
-	// 4. If no file_path → 409 "video_not_ready"
-	if outputs.Download.FilePath == "" {
-		writeError(w, http.StatusConflict, "video_not_ready", "download step has not completed yet")
-		return
-	}
-
-	// 5. If file_path doesn't exist on disk → 409 "file_not_found"
-	if _, err := os.Stat(outputs.Download.FilePath); os.IsNotExist(err) {
-		writeError(w, http.StatusConflict, "file_not_found", "source video file not found on disk")
-		return
-	}
-
-	// Parse mode config to apply anti-duplication effects in the preview
-	var modeCfg previewModeConfig
-	if run.ModeConfigJSON != "" && run.ModeConfigJSON != "{}" {
-		if err := json.Unmarshal([]byte(run.ModeConfigJSON), &modeCfg); err != nil {
-			h.log.Warn("parse mode_config_json for preview", "id", id, "err", err)
+		next, _ := pipeline.Advance(run.State, run.Mode, pipeline.EventURLSubmitted)
+		if err := h.repo.UpdateRunState(r.Context(), id, next, ""); err != nil {
+			h.log.Error("update run state failed", "runID", id, "err", err)
 		}
-	}
-	previewVF, previewAF := buildPreviewFilters(modeCfg)
+		writeJSON(w, http.StatusOK, map[string]interface{}{"run_id": id, "state": next})
 
-	// 6. Create preview dir: ~/.autocut/previews/
-	baseDir, err := autoCutDir()
+	case pipeline.StateWaitingMode:
+		if req.Mode == nil {
+			writeError(w, http.StatusBadRequest, "missing_field", "mode_config is required")
+			return
+		}
+		modeConfigJSON, err := json.Marshal(req.Mode)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_json", "invalid mode_config")
+			return
+		}
+		if err := h.repo.UpdateRunMode(r.Context(), id, req.Mode.Mode, string(modeConfigJSON)); err != nil {
+			h.log.Error("update run mode failed", "runID", id, "err", err)
+			writeError(w, http.StatusInternalServerError, "db_error", "failed to update mode")
+			return
+		}
+		next, _ := pipeline.Advance(run.State, req.Mode.Mode, pipeline.EventModeSubmitted)
+		if err := h.repo.UpdateRunState(r.Context(), id, next, ""); err != nil {
+			h.log.Error("update run state failed", "runID", id, "err", err)
+		}
+		// Fire goroutine
+		go h.exec.RunExecuting(context.Background(), id)
+		writeJSON(w, http.StatusOK, map[string]interface{}{"run_id": id, "state": next})
+
+	default:
+		writeError(w, http.StatusConflict, "invalid_state",
+			"advance not valid in state "+string(run.State))
+	}
+}
+
+// ── POST /api/pipeline/runs/{id}/gates/review-highlights ─────────────────────
+
+func (h *PipelineHandler) PostGateReviewHighlights(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseRunID(w, r)
+	if !ok {
+		return
+	}
+	run, err := h.repo.GetRun(r.Context(), id)
 	if err != nil {
-		h.log.Error("resolve autocut dir", "err", err)
-		writeError(w, http.StatusInternalServerError, "config_error", err.Error())
+		writeError(w, http.StatusNotFound, "not_found", "run not found")
 		return
 	}
-	previewDir := filepath.Join(baseDir, "previews")
-	if err := os.MkdirAll(previewDir, 0o755); err != nil {
-		h.log.Error("create previews dir", "dir", previewDir, "err", err)
-		writeError(w, http.StatusInternalServerError, "fs_error", err.Error())
+	if run.State != pipeline.StateWaitingReviewHighlights {
+		writeError(w, http.StatusConflict, "invalid_state", "run is not at WAITING_REVIEW_HIGHLIGHTS")
 		return
 	}
 
-	// 7. Run ffmpeg with optional anti-duplication filters.
-	// When filters are active: re-encode (120s timeout). Without: fast -c copy (60s).
-	dst := filepath.Join(previewDir, fmt.Sprintf("%d.mp4", id))
-	timeout := 60 * time.Second
-	if previewVF != "" || previewAF != "" {
-		timeout = 120 * time.Second
+	var req pipeline.ReviewHighlightsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), timeout)
-	defer cancel()
+	for _, u := range req.Highlights {
+		if err := h.repo.UpdateHighlight(r.Context(), u.ID, u.AdjStartSec, u.AdjEndSec, u.IsSelected); err != nil {
+			h.log.Error("update highlight failed", "id", u.ID, "err", err)
+		}
+	}
 
-	args := []string{"-y", "-i", outputs.Download.FilePath, "-t", "30"}
-	if previewVF != "" {
-		args = append(args, "-vf", previewVF)
+	next, _ := pipeline.Advance(run.State, run.Mode, pipeline.EventHighlightsReviewed)
+	if err := h.repo.UpdateRunState(r.Context(), id, next, ""); err != nil {
+		h.log.Error("update run state failed", "runID", id, "err", err)
 	}
-	if previewAF != "" {
-		args = append(args, "-af", previewAF)
-	} else if previewVF != "" {
-		// Visual-only filters: copy audio for performance
-		args = append(args, "-c:a", "copy")
-	}
-	if previewVF == "" && previewAF == "" {
-		// No filters: fast stream copy
-		args = append(args, "-c", "copy")
-	}
-	args = append(args, dst)
+	go h.exec.RunGeneratingClips(context.Background(), id)
+	writeJSON(w, http.StatusOK, map[string]interface{}{"run_id": id, "state": next})
+}
 
-	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		h.log.Error("ffmpeg preview", "id", id, "err", err, "output", string(out))
-		writeError(w, http.StatusInternalServerError, "ffmpeg_error", "failed to generate preview")
+// ── POST /api/pipeline/runs/{id}/gates/thumbnail-config ──────────────────────
+
+func (h *PipelineHandler) PostGateThumbnailConfig(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseRunID(w, r)
+	if !ok {
+		return
+	}
+	run, err := h.repo.GetRun(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "run not found")
+		return
+	}
+	if run.State != pipeline.StateWaitingThumbnailConfig {
+		writeError(w, http.StatusConflict, "invalid_state", "run is not at WAITING_THUMBNAIL_CONFIG")
 		return
 	}
 
-	// 8. Return JSON: {"preview_url": "/files/previews/{id}.mp4"}
-	writeJSON(w, http.StatusOK, map[string]string{
-		"preview_url": fmt.Sprintf("/files/previews/%d.mp4", id),
+	var req pipeline.ThumbnailConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	// Apply per-clip overrides
+	for _, ov := range req.ClipOverrides {
+		if err := h.repo.UpdateClipThumbnailStyle(r.Context(), ov.ClipID, ov.Style); err != nil {
+			h.log.Error("update clip thumbnail style failed", "clipID", ov.ClipID, "err", err)
+		}
+	}
+
+	next, _ := pipeline.Advance(run.State, run.Mode, pipeline.EventThumbnailConfigSubmitted)
+	if err := h.repo.UpdateRunState(r.Context(), id, next, ""); err != nil {
+		h.log.Error("update run state failed", "runID", id, "err", err)
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"run_id": id, "state": next})
+}
+
+// ── POST /api/pipeline/runs/{id}/gates/review-metadata ───────────────────────
+
+func (h *PipelineHandler) PostGateReviewMetadata(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseRunID(w, r)
+	if !ok {
+		return
+	}
+	run, err := h.repo.GetRun(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "run not found")
+		return
+	}
+	if run.State != pipeline.StateWaitingReviewMetadata {
+		writeError(w, http.StatusConflict, "invalid_state", "run is not at WAITING_REVIEW_METADATA")
+		return
+	}
+
+	var req pipeline.ReviewMetadataRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	for _, u := range req.Clips {
+		if err := h.repo.UpdateClipMetadata(r.Context(), u.ID, u.Title, u.Description, u.Tags); err != nil {
+			h.log.Error("update clip metadata failed", "id", u.ID, "err", err)
+		}
+	}
+
+	next, _ := pipeline.Advance(run.State, run.Mode, pipeline.EventMetadataReviewed)
+	if err := h.repo.UpdateRunState(r.Context(), id, next, ""); err != nil {
+		h.log.Error("update run state failed", "runID", id, "err", err)
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"run_id": id, "state": next})
+}
+
+// ── POST /api/pipeline/runs/{id}/gates/review-clips ──────────────────────────
+
+func (h *PipelineHandler) PostGateReviewClips(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseRunID(w, r)
+	if !ok {
+		return
+	}
+	run, err := h.repo.GetRun(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "run not found")
+		return
+	}
+	if run.State != pipeline.StateWaitingReviewClips {
+		writeError(w, http.StatusConflict, "invalid_state", "run is not at WAITING_REVIEW_CLIPS")
+		return
+	}
+
+	var req pipeline.ReviewClipsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	selectedSet := make(map[int64]bool, len(req.SelectedIDs))
+	for _, sid := range req.SelectedIDs {
+		selectedSet[sid] = true
+	}
+	clips, _ := h.repo.GetClips(r.Context(), id)
+	for _, c := range clips {
+		if err := h.repo.UpdateClipSelected(r.Context(), c.ID, selectedSet[c.ID]); err != nil {
+			h.log.Error("update clip selected failed", "clipID", c.ID, "err", err)
+		}
+	}
+
+	next, _ := pipeline.Advance(run.State, run.Mode, pipeline.EventClipsReviewed)
+	if err := h.repo.UpdateRunState(r.Context(), id, next, ""); err != nil {
+		h.log.Error("update run state failed", "runID", id, "err", err)
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"run_id": id, "state": next})
+}
+
+// ── POST /api/pipeline/runs/{id}/gates/upload-confirm ────────────────────────
+
+func (h *PipelineHandler) PostGateUploadConfirm(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseRunID(w, r)
+	if !ok {
+		return
+	}
+	run, err := h.repo.GetRun(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "run not found")
+		return
+	}
+	if run.State != pipeline.StateWaitingUploadConfirm {
+		writeError(w, http.StatusConflict, "invalid_state", "run is not at WAITING_UPLOAD_CONFIRM")
+		return
+	}
+
+	var req pipeline.UploadConfirmRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	privacy := req.Privacy
+	if privacy == "" {
+		privacy = "private"
+	}
+
+	next, _ := pipeline.Advance(run.State, run.Mode, pipeline.EventUploadConfirmed)
+	if err := h.repo.UpdateRunState(r.Context(), id, next, ""); err != nil {
+		h.log.Error("update run state failed", "runID", id, "err", err)
+	}
+	go h.exec.RunUploading(context.Background(), id, privacy)
+	writeJSON(w, http.StatusOK, map[string]interface{}{"run_id": id, "state": next})
+}
+
+// ── POST /api/pipeline/runs/{id}/cancel ──────────────────────────────────────
+
+func (h *PipelineHandler) PostCancel(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseRunID(w, r)
+	if !ok {
+		return
+	}
+	if err := h.repo.FinishRun(r.Context(), id, pipeline.StateCancelled, "cancelled by user"); err != nil {
+		h.log.Error("cancel run failed", "runID", id, "err", err)
+		writeError(w, http.StatusInternalServerError, "db_error", "failed to cancel run")
+		return
+	}
+	publishCancelled(h.hub, id)
+	writeJSON(w, http.StatusOK, map[string]interface{}{"run_id": id, "state": pipeline.StateCancelled})
+}
+
+// ── GET /api/pipeline/runs/{id}/highlights ────────────────────────────────────
+
+func (h *PipelineHandler) GetHighlights(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseRunID(w, r)
+	if !ok {
+		return
+	}
+	highlights, err := h.repo.GetHighlights(r.Context(), id)
+	if err != nil {
+		h.log.Error("get highlights failed", "runID", id, "err", err)
+		writeError(w, http.StatusInternalServerError, "db_error", "failed to get highlights")
+		return
+	}
+	if highlights == nil {
+		highlights = []pipeline.Highlight{}
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"highlights": highlights})
+}
+
+// ── GET /api/pipeline/runs/{id}/clips ─────────────────────────────────────────
+
+func (h *PipelineHandler) GetClips(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseRunID(w, r)
+	if !ok {
+		return
+	}
+	clips, err := h.repo.GetClips(r.Context(), id)
+	if err != nil {
+		h.log.Error("get clips failed", "runID", id, "err", err)
+		writeError(w, http.StatusInternalServerError, "db_error", "failed to get clips")
+		return
+	}
+	if clips == nil {
+		clips = []pipeline.Clip{}
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"clips": clips})
+}
+
+// ── helper ────────────────────────────────────────────────────────────────────
+
+func parseRunID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	v := r.PathValue("id")
+	id, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_id", "id must be an integer")
+		return 0, false
+	}
+	return id, true
+}
+
+// publishCancelled is a local helper to publish SSE from the handler.
+func publishCancelled(h *hub.SSEHub, runID int64) {
+	h.Publish(pipeline.PipelineJobID(runID), hub.SSEEvent{
+		Type: pipeline.SSEEventCancelled,
+		Data: map[string]interface{}{
+			"run_id": runID,
+			"state":  pipeline.StateCancelled,
+		},
 	})
 }
