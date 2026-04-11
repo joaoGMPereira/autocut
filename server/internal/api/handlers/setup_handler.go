@@ -58,7 +58,7 @@ func (h *SetupHandler) PostInstall(w http.ResponseWriter, r *http.Request) {
 				h.hub.Publish(jobID, hub.SSEEvent{Type: "log", Data: map[string]string{"message": line}})
 			}
 		}()
-		if err := h.cfg.Install(r.Context(), name, logCh); err != nil {
+		if err := h.cfg.Install(context.Background(), name, logCh); err != nil {
 			h.hub.Publish(jobID, hub.SSEEvent{Type: "error", Data: map[string]string{"message": err.Error()}})
 			return
 		}
