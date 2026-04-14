@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { useAppStore } from '@/store/appStore';
 import { usePipelineStore } from '@/store/pipelineStore';
 import { AI_DEFAULTS, LONGFORM_DEFAULTS } from '@/types/pipeline';
-import type { AntiDupEffects, AntiDuplicateConfig, BackgroundMusicConfig, CaptionsConfig, GatePayload, ModeConfig, PriorClipsResponse, WorkflowMode } from '@/types/pipeline';
+import type { AntiDupEffects, AntiDuplicateConfig, BackgroundMusicConfig, BrandingConfig, CaptionsConfig, GatePayload, ModeConfig, PriorClipsResponse, WorkflowMode } from '@/types/pipeline';
+import { PositionGrid } from '@/components/ui/PositionGrid';
 
 interface StepModeProps {
   historical?: GatePayload;
@@ -77,6 +78,16 @@ export function StepMode({ historical }: StepModeProps) {
   const [musicVolumePct, setMusicVolumePct] = useState<number>(7);
   const [musicLibraryTracks, setMusicLibraryTracks] = useState<string[]>([]);
 
+  // ── Branding state ─────────────────────────────────────────────────────────
+  const [brandingLogoEnabled, setBrandingLogoEnabled] = useState<boolean>(false);
+  const [brandingLogoPath, setBrandingLogoPath] = useState<string>('');
+  const [brandingLogoPosition, setBrandingLogoPosition] = useState<string>('top_right');
+  const [brandingLogoOpacity, setBrandingLogoOpacity] = useState<number>(80);
+  const [brandingLogoScale, setBrandingLogoScale] = useState<number>(10);
+  const [brandingLogoPulse, setBrandingLogoPulse] = useState<boolean>(false);
+  const [brandingIntroEnabled, setBrandingIntroEnabled] = useState<boolean>(false);
+  const [brandingOutroEnabled, setBrandingOutroEnabled] = useState<boolean>(false);
+
   // ── Derived validation (computed — not useState) ───────────────────────────
   const isMinDurationInvalid = selectedMode === 'ai' && minDurationSecs >= clipDurationSecs;
 
@@ -137,6 +148,16 @@ export function StepMode({ historical }: StepModeProps) {
         if (cfg.background_music.custom_path) setMusicCustomPath(cfg.background_music.custom_path);
         if (cfg.background_music.selected_track) setMusicSelectedTrack(cfg.background_music.selected_track);
         setMusicVolumePct(cfg.background_music.volume_pct);
+      }
+      if (cfg.branding) {
+        setBrandingLogoEnabled(cfg.branding.logo_enabled);
+        if (cfg.branding.logo_path != null) setBrandingLogoPath(cfg.branding.logo_path);
+        setBrandingLogoPosition(cfg.branding.logo_position);
+        setBrandingLogoOpacity(cfg.branding.logo_opacity);
+        setBrandingLogoScale(cfg.branding.logo_scale);
+        setBrandingLogoPulse(cfg.branding.logo_pulse);
+        setBrandingIntroEnabled(cfg.branding.intro_enabled);
+        setBrandingOutroEnabled(cfg.branding.outro_enabled);
       }
       setIsLoadingPreference(false);
       return;
@@ -215,6 +236,14 @@ export function StepMode({ historical }: StepModeProps) {
         setMusicCustomPath(data.find((s) => s.key === 'music_custom_path')?.value ?? '');
         setMusicSelectedTrack(data.find((s) => s.key === 'music_selected_track')?.value ?? '');
         setMusicVolumePct(parseIntKey('music_volume_pct', 7));
+        setBrandingLogoEnabled(parseBoolKey('branding_logo_enabled', false));
+        setBrandingLogoPath(data.find((s) => s.key === 'branding_logo_path')?.value ?? '');
+        setBrandingLogoPosition(data.find((s) => s.key === 'branding_logo_position')?.value ?? 'top_right');
+        setBrandingLogoOpacity(parseIntKey('branding_logo_opacity', 80));
+        setBrandingLogoScale(parseIntKey('branding_logo_scale', 10));
+        setBrandingLogoPulse(parseBoolKey('branding_logo_pulse', false));
+        setBrandingIntroEnabled(parseBoolKey('branding_intro_enabled', false));
+        setBrandingOutroEnabled(parseBoolKey('branding_outro_enabled', false));
       } catch (err) {
         console.warn('[StepMode] failed to load preference, defaulting to longform', err);
         setSelectedMode('longform');
@@ -259,6 +288,16 @@ export function StepMode({ historical }: StepModeProps) {
 
   // ── buildModeConfig ────────────────────────────────────────────────────────
   function buildModeConfig(): ModeConfig {
+    const brandingCfg: BrandingConfig | undefined = (brandingLogoEnabled || brandingIntroEnabled || brandingOutroEnabled) ? {
+      logo_enabled: brandingLogoEnabled,
+      logo_path: brandingLogoPath || undefined,
+      logo_position: brandingLogoPosition,
+      logo_opacity: brandingLogoOpacity,
+      logo_scale: brandingLogoScale,
+      logo_pulse: brandingLogoPulse,
+      intro_enabled: brandingIntroEnabled,
+      outro_enabled: brandingOutroEnabled,
+    } : undefined;
     const musicCfg: BackgroundMusicConfig | undefined = musicEnabled ? {
       enabled: true,
       mode: musicMode,
@@ -304,6 +343,7 @@ export function StepMode({ historical }: StepModeProps) {
         upload_options: { privacy: uploadPrivacy, schedule_enabled: uploadScheduleEnabled, auto_enabled: uploadAutoEnabled, dry_run: uploadDryRun },
         captions: captionsCfg,
         background_music: musicCfg,
+        branding: brandingCfg,
       };
     }
     return {
@@ -316,6 +356,7 @@ export function StepMode({ historical }: StepModeProps) {
       upload_options: { privacy: uploadPrivacy, schedule_enabled: uploadScheduleEnabled, auto_enabled: uploadAutoEnabled, dry_run: uploadDryRun },
       captions: captionsCfg,
       background_music: musicCfg,
+      branding: brandingCfg,
     };
   }
 
@@ -373,6 +414,14 @@ export function StepMode({ historical }: StepModeProps) {
         { key: 'music_custom_path', value: musicCustomPath },
         { key: 'music_selected_track', value: musicSelectedTrack },
         { key: 'music_volume_pct', value: String(musicVolumePct) },
+        { key: 'branding_logo_enabled', value: String(brandingLogoEnabled) },
+        { key: 'branding_logo_path', value: brandingLogoPath },
+        { key: 'branding_logo_position', value: brandingLogoPosition },
+        { key: 'branding_logo_opacity', value: String(brandingLogoOpacity) },
+        { key: 'branding_logo_scale', value: String(brandingLogoScale) },
+        { key: 'branding_logo_pulse', value: String(brandingLogoPulse) },
+        { key: 'branding_intro_enabled', value: String(brandingIntroEnabled) },
+        { key: 'branding_outro_enabled', value: String(brandingOutroEnabled) },
       ];
       await Promise.allSettled(
         settingPairs.map(({ key, value }) =>
@@ -857,6 +906,176 @@ export function StepMode({ historical }: StepModeProps) {
             </div>
           </>
         )}
+      </div>
+
+      {/* Branding */}
+      <div className="space-y-4 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
+        <p className="text-xs font-medium text-zinc-300 uppercase tracking-wider">Branding</p>
+
+        {/* Watermark (Logo) */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-zinc-300">Watermark (Logo)</p>
+            <button
+              onClick={() => setBrandingLogoEnabled((v) => !v)}
+              className={[
+                'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
+                brandingLogoEnabled ? 'bg-zinc-300' : 'bg-zinc-700',
+              ].join(' ')}
+              role="switch"
+              aria-checked={brandingLogoEnabled}
+            >
+              <span
+                className={[
+                  'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                  brandingLogoEnabled ? 'translate-x-4' : 'translate-x-1',
+                ].join(' ')}
+              />
+            </button>
+          </div>
+
+          {brandingLogoEnabled && (
+            <div className="space-y-3 pl-1">
+              {/* Logo source */}
+              <div className="space-y-1.5">
+                <label className="text-xs text-zinc-400">Logo</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setBrandingLogoPath('')}
+                    className={[
+                      'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
+                      brandingLogoPath === ''
+                        ? 'bg-zinc-300 text-zinc-900 font-medium'
+                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
+                    ].join(' ')}
+                  >
+                    Do canal (auto)
+                  </button>
+                  <button
+                    onClick={() => { if (brandingLogoPath === '') setBrandingLogoPath('/'); }}
+                    className={[
+                      'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
+                      brandingLogoPath !== ''
+                        ? 'bg-zinc-300 text-zinc-900 font-medium'
+                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
+                    ].join(' ')}
+                  >
+                    Arquivo custom
+                  </button>
+                </div>
+                {brandingLogoPath !== '' && (
+                  <input
+                    type="text"
+                    value={brandingLogoPath}
+                    onChange={(e) => setBrandingLogoPath(e.target.value)}
+                    placeholder="/caminho/para/logo.png"
+                    className="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                  />
+                )}
+              </div>
+
+              {/* Position grid */}
+              <div className="space-y-1.5">
+                <label className="text-xs text-zinc-400">Posição</label>
+                <PositionGrid value={brandingLogoPosition} onChange={setBrandingLogoPosition} />
+              </div>
+
+              {/* Opacity slider */}
+              <div className="flex items-center gap-3">
+                <label className="text-xs text-zinc-400 w-20 flex-shrink-0">Opacidade</label>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={brandingLogoOpacity}
+                  onChange={(e) => setBrandingLogoOpacity(Number(e.target.value))}
+                  className="flex-1 accent-zinc-300"
+                />
+                <span className="text-xs text-zinc-400 w-8 text-right">{brandingLogoOpacity}%</span>
+              </div>
+
+              {/* Scale slider */}
+              <div className="flex items-center gap-3">
+                <label className="text-xs text-zinc-400 w-20 flex-shrink-0">Tamanho</label>
+                <input
+                  type="range"
+                  min={5}
+                  max={30}
+                  value={brandingLogoScale}
+                  onChange={(e) => setBrandingLogoScale(Number(e.target.value))}
+                  className="flex-1 accent-zinc-300"
+                />
+                <span className="text-xs text-zinc-400 w-8 text-right">{brandingLogoScale}%</span>
+              </div>
+
+              {/* Pulse toggle */}
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-zinc-300">Watermark pulsante</p>
+                <button
+                  onClick={() => setBrandingLogoPulse((v) => !v)}
+                  className={[
+                    'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
+                    brandingLogoPulse ? 'bg-zinc-300' : 'bg-zinc-700',
+                  ].join(' ')}
+                  role="switch"
+                  aria-checked={brandingLogoPulse}
+                >
+                  <span
+                    className={[
+                      'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                      brandingLogoPulse ? 'translate-x-4' : 'translate-x-1',
+                    ].join(' ')}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Intro toggle */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs text-zinc-300">Intro animado</p>
+            <p className="text-xs text-zinc-600">3s a partir do logo do canal</p>
+          </div>
+          <button
+            onClick={() => setBrandingIntroEnabled((v) => !v)}
+            className={[
+              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
+              brandingIntroEnabled ? 'bg-zinc-300' : 'bg-zinc-700',
+            ].join(' ')}
+            role="switch"
+            aria-checked={brandingIntroEnabled}
+          >
+            <span
+              className={[
+                'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                brandingIntroEnabled ? 'translate-x-4' : 'translate-x-1',
+              ].join(' ')}
+            />
+          </button>
+        </div>
+
+        {/* Outro toggle */}
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-zinc-300">Outro (tela final)</p>
+          <button
+            onClick={() => setBrandingOutroEnabled((v) => !v)}
+            className={[
+              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
+              brandingOutroEnabled ? 'bg-zinc-300' : 'bg-zinc-700',
+            ].join(' ')}
+            role="switch"
+            aria-checked={brandingOutroEnabled}
+          >
+            <span
+              className={[
+                'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                brandingOutroEnabled ? 'translate-x-4' : 'translate-x-1',
+              ].join(' ')}
+            />
+          </button>
+        </div>
       </div>
 
       {/* Música de Fundo */}

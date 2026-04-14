@@ -132,6 +132,18 @@ export interface BackgroundMusicConfig {
   volume_pct: number; // 0–30
 }
 
+// ── BrandingConfig ────────────────────────────────────────────────────────────
+export interface BrandingConfig {
+  logo_enabled: boolean;
+  logo_path?: string;        // undefined = use channel logo automatically
+  logo_position: string;     // top_left, top_center, etc.
+  logo_opacity: number;      // 0–100
+  logo_scale: number;        // 5–30
+  logo_pulse: boolean;
+  intro_enabled: boolean;
+  outro_enabled: boolean;
+}
+
 // ── ModeConfig ────────────────────────────────────────────────────────────────
 
 export interface ModeConfig {
@@ -154,6 +166,7 @@ export interface ModeConfig {
   };
   captions?: CaptionsConfig;
   background_music?: BackgroundMusicConfig;
+  branding?: BrandingConfig;
 }
 
 export const AI_DEFAULTS: Omit<ModeConfig, 'mode'> = {
