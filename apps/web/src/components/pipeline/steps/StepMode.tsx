@@ -102,6 +102,12 @@ export function StepMode({ historical }: StepModeProps) {
   const [textOverlaysEnabled, setTextOverlaysEnabled] = useState<boolean>(false);
   const [textOverlayItems, setTextOverlayItems] = useState<TextOverlayItem[]>([]);
 
+  // ── Preview state ──────────────────────────────────────────────────────────
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState<boolean>(false);
+  const [previewMessage, setPreviewMessage] = useState<string>('');
+  const [presetName, setPresetName] = useState<string>('');
+
   // ── Derived validation (computed — not useState) ───────────────────────────
   const isMinDurationInvalid = selectedMode === 'ai' && minDurationSecs >= clipDurationSecs;
 
@@ -350,6 +356,40 @@ export function StepMode({ historical }: StepModeProps) {
 
   const updateTextOverlayItem = (idx: number, patch: Partial<TextOverlayItem>) => {
     setTextOverlayItems((prev) => prev.map((item, i) => (i === idx ? { ...item, ...patch } : item)));
+  };
+
+  const handlePreview = async () => {
+    if (!activeRunId || previewLoading) return;
+    setPreviewLoading(true);
+    setPreviewMessage('');
+    try {
+      const res = await fetch(`${goUrl}/api/pipeline/runs/${activeRunId}/preview`, { method: 'POST' });
+      const data = (await res.json()) as { status?: string; message?: string; preview_url?: string };
+      if (data.preview_url) {
+        setPreviewUrl(data.preview_url);
+      } else {
+        setPreviewMessage(data.message ?? 'Preview gerado.');
+      }
+    } catch {
+      setPreviewMessage('Falha ao gerar preview.');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleSavePreset = async () => {
+    if (!presetName.trim()) return;
+    const cfg = buildModeConfig();
+    try {
+      await fetch(`${goUrl}/api/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: `preset_${presetName.trim()}`, value: JSON.stringify(cfg) }),
+      });
+      setPresetName('');
+    } catch {
+      // non-fatal
+    }
   };
 
   // ── buildModeConfig ────────────────────────────────────────────────────────
@@ -1815,6 +1855,55 @@ export function StepMode({ historical }: StepModeProps) {
                 uploadDryRun ? 'translate-x-4' : 'translate-x-1',
               ].join(' ')}
             />
+          </button>
+        </div>
+      </div>
+
+      {/* Preview Panel */}
+      <div className="space-y-4 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
+        <p className="text-xs font-medium text-zinc-300 uppercase tracking-wider">Preview</p>
+
+        {/* Video player / placeholder */}
+        {previewUrl ? (
+          <video
+            src={previewUrl}
+            controls
+            className="w-full rounded border border-zinc-700"
+          />
+        ) : (
+          <div className="flex items-center justify-center h-32 rounded border border-dashed border-zinc-700 text-xs text-zinc-600">
+            {previewLoading ? 'Gerando preview…' : 'Nenhum preview ainda.'}
+          </div>
+        )}
+
+        {previewMessage && (
+          <p className="text-xs text-zinc-500">{previewMessage}</p>
+        )}
+
+        {/* Update Preview button */}
+        <button
+          onClick={() => void handlePreview()}
+          disabled={!activeRunId || previewLoading}
+          className="w-full rounded-md border border-zinc-600 px-4 py-2 text-xs font-medium text-zinc-300 transition-colors hover:border-zinc-400 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {previewLoading ? 'Gerando…' : 'Atualizar Preview (15s)'}
+        </button>
+
+        {/* Save Preset */}
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={presetName}
+            onChange={(e) => setPresetName(e.target.value)}
+            placeholder="Nome do preset…"
+            className="flex-1 rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+          />
+          <button
+            onClick={() => void handleSavePreset()}
+            disabled={!presetName.trim()}
+            className="rounded border border-zinc-600 px-3 py-1.5 text-xs text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Salvar Preset
           </button>
         </div>
       </div>

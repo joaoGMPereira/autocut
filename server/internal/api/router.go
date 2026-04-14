@@ -22,6 +22,7 @@ func NewRouter(
 	oh *handlers.OAuthHandler,
 	olh *handlers.OllamaHandler,
 	mlh *handlers.MediaLibraryHandler,
+	pvh *handlers.PreviewHandler,
 ) http.Handler {
 	mux := http.NewServeMux()
 
@@ -76,6 +77,9 @@ func NewRouter(
 	// Media library endpoints
 	mux.HandleFunc("GET /api/music-library", mlh.GetMusicLibrary)
 	mux.HandleFunc("GET /api/overlay-library", mlh.GetOverlayLibrary)
+
+	// Preview endpoint
+	mux.HandleFunc("POST /api/pipeline/runs/{id}/preview", pvh.PostPreview)
 
 	// Stats endpoint
 	mux.HandleFunc("GET /api/stats", sth.GetStats)

@@ -93,6 +93,7 @@ func main() {
 	ollamaHandler := handlers.NewOllamaHandler()
 	statsHandler := handlers.NewStatsHandler(stats.New())
 	mediaLibraryHandler := handlers.NewMediaLibraryHandler(settingRepo)
+	previewHandler := handlers.NewPreviewHandler()
 
 	router := api.NewRouter(
 		pipelineHandler,
@@ -105,6 +106,7 @@ func main() {
 		oauthHandler,
 		ollamaHandler,
 		mediaLibraryHandler,
+		previewHandler,
 	)
 
 	addr := *host + ":" + *port
