@@ -81,6 +81,7 @@ export function StepMode({ historical }: StepModeProps) {
   // ── Branding state ─────────────────────────────────────────────────────────
   const [brandingLogoEnabled, setBrandingLogoEnabled] = useState<boolean>(false);
   const [brandingLogoPath, setBrandingLogoPath] = useState<string>('');
+  const [brandingLogoIsCustom, setBrandingLogoIsCustom] = useState<boolean>(false);
   const [brandingLogoPosition, setBrandingLogoPosition] = useState<string>('top_right');
   const [brandingLogoOpacity, setBrandingLogoOpacity] = useState<number>(80);
   const [brandingLogoScale, setBrandingLogoScale] = useState<number>(10);
@@ -171,7 +172,10 @@ export function StepMode({ historical }: StepModeProps) {
       }
       if (cfg.branding) {
         setBrandingLogoEnabled(cfg.branding.logo_enabled);
-        if (cfg.branding.logo_path != null) setBrandingLogoPath(cfg.branding.logo_path);
+        if (cfg.branding.logo_path != null) {
+          setBrandingLogoPath(cfg.branding.logo_path);
+          setBrandingLogoIsCustom(true);
+        }
         setBrandingLogoPosition(cfg.branding.logo_position);
         setBrandingLogoOpacity(cfg.branding.logo_opacity);
         setBrandingLogoScale(cfg.branding.logo_scale);
@@ -270,7 +274,9 @@ export function StepMode({ historical }: StepModeProps) {
         setMusicSelectedTrack(data.find((s) => s.key === 'music_selected_track')?.value ?? '');
         setMusicVolumePct(parseIntKey('music_volume_pct', 7));
         setBrandingLogoEnabled(parseBoolKey('branding_logo_enabled', false));
-        setBrandingLogoPath(data.find((s) => s.key === 'branding_logo_path')?.value ?? '');
+        const savedLogoPath = data.find((s) => s.key === 'branding_logo_path')?.value ?? '';
+        setBrandingLogoPath(savedLogoPath);
+        setBrandingLogoIsCustom(savedLogoPath !== '');
         setBrandingLogoPosition(data.find((s) => s.key === 'branding_logo_position')?.value ?? 'top_right');
         setBrandingLogoOpacity(parseIntKey('branding_logo_opacity', 80));
         setBrandingLogoScale(parseIntKey('branding_logo_scale', 10));
@@ -396,7 +402,7 @@ export function StepMode({ historical }: StepModeProps) {
   function buildModeConfig(): ModeConfig {
     const brandingCfg: BrandingConfig | undefined = (brandingLogoEnabled || brandingIntroEnabled || brandingOutroEnabled) ? {
       logo_enabled: brandingLogoEnabled,
-      logo_path: brandingLogoPath || undefined,
+      logo_path: brandingLogoIsCustom && brandingLogoPath ? brandingLogoPath : undefined,
       logo_position: brandingLogoPosition,
       logo_opacity: brandingLogoOpacity,
       logo_scale: brandingLogoScale,
@@ -570,9 +576,12 @@ export function StepMode({ historical }: StepModeProps) {
     }
 
     // Advance the pipeline gate
-    const cfg = buildModeConfig();
-    console.log('[StepMode] calling advance with mode_config', cfg);
-    await advance(goUrl, activeRunId, { mode_config: cfg });
+    try {
+      const cfg = buildModeConfig();
+      await advance(goUrl, activeRunId, { mode_config: cfg });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const isSubmitDisabled = selectedMode === null || isSubmitting || isLoadingPreference || isMinDurationInvalid;
@@ -1306,10 +1315,10 @@ export function StepMode({ historical }: StepModeProps) {
                 <label className="text-xs text-zinc-400">Logo</label>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setBrandingLogoPath('')}
+                    onClick={() => { setBrandingLogoIsCustom(false); setBrandingLogoPath(''); }}
                     className={[
                       'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
-                      brandingLogoPath === ''
+                      !brandingLogoIsCustom
                         ? 'bg-zinc-300 text-zinc-900 font-medium'
                         : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
                     ].join(' ')}
@@ -1317,10 +1326,10 @@ export function StepMode({ historical }: StepModeProps) {
                     Do canal (auto)
                   </button>
                   <button
-                    onClick={() => { if (brandingLogoPath === '') setBrandingLogoPath('/'); }}
+                    onClick={() => setBrandingLogoIsCustom(true)}
                     className={[
                       'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
-                      brandingLogoPath !== ''
+                      brandingLogoIsCustom
                         ? 'bg-zinc-300 text-zinc-900 font-medium'
                         : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
                     ].join(' ')}
@@ -1328,7 +1337,7 @@ export function StepMode({ historical }: StepModeProps) {
                     Arquivo custom
                   </button>
                 </div>
-                {brandingLogoPath !== '' && (
+                {brandingLogoIsCustom && (
                   <input
                     type="text"
                     value={brandingLogoPath}
