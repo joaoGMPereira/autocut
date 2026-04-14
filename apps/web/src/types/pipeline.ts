@@ -117,6 +117,12 @@ export interface ModeConfig {
   anti_duplicate?: AntiDuplicateConfig; // All modes — anti-dup protection config
   skip_regenerate?: boolean;            // All modes — skip reprocessing if prior clips exist
   min_part_secs?: number;
+  upload_options?: {
+    privacy: 'private' | 'unlisted' | 'public';
+    schedule_enabled: boolean;
+    auto_enabled: boolean;
+    dry_run: boolean;
+  };
 }
 
 export const AI_DEFAULTS: Omit<ModeConfig, 'mode'> = {

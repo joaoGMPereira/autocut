@@ -45,6 +45,12 @@ export function StepMode({ historical }: StepModeProps) {
   const [priorRunId, setPriorRunId] = useState<number | null>(null);
   const [skipRegenerate, setSkipRegenerate] = useState<boolean>(false);
 
+  // ── Upload options ─────────────────────────────────────────────────────────
+  const [uploadPrivacy, setUploadPrivacy] = useState<'private' | 'unlisted' | 'public'>('private');
+  const [uploadScheduleEnabled, setUploadScheduleEnabled] = useState<boolean>(false);
+  const [uploadAutoEnabled, setUploadAutoEnabled] = useState<boolean>(false);
+  const [uploadDryRun, setUploadDryRun] = useState<boolean>(false);
+
   // ── Derived validation (computed — not useState) ───────────────────────────
   const isMinDurationInvalid = selectedMode === 'ai' && minDurationSecs >= clipDurationSecs;
 
@@ -75,6 +81,12 @@ export function StepMode({ historical }: StepModeProps) {
         if (cfg.anti_duplicate?.effects) setAntiDupEffects(cfg.anti_duplicate.effects);
       }
       if (cfg.skip_regenerate != null) setSkipRegenerate(cfg.skip_regenerate);
+      if (cfg.upload_options) {
+        setUploadPrivacy(cfg.upload_options.privacy);
+        setUploadScheduleEnabled(cfg.upload_options.schedule_enabled);
+        setUploadAutoEnabled(cfg.upload_options.auto_enabled);
+        setUploadDryRun(cfg.upload_options.dry_run);
+      }
       setIsLoadingPreference(false);
       return;
     }
@@ -124,6 +136,11 @@ export function StepMode({ historical }: StepModeProps) {
           zoom: parseBoolKey('anti_dup_effect_zoom', false),
           transitions: parseBoolKey('anti_dup_effect_transitions', false),
         });
+        const privacyVal = data.find((s) => s.key === 'upload_privacy')?.value;
+        setUploadPrivacy(privacyVal === 'unlisted' ? 'unlisted' : privacyVal === 'public' ? 'public' : 'private');
+        setUploadScheduleEnabled(parseBoolKey('upload_schedule_enabled', false));
+        setUploadAutoEnabled(parseBoolKey('upload_auto_enabled', false));
+        setUploadDryRun(parseBoolKey('upload_dry_run', false));
       } catch (err) {
         console.warn('[StepMode] failed to load preference, defaulting to longform', err);
         setSelectedMode('longform');
@@ -177,6 +194,7 @@ export function StepMode({ historical }: StepModeProps) {
         skip_transcription: skipTranscription,
         anti_duplicate: antiDup,
         skip_regenerate: skipRegenerate,
+        upload_options: { privacy: uploadPrivacy, schedule_enabled: uploadScheduleEnabled, auto_enabled: uploadAutoEnabled, dry_run: uploadDryRun },
       };
     }
     return {
@@ -186,6 +204,7 @@ export function StepMode({ historical }: StepModeProps) {
       min_part_secs: minPartSecs > 0 ? minPartSecs : undefined,
       anti_duplicate: antiDup,
       skip_regenerate: skipRegenerate,
+      upload_options: { privacy: uploadPrivacy, schedule_enabled: uploadScheduleEnabled, auto_enabled: uploadAutoEnabled, dry_run: uploadDryRun },
     };
   }
 
@@ -218,6 +237,10 @@ export function StepMode({ historical }: StepModeProps) {
         { key: 'anti_dup_effect_blur_edge_pct', value: String(antiDupEffects.blur_edge_pct ?? 10) },
         { key: 'anti_dup_effect_zoom', value: String(antiDupEffects.zoom ?? false) },
         { key: 'anti_dup_effect_transitions', value: String(antiDupEffects.transitions ?? false) },
+        { key: 'upload_privacy', value: uploadPrivacy },
+        { key: 'upload_schedule_enabled', value: String(uploadScheduleEnabled) },
+        { key: 'upload_auto_enabled', value: String(uploadAutoEnabled) },
+        { key: 'upload_dry_run', value: String(uploadDryRun) },
       ];
       await Promise.allSettled(
         settingPairs.map(({ key, value }) =>
@@ -702,6 +725,104 @@ export function StepMode({ historical }: StepModeProps) {
             </div>
           </>
         )}
+      </div>
+
+      {/* Upload Options */}
+      <div className="space-y-4 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
+        <p className="text-xs font-medium text-zinc-300 uppercase tracking-wider">Upload Options</p>
+
+        {/* Privacy pill selector */}
+        <div className="space-y-1.5">
+          <label className="text-xs text-zinc-400">Privacy</label>
+          <div className="flex gap-2">
+            {(['private', 'unlisted', 'public'] as const).map((p) => (
+              <button
+                key={p}
+                onClick={() => setUploadPrivacy(p)}
+                className={[
+                  'flex-1 rounded-full px-3 py-1.5 text-xs font-medium capitalize transition-colors',
+                  uploadPrivacy === p
+                    ? 'bg-zinc-300 text-zinc-900'
+                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
+                ].join(' ')}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Schedule toggle */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs text-zinc-300">Schedule Sequentially</p>
+            <p className="text-xs text-zinc-600">2 uploads/day per type</p>
+          </div>
+          <button
+            onClick={() => setUploadScheduleEnabled((v) => !v)}
+            className={[
+              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
+              uploadScheduleEnabled ? 'bg-zinc-300' : 'bg-zinc-700',
+            ].join(' ')}
+            role="switch"
+            aria-checked={uploadScheduleEnabled}
+          >
+            <span
+              className={[
+                'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                uploadScheduleEnabled ? 'translate-x-4' : 'translate-x-1',
+              ].join(' ')}
+            />
+          </button>
+        </div>
+
+        {/* Auto upload toggle */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs text-zinc-300">Auto Upload</p>
+            <p className="text-xs text-zinc-600">Upload immediately vs. manual queue</p>
+          </div>
+          <button
+            onClick={() => setUploadAutoEnabled((v) => !v)}
+            className={[
+              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
+              uploadAutoEnabled ? 'bg-zinc-300' : 'bg-zinc-700',
+            ].join(' ')}
+            role="switch"
+            aria-checked={uploadAutoEnabled}
+          >
+            <span
+              className={[
+                'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                uploadAutoEnabled ? 'translate-x-4' : 'translate-x-1',
+              ].join(' ')}
+            />
+          </button>
+        </div>
+
+        {/* Dry run toggle */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs text-zinc-300">Dry Run</p>
+            <p className="text-xs text-zinc-600">Generate thumbnails without uploading</p>
+          </div>
+          <button
+            onClick={() => setUploadDryRun((v) => !v)}
+            className={[
+              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
+              uploadDryRun ? 'bg-zinc-300' : 'bg-zinc-700',
+            ].join(' ')}
+            role="switch"
+            aria-checked={uploadDryRun}
+          >
+            <span
+              className={[
+                'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                uploadDryRun ? 'translate-x-4' : 'translate-x-1',
+              ].join(' ')}
+            />
+          </button>
+        </div>
       </div>
 
       {/* Submit button */}
