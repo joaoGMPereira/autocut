@@ -40,7 +40,10 @@ export function StepMode({ historical }: StepModeProps) {
   // ── Anti-duplicate config (new) ────────────────────────────────────────────
   const [antiDupEnabled, setAntiDupEnabled] = useState<boolean>(false);
   const [antiDupMode, setAntiDupMode] = useState<'subtle' | 'aggressive'>('subtle');
-  const [antiDupEffects, setAntiDupEffects] = useState<AntiDupEffects>({});
+  const [antiDupEffects, setAntiDupEffects] = useState<AntiDupEffects>({
+    speed_boost: true, crop: true, color_grading: true,
+    noise: true, noise_strength: 3, zoom: true, transitions: true,
+  });
 
   // ── Existing clips reuse (new) ─────────────────────────────────────────────
   const [priorRunId, setPriorRunId] = useState<number | null>(null);
@@ -103,10 +106,6 @@ export function StepMode({ historical }: StepModeProps) {
   const [textOverlaysEnabled, setTextOverlaysEnabled] = useState<boolean>(false);
   const [textOverlayItems, setTextOverlayItems] = useState<TextOverlayItem[]>([]);
 
-  // ── Preview state ──────────────────────────────────────────────────────────
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [previewLoading, setPreviewLoading] = useState<boolean>(false);
-  const [previewMessage, setPreviewMessage] = useState<string>('');
   const [presetName, setPresetName] = useState<string>('');
 
   // ── Derived validation (computed — not useState) ───────────────────────────
@@ -235,15 +234,15 @@ export function StepMode({ historical }: StepModeProps) {
         const adModeVal = data.find((s) => s.key === 'anti_dup_mode')?.value;
         setAntiDupMode(adModeVal === 'aggressive' ? 'aggressive' : 'subtle');
         setAntiDupEffects({
-          speed_boost: parseBoolKey('anti_dup_effect_speed_boost', false),
-          crop: parseBoolKey('anti_dup_effect_crop', false),
-          color_grading: parseBoolKey('anti_dup_effect_color_grading', false),
-          noise: parseBoolKey('anti_dup_effect_noise', false),
+          speed_boost: parseBoolKey('anti_dup_effect_speed_boost', true),
+          crop: parseBoolKey('anti_dup_effect_crop', true),
+          color_grading: parseBoolKey('anti_dup_effect_color_grading', true),
+          noise: parseBoolKey('anti_dup_effect_noise', true),
           noise_strength: parseIntKey('anti_dup_effect_noise_strength', 3),
           blur: parseBoolKey('anti_dup_effect_blur', false),
           blur_edge_pct: parseIntKey('anti_dup_effect_blur_edge_pct', 10),
-          zoom: parseBoolKey('anti_dup_effect_zoom', false),
-          transitions: parseBoolKey('anti_dup_effect_transitions', false),
+          zoom: parseBoolKey('anti_dup_effect_zoom', true),
+          transitions: parseBoolKey('anti_dup_effect_transitions', true),
         });
         const privacyVal = data.find((s) => s.key === 'upload_privacy')?.value;
         setUploadPrivacy(privacyVal === 'unlisted' ? 'unlisted' : privacyVal === 'public' ? 'public' : 'private');
@@ -362,25 +361,6 @@ export function StepMode({ historical }: StepModeProps) {
 
   const updateTextOverlayItem = (idx: number, patch: Partial<TextOverlayItem>) => {
     setTextOverlayItems((prev) => prev.map((item, i) => (i === idx ? { ...item, ...patch } : item)));
-  };
-
-  const handlePreview = async () => {
-    if (!activeRunId || previewLoading) return;
-    setPreviewLoading(true);
-    setPreviewMessage('');
-    try {
-      const res = await fetch(`${goUrl}/api/pipeline/runs/${activeRunId}/preview`, { method: 'POST' });
-      const data = (await res.json()) as { status?: string; message?: string; preview_url?: string };
-      if (data.preview_url) {
-        setPreviewUrl(data.preview_url);
-      } else {
-        setPreviewMessage(data.message ?? 'Preview gerado.');
-      }
-    } catch {
-      setPreviewMessage('Falha ao gerar preview.');
-    } finally {
-      setPreviewLoading(false);
-    }
   };
 
   const handleSavePreset = async () => {
@@ -857,28 +837,40 @@ export function StepMode({ historical }: StepModeProps) {
         <div className="space-y-4 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
           <p className="text-xs font-medium text-zinc-300 uppercase tracking-wider">Long Form Configuration</p>
 
-          {/* Segment duration presets */}
+          {/* Segment duration presets — derived from video duration */}
           <div className="space-y-1.5">
             <label className="text-xs text-zinc-400">Segment Duration</label>
-            <div className="flex gap-2">
-              {([
-                [1020, '17 min'],
-                [1560, '26 min'],
-                [3120, '52 min'],
-              ] as [number, string][]).map(([secs, label]) => (
-                <button
-                  key={secs}
-                  onClick={() => setSegmentSecs(secs)}
-                  className={[
-                    'rounded px-2 py-1.5 text-xs transition-colors',
-                    segmentSecs === secs
-                      ? 'bg-zinc-300 text-zinc-900 font-medium'
-                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
-                  ].join(' ')}
-                >
-                  {label}
-                </button>
-              ))}
+            <div className="flex gap-2 flex-wrap">
+              {(() => {
+                const MIN_PART = 480; // 8 min
+                const totalSec = videoInfo?.durationSec ?? 0;
+                const suggestions: [number, string][] = [];
+                for (const parts of [3, 2, 1]) {
+                  if (totalSec === 0) break;
+                  const partSec = Math.round(totalSec / parts / 60) * 60;
+                  if (partSec >= MIN_PART) {
+                    const mins = Math.round(partSec / 60);
+                    suggestions.push([partSec, `${mins} min`]);
+                  }
+                }
+                const options: [number, string][] = suggestions.length > 0
+                  ? suggestions
+                  : [[1020, '17 min'], [1560, '26 min'], [3120, '52 min']];
+                return options.map(([secs, label]) => (
+                  <button
+                    key={secs}
+                    onClick={() => setSegmentSecs(secs)}
+                    className={[
+                      'rounded px-2 py-1.5 text-xs transition-colors',
+                      segmentSecs === secs
+                        ? 'bg-zinc-300 text-zinc-900 font-medium'
+                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
+                    ].join(' ')}
+                  >
+                    {label}
+                  </button>
+                ));
+              })()}
             </div>
           </div>
 
@@ -1868,53 +1860,22 @@ export function StepMode({ historical }: StepModeProps) {
         </div>
       </div>
 
-      {/* Preview Panel */}
-      <div className="space-y-4 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
-        <p className="text-xs font-medium text-zinc-300 uppercase tracking-wider">Preview</p>
-
-        {/* Video player / placeholder */}
-        {previewUrl ? (
-          <video
-            src={previewUrl}
-            controls
-            className="w-full rounded border border-zinc-700"
-          />
-        ) : (
-          <div className="flex items-center justify-center h-32 rounded border border-dashed border-zinc-700 text-xs text-zinc-600">
-            {previewLoading ? 'Gerando preview…' : 'Nenhum preview ainda.'}
-          </div>
-        )}
-
-        {previewMessage && (
-          <p className="text-xs text-zinc-500">{previewMessage}</p>
-        )}
-
-        {/* Update Preview button */}
+      {/* Save Preset */}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={presetName}
+          onChange={(e) => setPresetName(e.target.value)}
+          placeholder="Nome do preset…"
+          className="flex-1 rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+        />
         <button
-          onClick={() => void handlePreview()}
-          disabled={!activeRunId || previewLoading}
-          className="w-full rounded-md border border-zinc-600 px-4 py-2 text-xs font-medium text-zinc-300 transition-colors hover:border-zinc-400 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+          onClick={() => void handleSavePreset()}
+          disabled={!presetName.trim()}
+          className="rounded border border-zinc-600 px-3 py-1.5 text-xs text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          {previewLoading ? 'Gerando…' : 'Atualizar Preview (15s)'}
+          Salvar Preset
         </button>
-
-        {/* Save Preset */}
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={presetName}
-            onChange={(e) => setPresetName(e.target.value)}
-            placeholder="Nome do preset…"
-            className="flex-1 rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
-          />
-          <button
-            onClick={() => void handleSavePreset()}
-            disabled={!presetName.trim()}
-            className="rounded border border-zinc-600 px-3 py-1.5 text-xs text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Salvar Preset
-          </button>
-        </div>
       </div>
 
       {/* Submit button */}
