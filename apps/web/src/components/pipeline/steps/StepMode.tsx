@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAppStore } from '@/store/appStore';
 import { usePipelineStore } from '@/store/pipelineStore';
 import { AI_DEFAULTS, LONGFORM_DEFAULTS } from '@/types/pipeline';
-import type { AntiDuplicateConfig, GatePayload, ModeConfig, PriorClipsResponse, WorkflowMode } from '@/types/pipeline';
+import type { AntiDupEffects, AntiDuplicateConfig, GatePayload, ModeConfig, PriorClipsResponse, WorkflowMode } from '@/types/pipeline';
 
 interface StepModeProps {
   historical?: GatePayload;
@@ -39,6 +39,7 @@ export function StepMode({ historical }: StepModeProps) {
   // ── Anti-duplicate config (new) ────────────────────────────────────────────
   const [antiDupEnabled, setAntiDupEnabled] = useState<boolean>(false);
   const [antiDupMode, setAntiDupMode] = useState<'subtle' | 'aggressive'>('subtle');
+  const [antiDupEffects, setAntiDupEffects] = useState<AntiDupEffects>({});
 
   // ── Existing clips reuse (new) ─────────────────────────────────────────────
   const [priorRunId, setPriorRunId] = useState<number | null>(null);
@@ -71,6 +72,7 @@ export function StepMode({ historical }: StepModeProps) {
       if (cfg.anti_duplicate) {
         setAntiDupEnabled(cfg.anti_duplicate.enabled);
         setAntiDupMode(cfg.anti_duplicate.mode);
+        if (cfg.anti_duplicate?.effects) setAntiDupEffects(cfg.anti_duplicate.effects);
       }
       if (cfg.skip_regenerate != null) setSkipRegenerate(cfg.skip_regenerate);
       setIsLoadingPreference(false);
@@ -111,6 +113,17 @@ export function StepMode({ historical }: StepModeProps) {
         setAntiDupEnabled(parseBoolKey('anti_dup_enabled', false));
         const adModeVal = data.find((s) => s.key === 'anti_dup_mode')?.value;
         setAntiDupMode(adModeVal === 'aggressive' ? 'aggressive' : 'subtle');
+        setAntiDupEffects({
+          speed_boost: parseBoolKey('anti_dup_effect_speed_boost', false),
+          crop: parseBoolKey('anti_dup_effect_crop', false),
+          color_grading: parseBoolKey('anti_dup_effect_color_grading', false),
+          noise: parseBoolKey('anti_dup_effect_noise', false),
+          noise_strength: parseIntKey('anti_dup_effect_noise_strength', 3),
+          blur: parseBoolKey('anti_dup_effect_blur', false),
+          blur_edge_pct: parseIntKey('anti_dup_effect_blur_edge_pct', 10),
+          zoom: parseBoolKey('anti_dup_effect_zoom', false),
+          transitions: parseBoolKey('anti_dup_effect_transitions', false),
+        });
       } catch (err) {
         console.warn('[StepMode] failed to load preference, defaulting to longform', err);
         setSelectedMode('longform');
@@ -140,9 +153,18 @@ export function StepMode({ historical }: StepModeProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── setEffect helper ───────────────────────────────────────────────────────
+  const setEffect = (key: keyof AntiDupEffects, value: boolean | number) => {
+    setAntiDupEffects((prev) => ({ ...prev, [key]: value }));
+  };
+
   // ── buildModeConfig ────────────────────────────────────────────────────────
   function buildModeConfig(): ModeConfig {
-    const antiDup: AntiDuplicateConfig = { enabled: antiDupEnabled, mode: antiDupMode };
+    const antiDup: AntiDuplicateConfig = {
+      enabled: antiDupEnabled,
+      mode: antiDupMode,
+      effects: antiDupEnabled ? antiDupEffects : undefined,
+    };
     if (selectedMode === 'ai') {
       return {
         mode: 'ai',
@@ -187,6 +209,15 @@ export function StepMode({ historical }: StepModeProps) {
         { key: 'longform_min_part_secs', value: String(minPartSecs) },
         { key: 'anti_dup_enabled', value: String(antiDupEnabled) },
         { key: 'anti_dup_mode', value: antiDupMode },
+        { key: 'anti_dup_effect_speed_boost', value: String(antiDupEffects.speed_boost ?? false) },
+        { key: 'anti_dup_effect_crop', value: String(antiDupEffects.crop ?? false) },
+        { key: 'anti_dup_effect_color_grading', value: String(antiDupEffects.color_grading ?? false) },
+        { key: 'anti_dup_effect_noise', value: String(antiDupEffects.noise ?? false) },
+        { key: 'anti_dup_effect_noise_strength', value: String(antiDupEffects.noise_strength ?? 3) },
+        { key: 'anti_dup_effect_blur', value: String(antiDupEffects.blur ?? false) },
+        { key: 'anti_dup_effect_blur_edge_pct', value: String(antiDupEffects.blur_edge_pct ?? 10) },
+        { key: 'anti_dup_effect_zoom', value: String(antiDupEffects.zoom ?? false) },
+        { key: 'anti_dup_effect_transitions', value: String(antiDupEffects.transitions ?? false) },
       ];
       await Promise.allSettled(
         settingPairs.map(({ key, value }) =>
@@ -569,28 +600,107 @@ export function StepMode({ historical }: StepModeProps) {
         </div>
 
         {antiDupEnabled && (
-          <div className="grid grid-cols-2 gap-2">
-            {(['subtle', 'aggressive'] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => {
-                  console.log('[StepMode] anti-dup mode selected:', m);
-                  setAntiDupMode(m);
-                }}
-                className={[
-                  'flex flex-col items-start rounded-lg border p-3 text-left transition-all',
-                  antiDupMode === m
-                    ? 'border-zinc-300 bg-zinc-800 ring-1 ring-zinc-300'
-                    : 'border-zinc-700 bg-zinc-800 hover:border-zinc-500',
-                ].join(' ')}
-              >
-                <span className="text-xs font-medium text-zinc-300 capitalize">{m}</span>
-                <span className="text-xs text-zinc-500">
-                  {m === 'subtle' ? '1–2% changes' : '5–10% changes'}
-                </span>
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              {(['subtle', 'aggressive'] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => {
+                    console.log('[StepMode] anti-dup mode selected:', m);
+                    setAntiDupMode(m);
+                  }}
+                  className={[
+                    'flex flex-col items-start rounded-lg border p-3 text-left transition-all',
+                    antiDupMode === m
+                      ? 'border-zinc-300 bg-zinc-800 ring-1 ring-zinc-300'
+                      : 'border-zinc-700 bg-zinc-800 hover:border-zinc-500',
+                  ].join(' ')}
+                >
+                  <span className="text-xs font-medium text-zinc-300 capitalize">{m}</span>
+                  <span className="text-xs text-zinc-500">
+                    {m === 'subtle' ? '1–2% changes' : '5–10% changes'}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <p className="text-xs text-zinc-500">Visual Effects</p>
+
+              {/* Simple checkboxes */}
+              {([
+                ['speed_boost', 'Speed +2%'],
+                ['crop', 'Crop subtle 2%'],
+                ['color_grading', 'Color grading'],
+                ['zoom', 'Static zoom 3%'],
+                ['transitions', 'Transitions 2×'],
+              ] as [keyof AntiDupEffects, string][]).map(([key, label]) => (
+                <label key={key} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!antiDupEffects[key]}
+                    onChange={(e) => setEffect(key, e.target.checked)}
+                    className="rounded border-zinc-600 bg-zinc-800 text-zinc-300 focus:ring-zinc-500"
+                  />
+                  <span className="text-xs text-zinc-300">{label}</span>
+                </label>
+              ))}
+
+              {/* Noise with strength slider */}
+              <div className="space-y-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!antiDupEffects.noise}
+                    onChange={(e) => setEffect('noise', e.target.checked)}
+                    className="rounded border-zinc-600 bg-zinc-800 text-zinc-300 focus:ring-zinc-500"
+                  />
+                  <span className="text-xs text-zinc-300">Noise/Grain</span>
+                </label>
+                {antiDupEffects.noise && (
+                  <div className="ml-6 flex items-center gap-2">
+                    <span className="text-xs text-zinc-500 w-16">Strength</span>
+                    <input
+                      type="range"
+                      min={1}
+                      max={10}
+                      value={antiDupEffects.noise_strength ?? 3}
+                      onChange={(e) => setEffect('noise_strength', Number(e.target.value))}
+                      className="flex-1 accent-zinc-300"
+                    />
+                    <span className="text-xs text-zinc-400 w-4">{antiDupEffects.noise_strength ?? 3}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Blur with edge % slider */}
+              <div className="space-y-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!antiDupEffects.blur}
+                    onChange={(e) => setEffect('blur', e.target.checked)}
+                    className="rounded border-zinc-600 bg-zinc-800 text-zinc-300 focus:ring-zinc-500"
+                  />
+                  <span className="text-xs text-zinc-300">Background Blur</span>
+                </label>
+                {antiDupEffects.blur && (
+                  <div className="ml-6 flex items-center gap-2">
+                    <span className="text-xs text-zinc-500 w-16">Edge %</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={antiDupEffects.blur_edge_pct ?? 10}
+                      onChange={(e) => setEffect('blur_edge_pct', Number(e.target.value))}
+                      className="flex-1 accent-zinc-300"
+                    />
+                    <span className="text-xs text-zinc-400 w-8">{antiDupEffects.blur_edge_pct ?? 10}%</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
         )}
       </div>
 

@@ -85,9 +85,22 @@ export interface Clip {
 }
 
 // ── AntiDuplicateConfig ──────────────────────────────────────────────────────
+export interface AntiDupEffects {
+  speed_boost?: boolean;
+  crop?: boolean;
+  color_grading?: boolean;
+  noise?: boolean;
+  noise_strength?: number;    // 1–10
+  blur?: boolean;
+  blur_edge_pct?: number;     // 0–100
+  zoom?: boolean;
+  transitions?: boolean;
+}
+
 export interface AntiDuplicateConfig {
   enabled: boolean;
   mode: 'subtle' | 'aggressive';
+  effects?: AntiDupEffects;
 }
 
 // ── ModeConfig ────────────────────────────────────────────────────────────────
