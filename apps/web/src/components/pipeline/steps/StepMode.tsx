@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAppStore } from '@/store/appStore';
 import { usePipelineStore } from '@/store/pipelineStore';
 import { AI_DEFAULTS, LONGFORM_DEFAULTS } from '@/types/pipeline';
-import type { AntiDupEffects, AntiDuplicateConfig, BackgroundMusicConfig, BrandingConfig, CaptionsConfig, GatePayload, ModeConfig, PriorClipsResponse, VideoOverlayConfig, WorkflowMode } from '@/types/pipeline';
+import type { AntiDupEffects, AntiDuplicateConfig, BackgroundMusicConfig, BrandingConfig, CaptionsConfig, GatePayload, ModeConfig, PriorClipsResponse, TextOverlayItem, TextOverlaysConfig, VideoOverlayConfig, WorkflowMode } from '@/types/pipeline';
 import { PositionGrid } from '@/components/ui/PositionGrid';
 
 interface StepModeProps {
@@ -98,6 +98,10 @@ export function StepMode({ historical }: StepModeProps) {
   const [overlayChromaKey, setOverlayChromaKey] = useState<VideoOverlayConfig['chroma_key']>('none');
   const [overlayLibraryFiles, setOverlayLibraryFiles] = useState<string[]>([]);
 
+  // ── Text Overlays state ────────────────────────────────────────────────────
+  const [textOverlaysEnabled, setTextOverlaysEnabled] = useState<boolean>(false);
+  const [textOverlayItems, setTextOverlayItems] = useState<TextOverlayItem[]>([]);
+
   // ── Derived validation (computed — not useState) ───────────────────────────
   const isMinDurationInvalid = selectedMode === 'ai' && minDurationSecs >= clipDurationSecs;
 
@@ -177,6 +181,10 @@ export function StepMode({ historical }: StepModeProps) {
         setOverlayAppearances(cfg.video_overlay.appearances);
         setOverlayEndOffsetSec(cfg.video_overlay.end_offset_sec);
         if (cfg.video_overlay.chroma_key) setOverlayChromaKey(cfg.video_overlay.chroma_key);
+      }
+      if (cfg.text_overlays) {
+        setTextOverlaysEnabled(cfg.text_overlays.enabled);
+        setTextOverlayItems(cfg.text_overlays.items);
       }
       setIsLoadingPreference(false);
       return;
@@ -273,6 +281,11 @@ export function StepMode({ historical }: StepModeProps) {
         const validChromaKeys = ['none','green','black','white','blue'] as const;
         type ChromaKey = typeof validChromaKeys[number];
         setOverlayChromaKey(overlayChromaVal && (validChromaKeys as readonly string[]).includes(overlayChromaVal) ? overlayChromaVal as ChromaKey : 'none');
+        setTextOverlaysEnabled(parseBoolKey('text_overlays_enabled', false));
+        const textOverlaysRaw = data.find((s) => s.key === 'text_overlays_items')?.value;
+        if (textOverlaysRaw) {
+          try { setTextOverlayItems(JSON.parse(textOverlaysRaw) as TextOverlayItem[]); } catch { /* ignore */ }
+        }
       } catch (err) {
         console.warn('[StepMode] failed to load preference, defaulting to longform', err);
         setSelectedMode('longform');
@@ -323,6 +336,22 @@ export function StepMode({ historical }: StepModeProps) {
     setAntiDupEffects((prev) => ({ ...prev, [key]: value }));
   };
 
+  // ── Text Overlay item helpers ──────────────────────────────────────────────
+  const addTextOverlayItem = () => {
+    setTextOverlayItems((prev) => [
+      ...prev,
+      { text: '', apply_full: true, start_sec: 0, end_sec: 60, position: 'bottom_center' },
+    ]);
+  };
+
+  const removeTextOverlayItem = (idx: number) => {
+    setTextOverlayItems((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const updateTextOverlayItem = (idx: number, patch: Partial<TextOverlayItem>) => {
+    setTextOverlayItems((prev) => prev.map((item, i) => (i === idx ? { ...item, ...patch } : item)));
+  };
+
   // ── buildModeConfig ────────────────────────────────────────────────────────
   function buildModeConfig(): ModeConfig {
     const brandingCfg: BrandingConfig | undefined = (brandingLogoEnabled || brandingIntroEnabled || brandingOutroEnabled) ? {
@@ -343,6 +372,10 @@ export function StepMode({ historical }: StepModeProps) {
       appearances: overlayAppearances,
       end_offset_sec: overlayEndOffsetSec,
       chroma_key: overlayChromaKey,
+    } : undefined;
+    const textOverlaysCfg: TextOverlaysConfig | undefined = textOverlaysEnabled ? {
+      enabled: true,
+      items: textOverlayItems,
     } : undefined;
     const musicCfg: BackgroundMusicConfig | undefined = musicEnabled ? {
       enabled: true,
@@ -391,6 +424,7 @@ export function StepMode({ historical }: StepModeProps) {
         background_music: musicCfg,
         branding: brandingCfg,
         video_overlay: overlayCfg,
+        text_overlays: textOverlaysCfg,
       };
     }
     return {
@@ -405,6 +439,7 @@ export function StepMode({ historical }: StepModeProps) {
       background_music: musicCfg,
       branding: brandingCfg,
       video_overlay: overlayCfg,
+      text_overlays: textOverlaysCfg,
     };
   }
 
@@ -477,6 +512,8 @@ export function StepMode({ historical }: StepModeProps) {
         { key: 'overlay_appearances', value: String(overlayAppearances) },
         { key: 'overlay_end_offset_sec', value: String(overlayEndOffsetSec) },
         { key: 'overlay_chroma_key', value: overlayChromaKey ?? 'none' },
+        { key: 'text_overlays_enabled', value: String(textOverlaysEnabled) },
+        { key: 'text_overlays_items', value: JSON.stringify(textOverlayItems) },
       ];
       await Promise.allSettled(
         settingPairs.map(({ key, value }) =>
@@ -960,6 +997,111 @@ export function StepMode({ historical }: StepModeProps) {
               </div>
             </div>
           </>
+        )}
+      </div>
+
+      {/* Text Overlays */}
+      <div className="space-y-4 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-zinc-300 uppercase tracking-wider">Overlays de Texto</p>
+          <button
+            onClick={() => setTextOverlaysEnabled((v) => !v)}
+            className={[
+              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
+              textOverlaysEnabled ? 'bg-zinc-300' : 'bg-zinc-700',
+            ].join(' ')}
+            role="switch"
+            aria-checked={textOverlaysEnabled}
+          >
+            <span
+              className={[
+                'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                textOverlaysEnabled ? 'translate-x-4' : 'translate-x-1',
+              ].join(' ')}
+            />
+          </button>
+        </div>
+
+        {textOverlaysEnabled && (
+          <div className="space-y-4">
+            {/* Item list */}
+            {textOverlayItems.map((item, idx) => (
+              <div key={idx} className="space-y-3 rounded-md border border-zinc-700 p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-zinc-400">Overlay #{idx + 1}</span>
+                  <button
+                    onClick={() => removeTextOverlayItem(idx)}
+                    className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+                  >
+                    Remover
+                  </button>
+                </div>
+
+                {/* Text */}
+                <textarea
+                  value={item.text}
+                  onChange={(e) => updateTextOverlayItem(idx, { text: e.target.value })}
+                  placeholder="Texto do overlay…"
+                  rows={2}
+                  className="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-none"
+                />
+
+                {/* Apply full video */}
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={item.apply_full}
+                    onChange={(e) => updateTextOverlayItem(idx, { apply_full: e.target.checked })}
+                    className="rounded border-zinc-600 bg-zinc-800 text-zinc-300"
+                  />
+                  <span className="text-xs text-zinc-300">Aplicar no vídeo todo</span>
+                </label>
+
+                {/* Time range — only when not apply_full */}
+                {!item.apply_full && (
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 space-y-1">
+                      <label className="text-xs text-zinc-400">Início (s)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={item.start_sec}
+                        onChange={(e) => updateTextOverlayItem(idx, { start_sec: Number(e.target.value) })}
+                        className="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                      />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <label className="text-xs text-zinc-400">Fim (s)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={item.end_sec}
+                        onChange={(e) => updateTextOverlayItem(idx, { end_sec: Number(e.target.value) })}
+                        className="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Position grid */}
+                <div className="space-y-1">
+                  <label className="text-xs text-zinc-400">Posição</label>
+                  <PositionGrid
+                    value={item.position}
+                    onChange={(pos) => updateTextOverlayItem(idx, { position: pos })}
+                  />
+                </div>
+              </div>
+            ))}
+
+            {/* Add button */}
+            <button
+              onClick={addTextOverlayItem}
+              className="w-full rounded border border-dashed border-zinc-600 px-3 py-2 text-xs text-zinc-500 hover:border-zinc-400 hover:text-zinc-300 transition-colors"
+            >
+              + Adicionar overlay de texto
+            </button>
+          </div>
         )}
       </div>
 

@@ -155,6 +155,20 @@ export interface VideoOverlayConfig {
   chroma_key?: 'none' | 'green' | 'black' | 'white' | 'blue';
 }
 
+// ── TextOverlaysConfig ────────────────────────────────────────────────────────
+export interface TextOverlayItem {
+  text: string;
+  apply_full: boolean;
+  start_sec: number;
+  end_sec: number;
+  position: string;
+}
+
+export interface TextOverlaysConfig {
+  enabled: boolean;
+  items: TextOverlayItem[];
+}
+
 // ── ModeConfig ────────────────────────────────────────────────────────────────
 
 export interface ModeConfig {
@@ -179,6 +193,7 @@ export interface ModeConfig {
   background_music?: BackgroundMusicConfig;
   branding?: BrandingConfig;
   video_overlay?: VideoOverlayConfig;
+  text_overlays?: TextOverlaysConfig;
 }
 
 export const AI_DEFAULTS: Omit<ModeConfig, 'mode'> = {
