@@ -1,16 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
 import { useAppStore } from '@/store/appStore';
 import { useChannelStore } from '@/store/channelStore';
 import type { Channel } from '@/store/channelStore';
@@ -19,14 +12,15 @@ import { createLogger } from '@/lib/logger';
 
 const log = createLogger('ChannelAuthSection');
 
+const POLL_INTERVAL_MS = 2000;
+const POLL_MAX_ITERATIONS = 150; // 5 minutes
+
 type AuthStatus = 'authorized' | 'expired' | 'not-authorized';
 
 function getAuthStatus(channel: Channel): AuthStatus {
-  const ch = channel as Channel & { AccessToken?: string; ExpiresAt?: number };
-  if (!ch.AccessToken) return 'not-authorized';
+  if (!channel.AccessToken) return 'not-authorized';
   const nowMs = Date.now();
-  // ExpiresAt from Go is stored as unix milliseconds
-  if (ch.ExpiresAt && ch.ExpiresAt > 0 && ch.ExpiresAt <= nowMs) return 'expired';
+  if (channel.ExpiresAt > 0 && channel.ExpiresAt <= nowMs) return 'expired';
   return 'authorized';
 }
 
@@ -52,62 +46,79 @@ function AuthBadge({ status }: { status: AuthStatus }) {
   );
 }
 
-interface AuthDialogState {
-  channelId: number;
-  channelName: string;
-  authUrl: string;
-}
-
 export function ChannelAuthSection() {
   const goUrl = useAppStore((s) => s.goUrl);
   const { channels, loading, fetchChannels } = useChannelStore();
-  const { initOAuth, submitCode } = useOAuthStore();
+  const { initOAuth } = useOAuthStore();
 
   const [authorizing, setAuthorizing] = useState<number | null>(null);
-  const [dialog, setDialog] = useState<AuthDialogState | null>(null);
-  const [code, setCode] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const [authError, setAuthError] = useState<{ channelId: number; message: string } | null>(null);
+
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollCountRef = useRef(0);
 
   useEffect(() => {
     void fetchChannels(goUrl);
   }, [goUrl, fetchChannels]);
+
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, []);
+
+  const stopPolling = () => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    pollCountRef.current = 0;
+  };
 
   const handleAuthorize = async (channel: Channel) => {
     setAuthorizing(channel.ID);
     setAuthError(null);
     try {
       const result = await initOAuth(goUrl, channel.ID);
-      setDialog({ channelId: channel.ID, channelName: channel.Name, authUrl: result.auth_url });
-      setCode('');
-      setSubmitError(null);
+      window.open(result.auth_url, '_blank');
+
+      pollCountRef.current = 0;
+      pollingRef.current = setInterval(() => {
+        pollCountRef.current += 1;
+
+        if (pollCountRef.current >= POLL_MAX_ITERATIONS) {
+          stopPolling();
+          setAuthorizing(null);
+          setAuthError({ channelId: channel.ID, message: 'Authorization timed out — try again' });
+          return;
+        }
+
+        void (async () => {
+          try {
+            await fetchChannels(goUrl);
+            const updated = useChannelStore.getState().channels.find((c) => c.ID === channel.ID);
+            if (updated?.AccessToken) {
+              stopPolling();
+              setAuthorizing(null);
+              log.info('oauth authorized', { channelId: channel.ID });
+            }
+          } catch {
+            // ignore poll errors, keep polling
+          }
+        })();
+      }, POLL_INTERVAL_MS);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to initiate OAuth';
       log.error('initOAuth failed', { channelId: channel.ID, err: message });
       setAuthError({ channelId: channel.ID, message });
-    } finally {
       setAuthorizing(null);
     }
   };
 
-  const handleSubmitCode = async () => {
-    if (!dialog || !code.trim()) return;
-    setSubmitting(true);
-    setSubmitError(null);
-    try {
-      await submitCode(goUrl, dialog.channelId, code.trim());
-      log.info('oauth code submitted successfully', { channelId: dialog.channelId });
-      setDialog(null);
-      setCode('');
-      await fetchChannels(goUrl);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to submit code';
-      log.error('submitCode failed', { channelId: dialog?.channelId, err: message });
-      setSubmitError(message);
-    } finally {
-      setSubmitting(false);
-    }
+  const handleCancel = (channelId: number) => {
+    stopPolling();
+    setAuthorizing(null);
+    log.info('oauth authorization cancelled', { channelId });
   };
 
   return (
@@ -136,19 +147,34 @@ export function ChannelAuthSection() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-foreground truncate">{ch.Name}</p>
                       <p className="text-[11px] font-mono text-muted-foreground truncate">
-                        {ch.YouTubeChannelID || '—'}
+                        {ch.ChannelID || ch.YouTubeChannelID || '—'}
                       </p>
                     </div>
                     <AuthBadge status={status} />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs shrink-0"
-                      disabled={isThisAuthorizing}
-                      onClick={() => void handleAuthorize(ch)}
-                    >
-                      {isThisAuthorizing ? 'Loading…' : 'Authorize'}
-                    </Button>
+                    {isThisAuthorizing ? (
+                      <>
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          Waiting…
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs shrink-0"
+                          onClick={() => handleCancel(ch.ID)}
+                        >
+                          Cancel
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs shrink-0"
+                        onClick={() => void handleAuthorize(ch)}
+                      >
+                        Authorize
+                      </Button>
+                    )}
                   </div>
                   {error && (
                     <p className="text-xs text-destructive pl-0.5">{error}</p>
@@ -159,67 +185,6 @@ export function ChannelAuthSection() {
           })
         )}
       </div>
-
-      <Dialog open={!!dialog} onOpenChange={(open) => { if (!open) setDialog(null); }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              Authorize {dialog?.channelName ?? 'Channel'}
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">
-                Open the link below in your browser, sign in with Google, and copy the
-                authorization code.
-              </p>
-              <div className="flex items-start gap-2">
-                <textarea
-                  readOnly
-                  value={dialog?.authUrl ?? ''}
-                  rows={3}
-                  className="flex-1 resize-none rounded-md border border-input bg-muted px-3 py-2 text-xs font-mono text-foreground focus:outline-none"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs shrink-0 mt-0.5"
-                  onClick={() => {
-                    if (dialog?.authUrl) window.open(dialog.authUrl, '_blank');
-                  }}
-                >
-                  Open
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <p className="text-sm font-medium text-foreground">Authorization code</p>
-              <Input
-                placeholder="Paste the code here"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                className="h-8 text-sm font-mono"
-              />
-              {submitError && (
-                <p className="text-xs text-destructive">{submitError}</p>
-              )}
-            </div>
-          </div>
-
-          <DialogFooter showCloseButton>
-            <Button
-              size="sm"
-              className="text-xs"
-              disabled={submitting || !code.trim()}
-              onClick={() => void handleSubmitCode()}
-            >
-              {submitting ? 'Confirming…' : 'Confirm'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </section>
   );
 }

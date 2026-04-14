@@ -9,6 +9,8 @@ export const SETTINGS_KEYS = {
   CACHE_DIR: 'cache_dir',
   DEFAULT_QUALITY: 'default_quality',
   DEFAULT_LANGUAGE: 'default_language',
+  UPLOAD_STRATEGY: 'upload_strategy',
+  UPLOAD_PARALLEL_COUNT: 'upload_parallel_count',
 } as const;
 
 export interface AppSettingsFormData {

@@ -76,3 +76,10 @@ Before completing any code modification task, verify:
 - Generate docs: `npx gitnexus wiki`
 
 <!-- gitnexus:end -->
+
+## Active Technologies
+- Go 1.23 (backend), TypeScript 5.8 (frontend) + modernc.org/sqlite (CGO_ENABLED=0), net/http stdlib, log/slog, yt-dlp subprocess, Next.js 16, React, Tailwind CSS, Zustand (002-download-pipeline-validation)
+- SQLite WAL — `video_path` exists in v9 schema; `video_title` and `duration_sec` absent → migration v10 required (see research.md §2) (002-download-pipeline-validation)
+
+## Recent Changes
+- 002-download-pipeline-validation: Added Go 1.23 (backend), TypeScript 5.8 (frontend) + modernc.org/sqlite (CGO_ENABLED=0), net/http stdlib, log/slog, yt-dlp subprocess, Next.js 16, React, Tailwind CSS, Zustand

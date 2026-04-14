@@ -52,6 +52,9 @@ migrate: wolf-build-debug
 
 ## Dev com Electron — build do desktop + abre o app (que gerencia web + server)
 dev: migrate
+	@echo "▶ Killing any process on ports $(GO_DEV_PORT) and $(WEB_DEV_PORT)..."
+	@node scripts/kill-ports.mjs $(GO_DEV_PORT) $(WEB_DEV_PORT) 2>/dev/null || true
+	@pkill -f "apps/desktop/bin/server" 2>/dev/null || true
 	@echo "▶ Starting AutoCut dev environment..."
 	@trap 'make kill' INT TERM; \
 	GO_DIR=$$HOME/.autocut-dev \
@@ -60,6 +63,9 @@ dev: migrate
 
 ## Dev sem Electron — Go + Next.js no browser
 run: migrate
+	@echo "▶ Killing any process on ports $(GO_DEV_PORT) and $(WEB_DEV_PORT)..."
+	@node scripts/kill-ports.mjs $(GO_DEV_PORT) $(WEB_DEV_PORT) 2>/dev/null || true
+	@pkill -f "apps/desktop/bin/server" 2>/dev/null || true
 	@echo "▶ Starting Go + Next.js (no Electron)..."
 	@trap 'make kill' INT TERM; \
 	apps/desktop/bin/server \

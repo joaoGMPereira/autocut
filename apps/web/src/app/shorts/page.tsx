@@ -1,5 +1,5 @@
-import { ShortsForm } from '@/components/shorts/ShortsForm';
+import { NotImplemented } from '@/components/ui/not-implemented';
 
 export default function ShortsPage() {
-  return <ShortsForm />;
+  return <NotImplemented feature="Shorts" />;
 }

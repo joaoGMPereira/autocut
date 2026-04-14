@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"database/sql"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -15,11 +14,9 @@ type ChannelHandler struct {
 	repo *database.ChannelRepo
 }
 
-// NewChannelHandler creates a ChannelHandler backed by db.
-func NewChannelHandler(db *sql.DB) *ChannelHandler {
-	return &ChannelHandler{
-		repo: database.NewChannelRepo(db, slog.Default()),
-	}
+// NewChannelHandler creates a ChannelHandler backed by the given repo.
+func NewChannelHandler(channelRepo *database.ChannelRepo) *ChannelHandler {
+	return &ChannelHandler{repo: channelRepo}
 }
 
 // createChannelRequest is the JSON body for POST /api/channels.
@@ -42,6 +39,26 @@ func (h *ChannelHandler) GetChannels(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(channels)
 }
 
+// GetChannel returns a single channel by id path value.
+func (h *ChannelHandler) GetChannel(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	ch, err := h.repo.GetByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, "channel not found", http.StatusNotFound)
+		return
+	}
+
+	slog.Info("channel fetched", "id", id)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(ch)
+}
+
 // PostChannel creates a new channel.
 func (h *ChannelHandler) PostChannel(w http.ResponseWriter, r *http.Request) {
 	var req createChannelRequest
@@ -54,7 +71,7 @@ func (h *ChannelHandler) PostChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := h.repo.Create(r.Context(), req.Name)
+	id, err := h.repo.Create(r.Context(), req.Name, req.YoutubeChannelID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -66,6 +83,7 @@ func (h *ChannelHandler) PostChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	slog.Info("channel created", "id", id, "name", req.Name, "youtube_channel_id", req.YoutubeChannelID)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(ch)

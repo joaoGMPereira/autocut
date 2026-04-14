@@ -6,28 +6,31 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+
+	"github.com/joaoGMPereira/autocut/server/internal/crypto"
 )
 
 // ChannelRepo provides CRUD for channels.
 // Kotlin ref: ChannelRepository.kt
 type ChannelRepo struct {
-	db  *sql.DB
-	log *slog.Logger
+	db     *sql.DB
+	log    *slog.Logger
+	cipher *crypto.TokenCipher
 }
 
-func NewChannelRepo(db *sql.DB, log *slog.Logger) *ChannelRepo {
-	return &ChannelRepo{db: db, log: log.With("repo", "channel")}
+func NewChannelRepo(db *sql.DB, log *slog.Logger, cipher *crypto.TokenCipher) *ChannelRepo {
+	return &ChannelRepo{db: db, log: log.With("repo", "channel"), cipher: cipher}
 }
 
 const channelCols = `id, name, channel_id, channel_title, avatar_url, access_token, refresh_token, expires_at, oauth_client_secret_id, is_favorite, created_at, updated_at`
 
-// Create creates a channel with just a name (Kotlin creates with defaults).
+// Create creates a channel with a name and optional YouTube channel ID.
 // Kotlin ref: create(name: String): Channel
-func (r *ChannelRepo) Create(ctx context.Context, name string) (int64, error) {
+func (r *ChannelRepo) Create(ctx context.Context, name, youtubeChannelID string) (int64, error) {
 	now := time.Now().UnixMilli()
 	res, err := r.db.ExecContext(ctx,
-		`INSERT INTO channels (name, created_at, updated_at) VALUES (?, ?, ?)`,
-		name, now, now,
+		`INSERT INTO channels (name, channel_id, created_at, updated_at) VALUES (?, ?, ?, ?)`,
+		name, youtubeChannelID, now, now,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("insert channel: %w", err)
@@ -38,21 +41,21 @@ func (r *ChannelRepo) Create(ctx context.Context, name string) (int64, error) {
 func (r *ChannelRepo) GetByID(ctx context.Context, id int64) (*Channel, error) {
 	row := r.db.QueryRowContext(ctx,
 		"SELECT "+channelCols+" FROM channels WHERE id = ?", id)
-	return scanChannel(row)
+	return r.scanChannel(row)
 }
 
 // Kotlin ref: getByName(name: String): Channel?
 func (r *ChannelRepo) GetByName(ctx context.Context, name string) (*Channel, error) {
 	row := r.db.QueryRowContext(ctx,
 		"SELECT "+channelCols+" FROM channels WHERE name = ?", name)
-	return scanChannel(row)
+	return r.scanChannel(row)
 }
 
 // Kotlin ref: getByYouTubeChannelId(youtubeChannelId: String): Channel?
 func (r *ChannelRepo) GetByYouTubeID(ctx context.Context, ytChannelID string) (*Channel, error) {
 	row := r.db.QueryRowContext(ctx,
 		"SELECT "+channelCols+" FROM channels WHERE channel_id = ?", ytChannelID)
-	return scanChannel(row)
+	return r.scanChannel(row)
 }
 
 // Kotlin ref: getAll(): List<Channel>
@@ -66,7 +69,7 @@ func (r *ChannelRepo) List(ctx context.Context) ([]Channel, error) {
 
 	var result []Channel
 	for rows.Next() {
-		ch, err := scanChannelRows(rows)
+		ch, err := r.scanChannelRows(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -86,7 +89,7 @@ func (r *ChannelRepo) ListFavorites(ctx context.Context) ([]Channel, error) {
 
 	var result []Channel
 	for rows.Next() {
-		ch, err := scanChannelRows(rows)
+		ch, err := r.scanChannelRows(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -115,11 +118,20 @@ func (r *ChannelRepo) Update(ctx context.Context, ch *Channel) error {
 }
 
 // UpdateTokens updates only OAuth tokens (common operation during refresh).
+// accessToken and refreshToken are plaintext; encryption is applied transparently.
 func (r *ChannelRepo) UpdateTokens(ctx context.Context, id int64, accessToken, refreshToken string, expiresAt int64) error {
+	encAccess, err := r.encryptToken(accessToken)
+	if err != nil {
+		return fmt.Errorf("encrypt access token: %w", err)
+	}
+	encRefresh, err := r.encryptToken(refreshToken)
+	if err != nil {
+		return fmt.Errorf("encrypt refresh token: %w", err)
+	}
 	now := time.Now().UnixMilli()
-	_, err := r.db.ExecContext(ctx,
+	_, err = r.db.ExecContext(ctx,
 		`UPDATE channels SET access_token = ?, refresh_token = ?, expires_at = ?, updated_at = ? WHERE id = ?`,
-		accessToken, refreshToken, expiresAt, now, id,
+		encAccess, encRefresh, expiresAt, now, id,
 	)
 	if err != nil {
 		return fmt.Errorf("update tokens channel %d: %w", id, err)
@@ -156,7 +168,21 @@ func (r *ChannelRepo) DeleteByName(ctx context.Context, name string) error {
 	return nil
 }
 
-func scanChannel(row *sql.Row) (*Channel, error) {
+func (r *ChannelRepo) encryptToken(s string) (string, error) {
+	if r.cipher == nil {
+		return s, nil
+	}
+	return r.cipher.Encrypt(s)
+}
+
+func (r *ChannelRepo) decryptToken(s string) (string, error) {
+	if r.cipher == nil {
+		return s, nil
+	}
+	return r.cipher.Decrypt(s)
+}
+
+func (r *ChannelRepo) scanChannel(row *sql.Row) (*Channel, error) {
 	var ch Channel
 	err := row.Scan(
 		&ch.ID, &ch.Name, &ch.ChannelID, &ch.ChannelTitle, &ch.AvatarURL,
@@ -166,10 +192,16 @@ func scanChannel(row *sql.Row) (*Channel, error) {
 	if err != nil {
 		return nil, err
 	}
+	if ch.AccessToken, err = r.decryptToken(ch.AccessToken); err != nil {
+		return nil, fmt.Errorf("decrypt access token: %w", err)
+	}
+	if ch.RefreshToken, err = r.decryptToken(ch.RefreshToken); err != nil {
+		return nil, fmt.Errorf("decrypt refresh token: %w", err)
+	}
 	return &ch, nil
 }
 
-func scanChannelRows(rows *sql.Rows) (*Channel, error) {
+func (r *ChannelRepo) scanChannelRows(rows *sql.Rows) (*Channel, error) {
 	var ch Channel
 	err := rows.Scan(
 		&ch.ID, &ch.Name, &ch.ChannelID, &ch.ChannelTitle, &ch.AvatarURL,
@@ -178,6 +210,12 @@ func scanChannelRows(rows *sql.Rows) (*Channel, error) {
 	)
 	if err != nil {
 		return nil, err
+	}
+	if ch.AccessToken, err = r.decryptToken(ch.AccessToken); err != nil {
+		return nil, fmt.Errorf("decrypt access token: %w", err)
+	}
+	if ch.RefreshToken, err = r.decryptToken(ch.RefreshToken); err != nil {
+		return nil, fmt.Errorf("decrypt refresh token: %w", err)
 	}
 	return &ch, nil
 }

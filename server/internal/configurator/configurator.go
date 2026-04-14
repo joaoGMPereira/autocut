@@ -21,6 +21,7 @@ type AutoCutDir struct {
 	Root          string `json:"root"`
 	BinDir        string `json:"bin_dir"`
 	ModelsDir     string `json:"models_dir"`
+	WhisperDir    string `json:"whisper_dir"`
 	TokensDir     string `json:"tokens_dir"`
 	CacheDir      string `json:"cache_dir"`
 	DownloadsDir  string `json:"downloads_dir"`
@@ -36,11 +37,17 @@ func NewAutoCutDir() (*AutoCutDir, error) {
 	return newAutoCutDirFromRoot(filepath.Join(home, ".autocut")), nil
 }
 
+// NewAutoCutDirFromPath creates an AutoCutDir rooted at the given path.
+func NewAutoCutDirFromPath(root string) *AutoCutDir {
+	return newAutoCutDirFromRoot(root)
+}
+
 func newAutoCutDirFromRoot(root string) *AutoCutDir {
 	d := &AutoCutDir{
 		Root:          root,
 		BinDir:        filepath.Join(root, "bin"),
 		ModelsDir:     filepath.Join(root, "models"),
+		WhisperDir:    filepath.Join(root, "models", "whisper"),
 		TokensDir:     filepath.Join(root, "tokens"),
 		CacheDir:      filepath.Join(root, "cache"),
 		DownloadsDir:  filepath.Join(root, "downloads"),
@@ -70,9 +77,11 @@ type UpdateInfo struct {
 
 // WhisperModelInfo describes a Whisper model.
 type WhisperModelInfo struct {
-	Name        string `json:"name"`
-	Downloaded  bool   `json:"downloaded"`
-	SizeMB      int    `json:"size_mb,omitempty"`
+	Name       string `json:"name"`
+	Downloaded bool   `json:"downloaded"`
+	SizeMB     int    `json:"size_mb,omitempty"`
+	Path       string `json:"path,omitempty"`
+	Active     bool   `json:"active,omitempty"`
 }
 
 // ErrToolNotFound is returned when a tool name is not registered.
@@ -102,8 +111,17 @@ func newWithValidators(dir *AutoCutDir, validators []ToolValidator) *Configurato
 	return &Configurator{dir: dir, validators: validators}
 }
 
-func defaultValidators(_ *AutoCutDir) []ToolValidator {
-	return []ToolValidator{}
+func defaultValidators(dir *AutoCutDir) []ToolValidator {
+	return []ToolValidator{
+		NewYtDlpValidator(dir),
+		NewFfmpegValidator(dir),
+		NewWhisperValidator(dir),
+		NewClaudeValidator(dir),
+		NewGhValidator(dir),
+		NewOllamaValidator(dir),
+		NewTwitchValidator(dir),
+		NewConvertValidator(dir),
+	}
 }
 
 // Status returns the install status of all registered tools.
@@ -172,11 +190,10 @@ func (c *Configurator) CheckUpdate(_ context.Context, name string) (UpdateInfo, 
 
 // WhisperModelStatus returns download status of known Whisper models.
 func (c *Configurator) WhisperModelStatus() []WhisperModelInfo {
-	return nil
+	return WhisperModelStatus(c.dir)
 }
 
 // DownloadWhisperModel downloads a Whisper model, streaming logs to logCh.
-func (c *Configurator) DownloadWhisperModel(_ context.Context, _ string, logCh chan<- string) error {
-	logCh <- "not implemented"
-	return nil
+func (c *Configurator) DownloadWhisperModel(ctx context.Context, name string, logCh chan<- string) error {
+	return DownloadWhisperModel(ctx, name, c.dir, logCh)
 }

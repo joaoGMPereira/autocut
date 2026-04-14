@@ -4,6 +4,7 @@ import { usePipelineStore } from '@/store/pipelineStore';
 
 export function DownloadInfoCard() {
   const phaseProgress = usePipelineStore((s) => s.phaseProgress);
+  const videoInfo = usePipelineStore((s) => s.videoInfo);
 
   if (!phaseProgress || phaseProgress.phase !== 'download') return null;
 
@@ -22,6 +23,22 @@ export function DownloadInfoCard() {
   return (
     <div className="rounded-lg border border-border bg-card p-3 text-sm space-y-2">
       <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Download</p>
+
+      {videoInfo && (
+        <div className="flex items-center gap-3">
+          {videoInfo.thumbnailUrl && (
+            <img
+              src={videoInfo.thumbnailUrl}
+              alt={videoInfo.title}
+              className="h-12 w-20 rounded object-cover shrink-0"
+            />
+          )}
+          {videoInfo.title && (
+            <p className="text-xs text-foreground line-clamp-2 leading-snug">{videoInfo.title}</p>
+          )}
+        </div>
+      )}
+
       <div className="w-full h-1.5 bg-zinc-700 rounded-full overflow-hidden">
         <div
           className="h-full bg-cyan-400 rounded-full transition-all duration-300"

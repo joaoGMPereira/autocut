@@ -3,14 +3,15 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 )
 
-// PipelineRunRepo provides CRUD for pipeline_runs.
-// Kotlin ref: PipelineRunsTable in Tables.kt
+// PipelineRunRepo provides CRUD for pipeline_runs (v9 schema).
+// v9 uses state/active_phase instead of status/current_step.
 type PipelineRunRepo struct {
 	db  *sql.DB
 	log *slog.Logger
@@ -20,22 +21,27 @@ func NewPipelineRunRepo(db *sql.DB, log *slog.Logger) *PipelineRunRepo {
 	return &PipelineRunRepo{db: db, log: log.With("repo", "pipeline_run")}
 }
 
-const pipelineRunCols = `id, channel_id, url, mode, status, progress, current_step, error, step_outputs_json, mode_config_json, started_at, finished_at, source_run_id`
+const pipelineRunCols = `id, channel_id, url, mode, state, active_phase, error, mode_config_json, video_path, video_title, duration_sec, transcript_path, started_at, finished_at`
 
+// Create inserts a new pipeline run and returns its ID.
 func (r *PipelineRunRepo) Create(ctx context.Context, p *PipelineRun) (int64, error) {
 	now := time.Now().UnixMilli()
-	stepOutputs := p.StepOutputsJSON
-	if stepOutputs == "" {
-		stepOutputs = "{}"
+	state := p.State
+	if state == "" {
+		state = "WAITING_URL"
 	}
 	modeConfig := p.ModeConfigJSON
 	if modeConfig == "" {
 		modeConfig = "{}"
 	}
+	mode := p.Mode
+	if mode == "" {
+		mode = "ai"
+	}
 	res, err := r.db.ExecContext(ctx,
-		`INSERT INTO pipeline_runs (channel_id, url, mode, status, progress, current_step, error, step_outputs_json, mode_config_json, started_at, source_run_id)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.ChannelID, p.URL, p.Mode, p.Status, p.Progress, p.CurrentStep, p.Error, stepOutputs, modeConfig, now, p.SourceRunID,
+		`INSERT INTO pipeline_runs (channel_id, url, mode, state, active_phase, error, mode_config_json, video_path, transcript_path, started_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.ChannelID, p.URL, mode, state, p.ActivePhase, p.Error, modeConfig, p.VideoPath, p.TranscriptPath, now,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("insert pipeline_run: %w", err)
@@ -43,70 +49,22 @@ func (r *PipelineRunRepo) Create(ctx context.Context, p *PipelineRun) (int64, er
 	return res.LastInsertId()
 }
 
+// GetByID returns a single pipeline run by ID.
 func (r *PipelineRunRepo) GetByID(ctx context.Context, id int64) (*PipelineRun, error) {
 	row := r.db.QueryRowContext(ctx,
 		"SELECT "+pipelineRunCols+" FROM pipeline_runs WHERE id = ?", id)
 	return scanPipelineRun(row)
 }
 
-// GetWithSteps returns a pipeline run together with its steps.
-func (r *PipelineRunRepo) GetWithSteps(ctx context.Context, id int64) (*PipelineRun, []PipelineRunStep, error) {
-	p, err := r.GetByID(ctx, id)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, run_id, step, status, job_id, error, started_at, finished_at
-		 FROM pipeline_run_steps WHERE run_id = ? ORDER BY id`, id)
-	if err != nil {
-		return nil, nil, fmt.Errorf("list steps for run %d: %w", id, err)
-	}
-	defer rows.Close()
-
-	var steps []PipelineRunStep
-	for rows.Next() {
-		var s PipelineRunStep
-		if err := rows.Scan(&s.ID, &s.RunID, &s.Step, &s.Status, &s.JobID, &s.Error, &s.StartedAt, &s.FinishedAt); err != nil {
-			return nil, nil, fmt.Errorf("scan pipeline_run_step: %w", err)
-		}
-		steps = append(steps, s)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, nil, err
-	}
-
-	return p, steps, nil
-}
-
-func (r *PipelineRunRepo) ListByChannel(ctx context.Context, channelID int64) ([]PipelineRun, error) {
-	rows, err := r.db.QueryContext(ctx,
-		"SELECT "+pipelineRunCols+" FROM pipeline_runs WHERE channel_id = ? ORDER BY started_at DESC", channelID)
-	if err != nil {
-		return nil, fmt.Errorf("list pipeline_runs by channel: %w", err)
-	}
-	defer rows.Close()
-
-	var result []PipelineRun
-	for rows.Next() {
-		p, err := scanPipelineRunRows(rows)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, *p)
-	}
-	return result, rows.Err()
-}
-
 // ListRunsFilter holds optional filters for ListAll.
 type ListRunsFilter struct {
 	ChannelID *int64
-	Status    string
-	DateFrom  int64 // unix ms, 0 = no filter
-	DateTo    int64 // unix ms, 0 = no filter
+	State     string
+	DateFrom  int64
+	DateTo    int64
 }
 
-// ListAll returns paginated pipeline runs with optional filters. Returns runs and total count.
+// ListAll returns paginated pipeline runs with optional filters.
 func (r *PipelineRunRepo) ListAll(ctx context.Context, limit, offset int, f ListRunsFilter) ([]PipelineRun, int, error) {
 	var whereClauses []string
 	var filterArgs []interface{}
@@ -115,9 +73,9 @@ func (r *PipelineRunRepo) ListAll(ctx context.Context, limit, offset int, f List
 		whereClauses = append(whereClauses, "channel_id = ?")
 		filterArgs = append(filterArgs, *f.ChannelID)
 	}
-	if f.Status != "" {
-		whereClauses = append(whereClauses, "status = ?")
-		filterArgs = append(filterArgs, f.Status)
+	if f.State != "" {
+		whereClauses = append(whereClauses, "state = ?")
+		filterArgs = append(filterArgs, f.State)
 	}
 	if f.DateFrom != 0 {
 		whereClauses = append(whereClauses, "started_at >= ?")
@@ -133,16 +91,15 @@ func (r *PipelineRunRepo) ListAll(ctx context.Context, limit, offset int, f List
 		whereSQL = " WHERE " + strings.Join(whereClauses, " AND ")
 	}
 
-	countQuery := "SELECT COUNT(*) FROM pipeline_runs" + whereSQL
-	dataQuery := "SELECT " + pipelineRunCols + " FROM pipeline_runs" + whereSQL + " ORDER BY started_at DESC LIMIT ? OFFSET ?"
-
 	var total int
-	if err := r.db.QueryRowContext(ctx, countQuery, filterArgs...).Scan(&total); err != nil {
+	if err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM pipeline_runs"+whereSQL, filterArgs...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count pipeline_runs: %w", err)
 	}
 
 	dataArgs := append(filterArgs, limit, offset)
-	rows, err := r.db.QueryContext(ctx, dataQuery, dataArgs...)
+	rows, err := r.db.QueryContext(ctx,
+		"SELECT "+pipelineRunCols+" FROM pipeline_runs"+whereSQL+" ORDER BY started_at DESC LIMIT ? OFFSET ?",
+		dataArgs...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list pipeline_runs: %w", err)
 	}
@@ -156,57 +113,124 @@ func (r *PipelineRunRepo) ListAll(ctx context.Context, limit, offset int, f List
 		}
 		result = append(result, *p)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, 0, err
-	}
-	return result, total, nil
+	return result, total, rows.Err()
 }
 
-// UpdateProgress updates progress percentage and current step description.
-func (r *PipelineRunRepo) UpdateProgress(ctx context.Context, id int64, progress int, step string) error {
-	_, err := r.db.ExecContext(ctx,
-		"UPDATE pipeline_runs SET progress = ?, current_step = ? WHERE id = ?",
-		progress, step, id,
+// StartDownload atomically sets url + active_phase='download' while keeping state=WAITING_URL.
+// The run state is NOT advanced to EXECUTING here; that happens only after download completes.
+func (r *PipelineRunRepo) StartDownload(ctx context.Context, id int64, url string) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE pipeline_runs SET url = ?, active_phase = 'download'
+		 WHERE id = ? AND state = 'WAITING_URL'`,
+		url, id,
 	)
 	if err != nil {
-		return fmt.Errorf("update pipeline_run progress %d: %w", id, err)
+		return fmt.Errorf("start download pipeline_run %d: %w", id, err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return sql.ErrNoRows
 	}
 	return nil
 }
 
-// UpdateMode updates the mode and mode_config_json for a pipeline run.
-func (r *PipelineRunRepo) UpdateMode(ctx context.Context, id int64, mode string, modeConfigJSON string) error {
-	if modeConfigJSON == "" {
-		modeConfigJSON = "{}"
-	}
+// SetActivePhase updates the active_phase field.
+func (r *PipelineRunRepo) SetActivePhase(ctx context.Context, id int64, phase string) error {
 	_, err := r.db.ExecContext(ctx,
-		"UPDATE pipeline_runs SET mode = ?, mode_config_json = ? WHERE id = ?",
-		mode, modeConfigJSON, id,
-	)
+		"UPDATE pipeline_runs SET active_phase = ? WHERE id = ?", phase, id)
 	if err != nil {
-		return fmt.Errorf("update pipeline_run mode %d: %w", id, err)
+		return fmt.Errorf("set active_phase pipeline_run %d: %w", id, err)
 	}
 	return nil
 }
 
-// UpdateStepOutput updates the step_outputs_json field for a pipeline run.
-func (r *PipelineRunRepo) UpdateStepOutput(ctx context.Context, id int64, stepOutputsJSON string) error {
+// SetVideoPath stores the downloaded video file path.
+func (r *PipelineRunRepo) SetVideoPath(ctx context.Context, id int64, path string) error {
 	_, err := r.db.ExecContext(ctx,
-		"UPDATE pipeline_runs SET step_outputs_json = ? WHERE id = ?",
-		stepOutputsJSON, id,
-	)
+		"UPDATE pipeline_runs SET video_path = ? WHERE id = ?", path, id)
 	if err != nil {
-		return fmt.Errorf("update pipeline_run step_outputs %d: %w", id, err)
+		return fmt.Errorf("set video_path pipeline_run %d: %w", id, err)
 	}
 	return nil
 }
 
-// Finish marks a pipeline run as completed or errored with final status.
-func (r *PipelineRunRepo) Finish(ctx context.Context, id int64, status string, errMsg string) error {
+// SetDownloadResult atomically persists video_path, video_title, and duration_sec
+// after a successful download. All three fields must be non-empty/non-zero — callers
+// must verify this before transitioning to WAITING_MODE.
+func (r *PipelineRunRepo) SetDownloadResult(ctx context.Context, id int64, path, title string, durationSec int64) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE pipeline_runs SET video_path = ?, video_title = ?, duration_sec = ? WHERE id = ?",
+		path, title, durationSec, id,
+	)
+	if err != nil {
+		return fmt.Errorf("set download result pipeline_run %d: %w", id, err)
+	}
+	return nil
+}
+
+// AdvanceState atomically transitions a run from fromState to toState.
+// Returns sql.ErrNoRows if no row was updated (idempotency signal — run already moved on).
+func (r *PipelineRunRepo) AdvanceState(ctx context.Context, id int64, fromState, toState string) error {
+	now := time.Now().UnixMilli()
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE pipeline_runs SET state = ?, active_phase = '', finished_at = ?
+		 WHERE id = ? AND state = ?`,
+		toState, now, id, fromState,
+	)
+	if err != nil {
+		return fmt.Errorf("advance state pipeline_run %d (%s→%s): %w", id, fromState, toState, err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// StoreModeConfig persists the submitted mode and mode_config_json for a
+// pipeline run. Must be called while the run is still in WAITING_MODE state.
+func (r *PipelineRunRepo) StoreModeConfig(ctx context.Context, id int64, mode string, configJSON []byte) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE pipeline_runs SET mode = ?, mode_config_json = ? WHERE id = ? AND state = 'WAITING_MODE'`,
+		mode, string(configJSON), id,
+	)
+	if err != nil {
+		return fmt.Errorf("store mode config run %d: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("store mode config rows affected run %d: %w", id, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("run %d not in WAITING_MODE state", id)
+	}
+	slog.Info("mode config stored", "run_id", id, "mode", mode)
+	return nil
+}
+
+// HasPriorDoneRun checks if a prior completed run exists for the given URL.
+// Returns (true, runID) if found, (false, 0) otherwise.
+func (r *PipelineRunRepo) HasPriorDoneRun(ctx context.Context, url string) (bool, int64, error) {
+	var id int64
+	err := r.db.QueryRowContext(ctx,
+		`SELECT id FROM pipeline_runs WHERE url = ? AND state = 'DONE' ORDER BY id DESC LIMIT 1`,
+		url,
+	).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, 0, nil
+	}
+	if err != nil {
+		return false, 0, fmt.Errorf("has prior done run: %w", err)
+	}
+	return true, id, nil
+}
+
+// Finish transitions the run to a terminal state.
+func (r *PipelineRunRepo) Finish(ctx context.Context, id int64, state string, errMsg string) error {
 	now := time.Now().UnixMilli()
 	_, err := r.db.ExecContext(ctx,
-		"UPDATE pipeline_runs SET status = ?, error = ?, finished_at = ? WHERE id = ?",
-		status, errMsg, now, id,
+		"UPDATE pipeline_runs SET state = ?, error = ?, active_phase = '', finished_at = ? WHERE id = ?",
+		state, errMsg, now, id,
 	)
 	if err != nil {
 		return fmt.Errorf("finish pipeline_run %d: %w", id, err)
@@ -214,22 +238,26 @@ func (r *PipelineRunRepo) Finish(ctx context.Context, id int64, status string, e
 	return nil
 }
 
-// Delete removes a pipeline run and its steps (via CASCADE).
-// source_run_id is a self-referential FK without ON DELETE SET NULL, so we
-// must clear any references before deleting to avoid FOREIGN KEY constraint errors.
-func (r *PipelineRunRepo) Delete(ctx context.Context, id int64) error {
-	tx, err := r.db.BeginTx(ctx, nil)
+// Cancel transitions a run to CANCELLED if not already terminal.
+func (r *PipelineRunRepo) Cancel(ctx context.Context, id int64) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE pipeline_runs SET state = 'CANCELLED', finished_at = ?
+		 WHERE id = ? AND state NOT IN ('DONE','ERROR','CANCELLED')`,
+		time.Now().UnixMilli(), id,
+	)
 	if err != nil {
-		return fmt.Errorf("begin tx for delete pipeline_run %d: %w", id, err)
+		return fmt.Errorf("cancel pipeline_run %d: %w", id, err)
 	}
-	defer tx.Rollback()
-
-	if _, err := tx.ExecContext(ctx,
-		"UPDATE pipeline_runs SET source_run_id = NULL WHERE source_run_id = ?", id); err != nil {
-		return fmt.Errorf("clear source_run_id refs for pipeline_run %d: %w", id, err)
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return sql.ErrNoRows
 	}
+	return nil
+}
 
-	res, err := tx.ExecContext(ctx, "DELETE FROM pipeline_runs WHERE id = ?", id)
+// Delete removes a pipeline run.
+func (r *PipelineRunRepo) Delete(ctx context.Context, id int64) error {
+	res, err := r.db.ExecContext(ctx, "DELETE FROM pipeline_runs WHERE id = ?", id)
 	if err != nil {
 		return fmt.Errorf("delete pipeline_run %d: %w", id, err)
 	}
@@ -237,37 +265,12 @@ func (r *PipelineRunRepo) Delete(ctx context.Context, id int64) error {
 	if n == 0 {
 		return sql.ErrNoRows
 	}
-	return tx.Commit()
-}
-
-// CreateStep inserts a new pipeline run step.
-func (r *PipelineRunRepo) CreateStep(ctx context.Context, s *PipelineRunStep) (int64, error) {
-	res, err := r.db.ExecContext(ctx,
-		`INSERT INTO pipeline_run_steps (run_id, step, status, job_id, error, started_at, finished_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		s.RunID, s.Step, s.Status, s.JobID, s.Error, s.StartedAt, s.FinishedAt,
-	)
-	if err != nil {
-		return 0, fmt.Errorf("insert pipeline_run_step: %w", err)
-	}
-	return res.LastInsertId()
-}
-
-// UpdateStep updates status, error, and finished_at for a pipeline run step.
-func (r *PipelineRunRepo) UpdateStep(ctx context.Context, id int64, status string, errMsg string, finishedAt sql.NullInt64) error {
-	_, err := r.db.ExecContext(ctx,
-		"UPDATE pipeline_run_steps SET status = ?, error = ?, finished_at = ? WHERE id = ?",
-		status, errMsg, finishedAt, id,
-	)
-	if err != nil {
-		return fmt.Errorf("update pipeline_run_step %d: %w", id, err)
-	}
 	return nil
 }
 
 func scanPipelineRun(row *sql.Row) (*PipelineRun, error) {
 	var p PipelineRun
-	err := row.Scan(&p.ID, &p.ChannelID, &p.URL, &p.Mode, &p.Status, &p.Progress, &p.CurrentStep, &p.Error, &p.StepOutputsJSON, &p.ModeConfigJSON, &p.StartedAt, &p.FinishedAt, &p.SourceRunID)
+	err := row.Scan(&p.ID, &p.ChannelID, &p.URL, &p.Mode, &p.State, &p.ActivePhase, &p.Error, &p.ModeConfigJSON, &p.VideoPath, &p.VideoTitle, &p.DurationSec, &p.TranscriptPath, &p.StartedAt, &p.FinishedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -276,7 +279,7 @@ func scanPipelineRun(row *sql.Row) (*PipelineRun, error) {
 
 func scanPipelineRunRows(rows *sql.Rows) (*PipelineRun, error) {
 	var p PipelineRun
-	err := rows.Scan(&p.ID, &p.ChannelID, &p.URL, &p.Mode, &p.Status, &p.Progress, &p.CurrentStep, &p.Error, &p.StepOutputsJSON, &p.ModeConfigJSON, &p.StartedAt, &p.FinishedAt, &p.SourceRunID)
+	err := rows.Scan(&p.ID, &p.ChannelID, &p.URL, &p.Mode, &p.State, &p.ActivePhase, &p.Error, &p.ModeConfigJSON, &p.VideoPath, &p.VideoTitle, &p.DurationSec, &p.TranscriptPath, &p.StartedAt, &p.FinishedAt)
 	if err != nil {
 		return nil, err
 	}

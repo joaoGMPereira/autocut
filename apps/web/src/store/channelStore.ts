@@ -6,7 +6,17 @@ const log = createLogger('channelStore');
 export interface Channel {
   ID: number;
   Name: string;
-  YouTubeChannelID: string;
+  ChannelID: string;        // YouTube channel ID (backend field name)
+  YouTubeChannelID?: string; // Kept for backward compat (not returned by backend)
+  ChannelTitle: string;
+  AvatarURL: string;
+  AccessToken: string;
+  RefreshToken: string;
+  ExpiresAt: number;
+  OAuthClientSecretID: { Int64: number; Valid: boolean } | null;
+  IsFavorite: boolean;
+  CreatedAt: number;
+  UpdatedAt: number;
   avatar_url?: string;
   subscriber_count?: number;
 }
@@ -27,6 +37,7 @@ interface ChannelState {
   selectedChannelId: number | null;
   channelConfig: ChannelConfig | null;
   fetchChannels: (goUrl: string) => Promise<void>;
+  getChannel: (goUrl: string, id: number) => Promise<Channel>;
   addChannel: (goUrl: string, payload: { name: string; youtube_channel_id: string }) => Promise<void>;
   removeChannel: (goUrl: string, id: number) => Promise<void>;
   selectChannel: (id: number | null) => void;
@@ -53,6 +64,14 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
       log.error('fetch channels failed', { err: message });
       set({ loading: false, error: message });
     }
+  },
+
+  getChannel: async (goUrl, id) => {
+    const res = await fetch(`${goUrl}/api/channels/${id}`);
+    if (!res.ok) throw new Error(`Failed: ${res.status}`);
+    const data = (await res.json()) as Channel;
+    log.info('channel fetched', { id });
+    return data;
   },
 
   addChannel: async (goUrl, payload) => {

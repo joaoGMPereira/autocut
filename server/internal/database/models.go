@@ -71,20 +71,22 @@ type Upload struct {
 }
 
 // Kotlin: PipelineRunsTable in Tables.kt (no dedicated data class)
+// PipelineRun maps to the v10 pipeline_runs schema.
 type PipelineRun struct {
-	ID              int64         `json:"id"`
-	ChannelID       sql.NullInt64 `json:"channel_id"`
-	URL             string        `json:"url"`
-	Mode            string        `json:"mode"`
-	Status          string        `json:"status"`
-	Progress        int           `json:"progress"`
-	CurrentStep     string        `json:"current_step"`
-	Error           string        `json:"error"`
-	StepOutputsJSON string        `json:"-"`
-	ModeConfigJSON  string        `json:"-"`
-	StartedAt       int64         `json:"started_at"`
-	FinishedAt      sql.NullInt64 `json:"finished_at"`
-	SourceRunID     sql.NullInt64 `json:"source_run_id,omitempty"`
+	ID             int64         `json:"id"`
+	ChannelID      sql.NullInt64 `json:"channel_id"`
+	URL            string        `json:"url"`
+	Mode           string        `json:"mode"`
+	State          string        `json:"state"`        // WAITING_URL | EXECUTING | WAITING_MODE | DONE | ERROR | CANCELLED
+	ActivePhase    string        `json:"active_phase"` // download | transcribe | …
+	Error          string        `json:"error"`
+	ModeConfigJSON string        `json:"-"`
+	VideoPath      string        `json:"video_path"`
+	VideoTitle     string        `json:"video_title"`
+	DurationSec    int64         `json:"duration_sec"`
+	TranscriptPath string        `json:"transcript_path"`
+	StartedAt      int64         `json:"started_at"`
+	FinishedAt     sql.NullInt64 `json:"finished_at"`
 }
 
 // PipelineRunStep tracks individual step execution within a pipeline run.
@@ -251,6 +253,15 @@ type QuotaUsage struct {
 	OtherAPICalls        int
 	CreatedAt            int64
 	UpdatedAt            int64
+}
+
+// URLHistoryEntry represents a persisted URL in the url_history table (migration v11).
+type URLHistoryEntry struct {
+	ID         int64   `json:"id"`
+	URL        string  `json:"url"`
+	VideoTitle *string `json:"video_title"`
+	LastUsedAt int64   `json:"last_used_at"`
+	UseCount   int     `json:"use_count"`
 }
 
 // Quota constants from Kotlin QuotaUsage companion object

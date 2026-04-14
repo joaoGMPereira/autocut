@@ -49,7 +49,8 @@ func (h *SetupHandler) PostInstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jobID := newJobID()
+	// Use deterministic job_id so the stream subscriber can connect before posting.
+	jobID := "install-" + name
 	go func() {
 		logCh := make(chan string, 64)
 		defer close(logCh)
@@ -62,7 +63,7 @@ func (h *SetupHandler) PostInstall(w http.ResponseWriter, r *http.Request) {
 			h.hub.Publish(jobID, hub.SSEEvent{Type: "error", Data: map[string]string{"message": err.Error()}})
 			return
 		}
-		h.hub.Publish(jobID, hub.SSEEvent{Type: "done", Data: map[string]string{"tool": name}})
+		h.hub.Publish(jobID, hub.SSEEvent{Type: "done", Data: map[string]string{"tool": name, "success": "true"}})
 	}()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -83,4 +84,75 @@ func (h *SetupHandler) GetDir(w http.ResponseWriter, _ *http.Request) {
 		"downloads_dir":  dir.DownloadsDir,
 		"thumbnails_dir": dir.ThumbnailsDir,
 	})
+}
+
+// GetInstallStream streams SSE events for an in-progress install job.
+// The client subscribes by job_id returned from POST /api/setup/install/{tool}.
+// Per the contract, the client may also subscribe before posting by using
+// GET /api/setup/install/{tool}/stream — the hub will queue events once posted.
+func (h *SetupHandler) GetInstallStream(w http.ResponseWriter, r *http.Request) {
+	tool := r.PathValue("tool")
+	if _, ok := h.cfg.Get(tool); !ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]string{"code": "tool_not_found", "message": "tool not registered: " + tool})
+		return
+	}
+	// The job_id for installs is derived from the tool name so the frontend can
+	// open the stream before triggering the install POST.
+	jobID := "install-" + tool
+	h.hub.ServeSSE(w, r, jobID)
+}
+
+// GetCheckUpdate returns update availability for the named tool.
+func (h *SetupHandler) GetCheckUpdate(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("tool")
+	info, err := h.cfg.CheckUpdate(r.Context(), name)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]string{"code": "tool_not_found", "message": "tool not registered: " + name})
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(info)
+}
+
+// GetWhisperModels returns the list of known Whisper model variants with download status.
+func (h *SetupHandler) GetWhisperModels(w http.ResponseWriter, _ *http.Request) {
+	models := h.cfg.WhisperModelStatus()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"models": models})
+}
+
+// PostWhisperModel starts a background download of the named Whisper model and returns a job_id.
+func (h *SetupHandler) PostWhisperModel(w http.ResponseWriter, r *http.Request) {
+	model := r.PathValue("model")
+
+	jobID := "whisper-" + model
+	go func() {
+		logCh := make(chan string, 64)
+		defer close(logCh)
+		go func() {
+			for line := range logCh {
+				h.hub.Publish(jobID, hub.SSEEvent{Type: "log", Data: map[string]string{"message": line}})
+			}
+		}()
+		if err := h.cfg.DownloadWhisperModel(context.Background(), model, logCh); err != nil {
+			h.hub.Publish(jobID, hub.SSEEvent{Type: "error", Data: map[string]string{"message": err.Error()}})
+			return
+		}
+		h.hub.Publish(jobID, hub.SSEEvent{Type: "done", Data: map[string]string{"model": model}})
+	}()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(map[string]string{"job_id": jobID})
+}
+
+// GetWhisperModelStream streams SSE events for a Whisper model download job.
+func (h *SetupHandler) GetWhisperModelStream(w http.ResponseWriter, r *http.Request) {
+	model := r.PathValue("model")
+	jobID := "whisper-" + model
+	h.hub.ServeSSE(w, r, jobID)
 }

@@ -2,8 +2,7 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
-import { Download, Upload, Scissors, Smartphone, Users, Gauge } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,16 +12,8 @@ import type { PipelineRunSummary } from '@/store/statsStore';
 
 const log = createLogger('DashboardClient');
 
-interface StatCardItem {
-  label: string;
-  value: number;
-  icon: LucideIcon;
-}
-
 const quickActions = [
   { label: 'New Download', href: '/pipeline' },
-  { label: 'Upload Queue', href: '/queue' },
-  { label: 'Channels', href: '/channels' },
 ] as const;
 
 function statusBadgeClass(status: string): string {
@@ -64,34 +55,24 @@ export default function DashboardClient() {
     };
   }, [fetchStats]);
 
-  const statCards: StatCardItem[] = [
-    { label: 'Active Downloads', value: stats?.active_downloads ?? 0, icon: Download },
-    { label: 'Pending Uploads',  value: stats?.pending_uploads ?? 0,  icon: Upload },
-    { label: 'Total Clips',      value: stats?.total_clips ?? 0,      icon: Scissors },
-    { label: 'Total Shorts',     value: stats?.total_shorts ?? 0,     icon: Smartphone },
-    { label: 'Channels',         value: stats?.channels_count ?? 0,   icon: Users },
-    { label: 'Quota Today',      value: stats?.quota_used_today ?? 0, icon: Gauge },
-  ];
-
+  const activeDownloads = stats?.active_downloads ?? 0;
   const recentRuns = stats?.recent_pipeline_runs ?? [];
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Stats Grid — 2 rows × 3 cols */}
+      {/* Stats — only validated features */}
       <div className="grid grid-cols-3 gap-4">
-        {statCards.map(({ label, value, icon: Icon }) => (
-          <Card key={label} className="border-border bg-card">
-            <CardContent className="flex items-center gap-4 p-5">
-              <Icon className="h-5 w-5 text-[#00D4FF] shrink-0" />
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground leading-none mb-1">{label}</p>
-                <p className="font-mono text-2xl font-semibold tabular-nums leading-none">
-                  {loading && stats === null ? '…' : value}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        <Card className="border-border bg-card">
+          <CardContent className="flex items-center gap-4 p-5">
+            <Download className="h-5 w-5 text-[#00D4FF] shrink-0" />
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground leading-none mb-1">Active Downloads</p>
+              <p className="font-mono text-2xl font-semibold tabular-nums leading-none">
+                {loading && stats === null ? '…' : activeDownloads}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Recent Pipeline Runs */}

@@ -7,7 +7,23 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/joaoGMPereira/autocut/server/internal/progress"
 )
+
+// MockReporter captures all Report calls for assertion.
+type MockReporter struct {
+	calls []reportedEvent
+}
+
+type reportedEvent struct {
+	jobID string
+	event progress.Event
+}
+
+func (m *MockReporter) Report(jobID string, event progress.Event) {
+	m.calls = append(m.calls, reportedEvent{jobID: jobID, event: event})
+}
 
 // MockExecutor records all calls and returns configured output/error.
 type MockExecutor struct {
@@ -205,5 +221,60 @@ func TestDownloadWithOptions_DownloadsWhenNotCached(t *testing.T) {
 	// Must have at least 2 calls: download + ExtractMetadata.
 	if len(mock.calls) < 2 {
 		t.Errorf("expected at least 2 executor calls (download + metadata), got %d", len(mock.calls))
+	}
+}
+
+// TestDownload_EmitsProgressEvents verifies that Download emits progress events
+// at the expected stages when a reporter is injected.
+func TestDownload_EmitsProgressEvents(t *testing.T) {
+	mock := &MockExecutor{response: []byte(ytDlpFixture)}
+	reporter := &MockReporter{}
+
+	d := NewYouTubeDownloader("yt-dlp").
+		withExecutor(mock).
+		WithJobID("job-abc").
+		WithReporter(reporter)
+	d.retry = RetryConfig{MaxAttempts: 1, InitialDelay: 0}
+
+	outDir := t.TempDir()
+	const testURL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+
+	_, err := d.Download(testURL, outDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(reporter.calls) == 0 {
+		t.Fatal("no progress events emitted")
+	}
+
+	// First event must be "metadata".
+	first := reporter.calls[0]
+	if first.jobID != "job-abc" {
+		t.Errorf("first event jobID: want %q, got %q", "job-abc", first.jobID)
+	}
+	if first.event.Stage != "metadata" {
+		t.Errorf("first event Stage: want %q, got %q", "metadata", first.event.Stage)
+	}
+
+	// At least one "download" event must exist.
+	hasDownload := false
+	for _, c := range reporter.calls {
+		if c.event.Stage == "download" {
+			hasDownload = true
+			break
+		}
+	}
+	if !hasDownload {
+		t.Error("no event with Stage==\"download\" emitted")
+	}
+
+	// Last event must be "done" with Percent==100.
+	last := reporter.calls[len(reporter.calls)-1]
+	if last.event.Stage != "done" {
+		t.Errorf("last event Stage: want %q, got %q", "done", last.event.Stage)
+	}
+	if last.event.Percent != 100 {
+		t.Errorf("last event Percent: want 100, got %v", last.event.Percent)
 	}
 }

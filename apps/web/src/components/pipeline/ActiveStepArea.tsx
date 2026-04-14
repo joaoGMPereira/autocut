@@ -9,47 +9,29 @@ import { StepThumbnailConfig } from './steps/StepThumbnailConfig';
 import { StepReviewMetadata } from './steps/StepReviewMetadata';
 import { StepReviewClips } from './steps/StepReviewClips';
 import { StepUpload } from './steps/StepUpload';
+import { StepGeneratingClips } from './steps/StepGeneratingClips';
 
 export function ActiveStepArea() {
-  const run = usePipelineStore((s) => s.run);
-  const state = run?.state ?? 'WAITING_URL';
+  const displayedState = usePipelineStore((s) => s.displayedState());
+  const isNavigatedBack = usePipelineStore((s) => s.isNavigatedBack());
+  const gateHistory = usePipelineStore((s) => s.gateHistory);
 
-  switch (state) {
-    case 'WAITING_URL':
-      return <StepUrl />;
-    case 'WAITING_MODE':
-      return <StepMode />;
-    case 'EXECUTING':
-    case 'GENERATING_CLIPS':
-      return <StepExecute />;
-    case 'WAITING_REVIEW_HIGHLIGHTS':
-      return <StepReviewHighlights />;
-    case 'WAITING_THUMBNAIL_CONFIG':
-      return <StepThumbnailConfig />;
-    case 'WAITING_REVIEW_METADATA':
-      return <StepReviewMetadata />;
-    case 'WAITING_REVIEW_CLIPS':
-      return <StepReviewClips />;
+  console.log('[ActiveStepArea] displayedState', displayedState, 'isNavigatedBack', isNavigatedBack);
+
+  const historical = isNavigatedBack ? gateHistory[displayedState] : undefined;
+
+  switch (displayedState) {
+    case 'WAITING_URL':          return <StepUrl historical={historical} />;
+    case 'WAITING_MODE':         return <StepMode historical={historical} />;
+    case 'EXECUTING':            return <StepExecute />;
+    case 'GENERATING_CLIPS':     return <StepGeneratingClips />;
+    case 'WAITING_REVIEW_HIGHLIGHTS': return <StepReviewHighlights historical={historical} />;
+    case 'WAITING_THUMBNAIL_CONFIG':  return <StepThumbnailConfig historical={historical} />;
+    case 'WAITING_REVIEW_METADATA':   return <StepReviewMetadata historical={historical} />;
+    case 'WAITING_REVIEW_CLIPS':      return <StepReviewClips historical={historical} />;
     case 'WAITING_UPLOAD_CONFIRM':
     case 'UPLOADING':
-    case 'DONE':
-      return <StepUpload />;
-    case 'ERROR':
-      return (
-        <div className="flex flex-col items-center justify-center h-64 gap-3">
-          <div className="text-red-500 text-4xl">⚠</div>
-          <p className="text-red-400 font-medium">Pipeline Error</p>
-          <p className="text-zinc-400 text-sm text-center max-w-sm">{run?.error || 'An unexpected error occurred.'}</p>
-        </div>
-      );
-    case 'CANCELLED':
-      return (
-        <div className="flex flex-col items-center justify-center h-64 gap-3">
-          <div className="text-zinc-500 text-4xl">✕</div>
-          <p className="text-zinc-400 font-medium">Run Cancelled</p>
-        </div>
-      );
-    default:
-      return null;
+    case 'DONE':                 return <StepUpload />;
+    default:                     return null;
   }
 }

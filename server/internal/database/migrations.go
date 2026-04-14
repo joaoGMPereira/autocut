@@ -20,6 +20,9 @@ var allMigrations = []migration{
 	{version: 7, name: "video_comments", fn: migrateV7},
 	{version: 8, name: "pipeline_source_run_id", fn: migrateV8},
 	{version: 9, name: "pipeline_rewrite", fn: migrateV9},
+	{version: 10, name: "pipeline_run_video_meta", fn: migrateV10},
+	{version: 11, name: "url_history", fn: migrateV11},
+	{version: 12, name: "seed_channels_oauth", fn: migrateV12},
 }
 
 // migrateV1 creates all 11 application tables.
@@ -431,6 +434,55 @@ func migrateV9(tx *sql.Tx) error {
 		);
 		CREATE INDEX idx_pipeline_clips_run       ON pipeline_clips(run_id);
 		CREATE INDEX idx_pipeline_clips_highlight ON pipeline_clips(highlight_id);
+	`)
+	return err
+}
+
+// migrateV10 adds video_title and duration_sec to pipeline_runs.
+// video_title: human-readable title from yt-dlp metadata.
+// duration_sec: video duration in whole seconds, required by downstream phases.
+func migrateV10(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		ALTER TABLE pipeline_runs ADD COLUMN video_title  TEXT    NOT NULL DEFAULT '';
+		ALTER TABLE pipeline_runs ADD COLUMN duration_sec INTEGER NOT NULL DEFAULT 0;
+	`)
+	return err
+}
+
+// migrateV11 creates the url_history table for URL autocomplete/history (099).
+func migrateV11(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		CREATE TABLE IF NOT EXISTS url_history (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			url          TEXT    NOT NULL UNIQUE,
+			video_title  TEXT,
+			last_used_at INTEGER NOT NULL,
+			use_count    INTEGER NOT NULL DEFAULT 1
+		)
+	`)
+	return err
+}
+
+// migrateV12 seeds the 4 known OAuth client secret profiles and 4 channels extracted from the
+// Youtube companion app's database. Uses INSERT OR IGNORE so re-running on an existing database
+// (e.g. after a future re-install) is a no-op — existing records are never overwritten.
+// Channels are seeded without tokens (access_token/refresh_token empty) so each one starts
+// as "Not Authorized" and the user completes the OAuth flow once per channel after install.
+func migrateV12(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		-- OAuth client secret profiles (app-level credentials, safe to embed)
+		INSERT OR IGNORE INTO oauth_client_secrets (name, client_id, client_secret, project_id, is_default) VALUES
+			('OAuth cortes_inerd',          'PLACEHOLDER_CLIENT_ID_INERD', 'PLACEHOLDER_CLIENT_SECRET_INERD', 'video-clipper-484223',        1),
+			('OAuth cortes_maromba',        'PLACEHOLDER_CLIENT_ID_MAROMBA','PLACEHOLDER_CLIENT_SECRET_MAROMBA', 'video-clipper-484209',        0),
+			('OAuth cortes_react',          'PLACEHOLDER_CLIENT_ID_REACT', 'PLACEHOLDER_CLIENT_SECRET_REACT', 'video-clipper-484017',        0),
+			('gen-lang-client-0861870513',  'PLACEHOLDER_CLIENT_ID_GEN_LANG', 'PLACEHOLDER_CLIENT_SECRET_GEN_LANG', 'gen-lang-client-0861870513', 0);
+
+		-- Channels (no tokens — user must authorize via OAuth flow after install)
+		INSERT OR IGNORE INTO channels (name, channel_id, channel_title, oauth_client_secret_id, is_favorite) VALUES
+			('dev_ao_cubo',         'UCSwTDK61hsBFV4CToQtFl-g', 'Dev ao Cubo',                    (SELECT id FROM oauth_client_secrets WHERE name = 'gen-lang-client-0861870513'), 1),
+			('cortes_maromba',      'UCpGpj9G3W1ofZGG2kcIWvnQ', 'Cortes da Maromba',              (SELECT id FROM oauth_client_secrets WHERE name = 'OAuth cortes_maromba'),        0),
+			('cortes_inerd',        'UCpjSuvMTQAq6SKuRE_SoaDQ', 'Cortes do Velho Peter (Ei Nerd)',(SELECT id FROM oauth_client_secrets WHERE name = 'OAuth cortes_inerd'),          0),
+			('cortes_react',        'UCNcaOXuxyjSwrbEhgZWA-NA', 'Cortes e React',                 (SELECT id FROM oauth_client_secrets WHERE name = 'OAuth cortes_react'),          0);
 	`)
 	return err
 }

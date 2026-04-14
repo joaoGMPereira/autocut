@@ -12,7 +12,8 @@ export interface WhisperModelInfo {
   name: string;
   size_mb: number;
   downloaded: boolean;
-  path: string;
+  path?: string;
+  active?: boolean;
 }
 
 export type InstallEventType = 'log' | 'done' | 'error';
