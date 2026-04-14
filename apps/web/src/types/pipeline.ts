@@ -84,15 +84,47 @@ export interface Clip {
   created_at: number;
 }
 
+// ── AntiDuplicateConfig ──────────────────────────────────────────────────────
+export interface AntiDuplicateConfig {
+  enabled: boolean;
+  mode: 'subtle' | 'aggressive';
+}
+
 // ── ModeConfig ────────────────────────────────────────────────────────────────
 
 export interface ModeConfig {
   mode: WorkflowMode;
   min_duration_secs: number;
   max_duration_secs: number;
-  sensitivity_pct?: number;   // AI only
-  segment_secs?: number;      // longform only
+  sensitivity_pct?: number;        // AI only — highlights threshold 0–100
+  segment_secs?: number;           // longform only — target part duration
+  skip_music_mins?: number | null; // AI only — skip leading music in minutes
+  force_regenerate?: boolean;      // AI only — ignore cached transcript/analysis
+  skip_transcription?: boolean;    // AI only — skip Whisper, use existing transcript
+  anti_duplicate?: AntiDuplicateConfig; // All modes — anti-dup protection config
+  skip_regenerate?: boolean;            // All modes — skip reprocessing if prior clips exist
+  min_part_secs?: number;
 }
+
+export const AI_DEFAULTS: Omit<ModeConfig, 'mode'> = {
+  min_duration_secs: 480,
+  max_duration_secs: 1200,
+  sensitivity_pct: 70,
+  skip_music_mins: null,
+  force_regenerate: true,
+  skip_transcription: false,
+  anti_duplicate: { enabled: false, mode: 'subtle' as const },
+  skip_regenerate: false,
+};
+
+export const LONGFORM_DEFAULTS: Omit<ModeConfig, 'mode'> = {
+  min_duration_secs: 480,
+  max_duration_secs: 0,
+  segment_secs: 600,
+  anti_duplicate: { enabled: false, mode: 'subtle' as const },
+  skip_regenerate: false,
+  min_part_secs: 0,
+};
 
 // ── Gate request types ────────────────────────────────────────────────────────
 
@@ -142,6 +174,12 @@ export interface UploadConfirmRequest {
   privacy: 'public' | 'unlisted' | 'private';
 }
 
+// ── PriorClipsResponse ───────────────────────────────────────────────────────
+export interface PriorClipsResponse {
+  exists: boolean;
+  run_id?: number;
+}
+
 // ── SSE event payloads ────────────────────────────────────────────────────────
 
 export interface SSEStateChangedPayload {
@@ -165,11 +203,20 @@ export interface SSEPhaseProgressPayload {
   warning?: string;
 }
 
+export interface SSEVideoInfoPayload {
+  run_id: number;
+  title: string;
+  thumbnail_url: string;
+  duration_sec: number;
+  channel_name?: string;
+}
+
 export interface SSEEvent {
   type:
     | 'state_changed'
     | 'gate_opened'
     | 'phase_progress'
+    | 'video_info'
     | 'done'
     | 'error'
     | 'cancelled'
@@ -178,8 +225,78 @@ export interface SSEEvent {
     | SSEStateChangedPayload
     | SSEGateOpenedPayload
     | SSEPhaseProgressPayload
+    | SSEVideoInfoPayload
     | { run_id: number; state: RunState; message?: string };
 }
+
+// ── UrlHistoryEntry ───────────────────────────────────────────────────────────
+
+export interface UrlHistoryEntry {
+  id: number;
+  url: string;
+  video_title: string | null;
+  last_used_at: number;
+  use_count: number;
+}
+
+// ── Gate payload types (for back-navigation history) ──────────────────────────
+
+export interface UrlPayload {
+  kind: 'url';
+  url: string;
+}
+
+export interface ModePayload {
+  kind: 'mode';
+  url?: string;
+  channel_id?: number;
+  mode_config?: ModeConfig;
+}
+
+export interface HighlightsPayload {
+  kind: 'highlights';
+  highlights: HighlightUpdate[];
+}
+
+export interface ThumbnailPayload {
+  kind: 'thumbnail';
+  default_style: string;
+  clip_overrides?: ClipThumbnailOverride[];
+}
+
+export interface MetadataPayload {
+  kind: 'metadata';
+  clips: ClipMetadataUpdate[];
+}
+
+export interface ClipsPayload {
+  kind: 'clips';
+  selected_ids: number[];
+}
+
+export interface UploadPayload {
+  kind: 'upload';
+  privacy: 'public' | 'unlisted' | 'private';
+}
+
+export type GatePayload =
+  | UrlPayload
+  | ModePayload
+  | HighlightsPayload
+  | ThumbnailPayload
+  | MetadataPayload
+  | ClipsPayload
+  | UploadPayload;
+
+export const GATE_STATE_ORDER: RunState[] = [
+  'WAITING_URL',
+  'WAITING_MODE',
+  'WAITING_REVIEW_HIGHLIGHTS',
+  'WAITING_THUMBNAIL_CONFIG',
+  'WAITING_REVIEW_METADATA',
+  'WAITING_REVIEW_CLIPS',
+  'WAITING_UPLOAD_CONFIRM',
+];
 
 // ── Step rail helpers ─────────────────────────────────────────────────────────
 

@@ -15,7 +15,10 @@ import type {
   UploadConfirmRequest,
   SSEEvent,
   SSEPhaseProgressPayload,
+  SSEVideoInfoPayload,
+  GatePayload,
 } from '@/types/pipeline';
+import { GATE_STATE_ORDER } from '@/types/pipeline';
 import { useDispatcherStore } from '@/store/dispatcherStore';
 
 const log = createLogger('pipelineStore');
@@ -29,6 +32,13 @@ export interface PhaseProgress {
   etaSec?: number;
 }
 
+export interface VideoInfo {
+  title: string;
+  thumbnailUrl: string;
+  durationSec: number;
+  channelName?: string;
+}
+
 // ── Store interface ───────────────────────────────────────────────────────────
 
 interface PipelineState {
@@ -40,9 +50,19 @@ interface PipelineState {
   highlights: Highlight[];
   clips: Clip[];
   phaseProgress: PhaseProgress | null;
+  videoInfo: VideoInfo | null;
   isLoading: boolean;
   error: string | null;
   sseCleanup: (() => void) | null;
+
+  // Navigation history
+  navHistory: RunState[];
+  navIndex: number;
+  gateHistory: Partial<Record<RunState, GatePayload>>;
+
+  // Computed accessors
+  displayedState: () => RunState;
+  isNavigatedBack: () => boolean;
 
   // Actions — run lifecycle
   createRun: (goUrl: string) => Promise<number | null>;
@@ -59,6 +79,12 @@ interface PipelineState {
   submitReviewMetadata: (goUrl: string, id: number, req: ReviewMetadataRequest) => Promise<void>;
   submitReviewClips: (goUrl: string, id: number, req: ReviewClipsRequest) => Promise<void>;
   submitUploadConfirm: (goUrl: string, id: number, req: UploadConfirmRequest) => Promise<void>;
+
+  // Actions — navigation
+  navigateBack: () => void;
+  navigateForward: () => void;
+  recordGateSubmission: (state: RunState, payload: GatePayload) => void;
+  resubmitFromBacked: (goUrl: string, targetGate: RunState, newPayload: GatePayload) => Promise<void>;
 
   // Actions — resource loading
   loadHighlights: (goUrl: string, id: number) => Promise<void>;
@@ -79,9 +105,24 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
   highlights: [],
   clips: [],
   phaseProgress: null,
+  videoInfo: null,
   isLoading: false,
   error: null,
   sseCleanup: null,
+
+  navHistory: [],
+  navIndex: 0,
+  gateHistory: {},
+
+  displayedState: () => {
+    const { navHistory, navIndex } = get();
+    return navHistory[navIndex] ?? 'WAITING_URL';
+  },
+
+  isNavigatedBack: () => {
+    const { navHistory, navIndex } = get();
+    return navIndex < navHistory.length - 1;
+  },
 
   // ── Run lifecycle ──────────────────────────────────────────────────────────
 
@@ -97,7 +138,8 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
       const runRes = await fetch(`${goUrl}/api/pipeline/runs/${data.run_id}`);
       if (!runRes.ok) throw new Error(`Failed to load run: ${runRes.status}`);
       const runData = (await runRes.json()) as { run: Run };
-      set({ run: runData.run, activeRunId: runData.run.id, isLoading: false });
+      set({ run: runData.run, activeRunId: runData.run.id, isLoading: false,
+            navHistory: ['WAITING_URL'], navIndex: 0 });
       return data.run_id;
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to create run';
@@ -168,13 +210,34 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
 
   clearRun: () => {
     get().stopSSE();
-    set({ run: null, activeRunId: null, highlights: [], clips: [], phaseProgress: null, error: null });
+    set({
+      run: null,
+      activeRunId: null,
+      highlights: [],
+      clips: [],
+      phaseProgress: null,
+      videoInfo: null,
+      error: null,
+      navHistory: [],
+      navIndex: 0,
+      gateHistory: {},
+    });
   },
 
   // ── Gate advances ──────────────────────────────────────────────────────────
 
   advance: async (goUrl, id, req) => {
     log.info('[pipelineStore] advance', { id });
+    // Record gate submission based on current run state
+    const currentState = get().run?.state ?? 'WAITING_URL';
+    if (currentState === 'WAITING_URL' && req.url) {
+      get().recordGateSubmission('WAITING_URL', { kind: 'url', url: req.url });
+      console.log('[pipelineStore] recordGateSubmission', 'WAITING_URL', { kind: 'url', url: req.url });
+    } else if (currentState === 'WAITING_MODE') {
+      const payload: GatePayload = { kind: 'mode', url: req.url, channel_id: req.channel_id, mode_config: req.mode_config };
+      get().recordGateSubmission('WAITING_MODE', payload);
+      console.log('[pipelineStore] recordGateSubmission', 'WAITING_MODE', payload);
+    }
     try {
       const res = await fetch(`${goUrl}/api/pipeline/runs/${id}/advance`, {
         method: 'POST',
@@ -193,6 +256,9 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
 
   submitReviewHighlights: async (goUrl, id, req) => {
     log.info('[pipelineStore] submitReviewHighlights', { id });
+    const payload: GatePayload = { kind: 'highlights', highlights: req.highlights };
+    get().recordGateSubmission('WAITING_REVIEW_HIGHLIGHTS', payload);
+    console.log('[pipelineStore] recordGateSubmission', 'WAITING_REVIEW_HIGHLIGHTS', payload);
     try {
       const res = await fetch(`${goUrl}/api/pipeline/runs/${id}/gates/review-highlights`, {
         method: 'POST',
@@ -211,6 +277,9 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
 
   submitThumbnailConfig: async (goUrl, id, req) => {
     log.info('[pipelineStore] submitThumbnailConfig', { id });
+    const payload: GatePayload = { kind: 'thumbnail', default_style: req.default_style, clip_overrides: req.clip_overrides };
+    get().recordGateSubmission('WAITING_THUMBNAIL_CONFIG', payload);
+    console.log('[pipelineStore] recordGateSubmission', 'WAITING_THUMBNAIL_CONFIG', payload);
     try {
       const res = await fetch(`${goUrl}/api/pipeline/runs/${id}/gates/thumbnail-config`, {
         method: 'POST',
@@ -229,6 +298,9 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
 
   submitReviewMetadata: async (goUrl, id, req) => {
     log.info('[pipelineStore] submitReviewMetadata', { id });
+    const payload: GatePayload = { kind: 'metadata', clips: req.clips };
+    get().recordGateSubmission('WAITING_REVIEW_METADATA', payload);
+    console.log('[pipelineStore] recordGateSubmission', 'WAITING_REVIEW_METADATA', payload);
     try {
       const res = await fetch(`${goUrl}/api/pipeline/runs/${id}/gates/review-metadata`, {
         method: 'POST',
@@ -247,6 +319,9 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
 
   submitReviewClips: async (goUrl, id, req) => {
     log.info('[pipelineStore] submitReviewClips', { id });
+    const payload: GatePayload = { kind: 'clips', selected_ids: req.selected_ids };
+    get().recordGateSubmission('WAITING_REVIEW_CLIPS', payload);
+    console.log('[pipelineStore] recordGateSubmission', 'WAITING_REVIEW_CLIPS', payload);
     try {
       const res = await fetch(`${goUrl}/api/pipeline/runs/${id}/gates/review-clips`, {
         method: 'POST',
@@ -265,6 +340,9 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
 
   submitUploadConfirm: async (goUrl, id, req) => {
     log.info('[pipelineStore] submitUploadConfirm', { id });
+    const payload: GatePayload = { kind: 'upload', privacy: req.privacy };
+    get().recordGateSubmission('WAITING_UPLOAD_CONFIRM', payload);
+    console.log('[pipelineStore] recordGateSubmission', 'WAITING_UPLOAD_CONFIRM', payload);
     try {
       const res = await fetch(`${goUrl}/api/pipeline/runs/${id}/gates/upload-confirm`, {
         method: 'POST',
@@ -279,6 +357,111 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
       log.error('[pipelineStore] submitUploadConfirm failed', { error: msg });
       set({ error: msg });
     }
+  },
+
+  // ── Navigation ─────────────────────────────────────────────────────────────
+
+  navigateBack: () => {
+    const { navHistory, navIndex } = get();
+    if (navIndex <= 0) return;
+    let newIndex = navIndex - 1;
+    // Skip compute states — user always lands on a gate step
+    while (newIndex > 0 && !GATE_STATE_ORDER.includes(navHistory[newIndex])) {
+      newIndex--;
+    }
+    set({ navIndex: newIndex });
+    console.log('[pipelineStore] navigateBack', navHistory[newIndex]);
+  },
+
+  navigateForward: () => {
+    const { navHistory, navIndex } = get();
+    const newIndex = Math.min(navIndex + 1, navHistory.length - 1);
+    set({ navIndex: newIndex });
+    console.log('[pipelineStore] navigateForward', navHistory[newIndex]);
+  },
+
+  recordGateSubmission: (state, payload) => {
+    set((s) => ({ gateHistory: { ...s.gateHistory, [state]: payload } }));
+  },
+
+  resubmitFromBacked: async (goUrl, targetGate, newPayload) => {
+    const { activeRunId, gateHistory, advance, submitReviewHighlights, submitThumbnailConfig, submitReviewMetadata, submitReviewClips, submitUploadConfirm, cancelRun, clearRun, createRun, subscribeSSE } = get();
+
+    log.info('[pipelineStore] resubmitFromBacked', { targetGate });
+    console.log('[pipelineStore] resubmitFromBacked', targetGate, newPayload);
+
+    // Snapshot gateHistory before clearRun wipes it
+    const savedGateHistory = { ...gateHistory };
+
+    // 1. Cancel current run if active
+    if (activeRunId !== null) {
+      await cancelRun(goUrl, activeRunId);
+    }
+
+    // 2. Clear state (resets navHistory, navIndex, gateHistory)
+    clearRun();
+
+    // 3. Create new run
+    const newRunId = await createRun(goUrl);
+    if (newRunId === null) {
+      log.error('[pipelineStore] resubmitFromBacked: createRun failed');
+      return;
+    }
+    subscribeSSE(goUrl, newRunId);
+
+    // Helper: wait for a specific state via SSE (polling get().run?.state)
+    const waitForState = (target: RunState, timeoutMs = 30000): Promise<boolean> =>
+      new Promise((resolve) => {
+        const deadline = Date.now() + timeoutMs;
+        const check = () => {
+          const current = get().run?.state;
+          if (current === target) { resolve(true); return; }
+          if (Date.now() > deadline) { resolve(false); return; }
+          setTimeout(check, 100);
+        };
+        check();
+      });
+
+    // 4. Auto-replay all gates before targetGate
+    const targetIdx = GATE_STATE_ORDER.indexOf(targetGate);
+    for (let i = 0; i < targetIdx; i++) {
+      const gate = GATE_STATE_ORDER[i];
+      const hist = savedGateHistory[gate];
+      if (!hist) continue;
+
+      // Wait until we're at this gate
+      const reached = await waitForState(gate);
+      if (!reached) {
+        log.error('[pipelineStore] resubmitFromBacked: timed out waiting for', { gate });
+        return;
+      }
+
+      // Auto-advance through this gate
+      if (hist.kind === 'url') {
+        await advance(goUrl, newRunId, { url: hist.url });
+      } else if (hist.kind === 'mode') {
+        await advance(goUrl, newRunId, { url: hist.url, channel_id: hist.channel_id, mode_config: hist.mode_config });
+      } else if (hist.kind === 'highlights') {
+        await submitReviewHighlights(goUrl, newRunId, { highlights: hist.highlights });
+      } else if (hist.kind === 'thumbnail') {
+        await submitThumbnailConfig(goUrl, newRunId, { default_style: hist.default_style, clip_overrides: hist.clip_overrides });
+      } else if (hist.kind === 'metadata') {
+        await submitReviewMetadata(goUrl, newRunId, { clips: hist.clips });
+      } else if (hist.kind === 'clips') {
+        await submitReviewClips(goUrl, newRunId, { selected_ids: hist.selected_ids });
+      } else if (hist.kind === 'upload') {
+        await submitUploadConfirm(goUrl, newRunId, { privacy: hist.privacy });
+      }
+    }
+
+    // 5. Wait for targetGate, then store newPayload so the step component pre-fills
+    const reached = await waitForState(targetGate);
+    if (!reached) {
+      log.error('[pipelineStore] resubmitFromBacked: timed out waiting for targetGate', { targetGate });
+      return;
+    }
+    get().recordGateSubmission(targetGate, newPayload);
+    console.log('[pipelineStore] resubmitFromBacked complete — presenting targetGate', targetGate);
   },
 
   // ── Resource loading ───────────────────────────────────────────────────────
@@ -318,9 +501,26 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
 
         if (evt.type === 'state_changed' || evt.type === 'gate_opened') {
           const payload = evt.data as { run_id: number; state: RunState };
-          set((s) => ({
-            run: s.run?.id === payload.run_id ? { ...s.run, state: payload.state } : s.run,
-          }));
+          set((s) => {
+            const newNavHistory = [...s.navHistory, payload.state];
+            return {
+              run: s.run?.id === payload.run_id ? { ...s.run, state: payload.state } : s.run,
+              navHistory: newNavHistory,
+              navIndex: newNavHistory.length - 1,
+            };
+          });
+        }
+
+        if (evt.type === 'video_info') {
+          const payload = evt.data as SSEVideoInfoPayload;
+          set({
+            videoInfo: {
+              title: payload.title,
+              thumbnailUrl: payload.thumbnail_url,
+              durationSec: payload.duration_sec,
+              channelName: payload.channel_name,
+            },
+          });
         }
 
         if (evt.type === 'phase_progress') {
@@ -344,11 +544,16 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
         if (evt.type === 'done') {
           es.close();
           const payload = evt.data as { run_id: number; state: RunState };
-          set((s) => ({
-            run: s.run?.id === payload.run_id ? { ...s.run, state: 'DONE' } : s.run,
-            sseCleanup: null,
-            phaseProgress: null,
-          }));
+          set((s) => {
+            const newNavHistory = [...s.navHistory, 'DONE' as RunState];
+            return {
+              run: s.run?.id === payload.run_id ? { ...s.run, state: 'DONE' } : s.run,
+              sseCleanup: null,
+              phaseProgress: null,
+              navHistory: newNavHistory,
+              navIndex: newNavHistory.length - 1,
+            };
+          });
         }
 
         if (evt.type === 'error') {

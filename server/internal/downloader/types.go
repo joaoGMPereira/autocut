@@ -16,6 +16,9 @@ type VideoInfo struct {
 	// ThumbnailURL is the highest-resolution thumbnail URL provided by yt-dlp.
 	ThumbnailURL string
 
+	// ChannelName is the uploader/channel name from yt-dlp.
+	ChannelName string
+
 	// Duration is the video length.
 	Duration time.Duration
 
@@ -32,6 +35,7 @@ type ytDlpJSON struct {
 	Description string  `json:"description"`
 	Duration    float64 `json:"duration"`
 	Thumbnail   string  `json:"thumbnail"`
+	Uploader    string  `json:"uploader"`
 	Filename    string  `json:"_filename"`
 }
 
