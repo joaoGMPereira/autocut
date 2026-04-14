@@ -144,6 +144,17 @@ export interface BrandingConfig {
   outro_enabled: boolean;
 }
 
+// ── VideoOverlayConfig ────────────────────────────────────────────────────────
+export interface VideoOverlayConfig {
+  enabled: boolean;
+  video_path?: string;
+  scale_pct: number;         // 10–200
+  position: string;          // top_left, etc.
+  appearances: number;       // 1–5
+  end_offset_sec: number;    // 0–10
+  chroma_key?: 'none' | 'green' | 'black' | 'white' | 'blue';
+}
+
 // ── ModeConfig ────────────────────────────────────────────────────────────────
 
 export interface ModeConfig {
@@ -167,6 +178,7 @@ export interface ModeConfig {
   captions?: CaptionsConfig;
   background_music?: BackgroundMusicConfig;
   branding?: BrandingConfig;
+  video_overlay?: VideoOverlayConfig;
 }
 
 export const AI_DEFAULTS: Omit<ModeConfig, 'mode'> = {

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAppStore } from '@/store/appStore';
 import { usePipelineStore } from '@/store/pipelineStore';
 import { AI_DEFAULTS, LONGFORM_DEFAULTS } from '@/types/pipeline';
-import type { AntiDupEffects, AntiDuplicateConfig, BackgroundMusicConfig, BrandingConfig, CaptionsConfig, GatePayload, ModeConfig, PriorClipsResponse, WorkflowMode } from '@/types/pipeline';
+import type { AntiDupEffects, AntiDuplicateConfig, BackgroundMusicConfig, BrandingConfig, CaptionsConfig, GatePayload, ModeConfig, PriorClipsResponse, VideoOverlayConfig, WorkflowMode } from '@/types/pipeline';
 import { PositionGrid } from '@/components/ui/PositionGrid';
 
 interface StepModeProps {
@@ -88,6 +88,16 @@ export function StepMode({ historical }: StepModeProps) {
   const [brandingIntroEnabled, setBrandingIntroEnabled] = useState<boolean>(false);
   const [brandingOutroEnabled, setBrandingOutroEnabled] = useState<boolean>(false);
 
+  // ── Video Overlay state ────────────────────────────────────────────────────
+  const [overlayEnabled, setOverlayEnabled] = useState<boolean>(false);
+  const [overlayVideoPath, setOverlayVideoPath] = useState<string>('');
+  const [overlayScalePct, setOverlayScalePct] = useState<number>(100);
+  const [overlayPosition, setOverlayPosition] = useState<string>('mid_center');
+  const [overlayAppearances, setOverlayAppearances] = useState<number>(1);
+  const [overlayEndOffsetSec, setOverlayEndOffsetSec] = useState<number>(0);
+  const [overlayChromaKey, setOverlayChromaKey] = useState<VideoOverlayConfig['chroma_key']>('none');
+  const [overlayLibraryFiles, setOverlayLibraryFiles] = useState<string[]>([]);
+
   // ── Derived validation (computed — not useState) ───────────────────────────
   const isMinDurationInvalid = selectedMode === 'ai' && minDurationSecs >= clipDurationSecs;
 
@@ -158,6 +168,15 @@ export function StepMode({ historical }: StepModeProps) {
         setBrandingLogoPulse(cfg.branding.logo_pulse);
         setBrandingIntroEnabled(cfg.branding.intro_enabled);
         setBrandingOutroEnabled(cfg.branding.outro_enabled);
+      }
+      if (cfg.video_overlay) {
+        setOverlayEnabled(cfg.video_overlay.enabled);
+        if (cfg.video_overlay.video_path) setOverlayVideoPath(cfg.video_overlay.video_path);
+        setOverlayScalePct(cfg.video_overlay.scale_pct);
+        setOverlayPosition(cfg.video_overlay.position);
+        setOverlayAppearances(cfg.video_overlay.appearances);
+        setOverlayEndOffsetSec(cfg.video_overlay.end_offset_sec);
+        if (cfg.video_overlay.chroma_key) setOverlayChromaKey(cfg.video_overlay.chroma_key);
       }
       setIsLoadingPreference(false);
       return;
@@ -244,6 +263,16 @@ export function StepMode({ historical }: StepModeProps) {
         setBrandingLogoPulse(parseBoolKey('branding_logo_pulse', false));
         setBrandingIntroEnabled(parseBoolKey('branding_intro_enabled', false));
         setBrandingOutroEnabled(parseBoolKey('branding_outro_enabled', false));
+        setOverlayEnabled(parseBoolKey('overlay_enabled', false));
+        setOverlayVideoPath(data.find((s) => s.key === 'overlay_video_path')?.value ?? '');
+        setOverlayScalePct(parseIntKey('overlay_scale_pct', 100));
+        setOverlayPosition(data.find((s) => s.key === 'overlay_position')?.value ?? 'mid_center');
+        setOverlayAppearances(parseIntKey('overlay_appearances', 1));
+        setOverlayEndOffsetSec(parseIntKey('overlay_end_offset_sec', 0));
+        const overlayChromaVal = data.find((s) => s.key === 'overlay_chroma_key')?.value;
+        const validChromaKeys = ['none','green','black','white','blue'] as const;
+        type ChromaKey = typeof validChromaKeys[number];
+        setOverlayChromaKey(overlayChromaVal && (validChromaKeys as readonly string[]).includes(overlayChromaVal) ? overlayChromaVal as ChromaKey : 'none');
       } catch (err) {
         console.warn('[StepMode] failed to load preference, defaulting to longform', err);
         setSelectedMode('longform');
@@ -281,6 +310,14 @@ export function StepMode({ historical }: StepModeProps) {
       .catch(() => setMusicLibraryTracks([]));
   }, [goUrl, musicEnabled, musicMode]);
 
+  useEffect(() => {
+    if (!overlayEnabled) return;
+    void fetch(`${goUrl}/api/overlay-library`)
+      .then((r) => r.json())
+      .then((files: string[]) => setOverlayLibraryFiles(files))
+      .catch(() => setOverlayLibraryFiles([]));
+  }, [goUrl, overlayEnabled]);
+
   // ── setEffect helper ───────────────────────────────────────────────────────
   const setEffect = (key: keyof AntiDupEffects, value: boolean | number) => {
     setAntiDupEffects((prev) => ({ ...prev, [key]: value }));
@@ -297,6 +334,15 @@ export function StepMode({ historical }: StepModeProps) {
       logo_pulse: brandingLogoPulse,
       intro_enabled: brandingIntroEnabled,
       outro_enabled: brandingOutroEnabled,
+    } : undefined;
+    const overlayCfg: VideoOverlayConfig | undefined = overlayEnabled ? {
+      enabled: true,
+      video_path: overlayVideoPath || undefined,
+      scale_pct: overlayScalePct,
+      position: overlayPosition,
+      appearances: overlayAppearances,
+      end_offset_sec: overlayEndOffsetSec,
+      chroma_key: overlayChromaKey,
     } : undefined;
     const musicCfg: BackgroundMusicConfig | undefined = musicEnabled ? {
       enabled: true,
@@ -344,6 +390,7 @@ export function StepMode({ historical }: StepModeProps) {
         captions: captionsCfg,
         background_music: musicCfg,
         branding: brandingCfg,
+        video_overlay: overlayCfg,
       };
     }
     return {
@@ -357,6 +404,7 @@ export function StepMode({ historical }: StepModeProps) {
       captions: captionsCfg,
       background_music: musicCfg,
       branding: brandingCfg,
+      video_overlay: overlayCfg,
     };
   }
 
@@ -422,6 +470,13 @@ export function StepMode({ historical }: StepModeProps) {
         { key: 'branding_logo_pulse', value: String(brandingLogoPulse) },
         { key: 'branding_intro_enabled', value: String(brandingIntroEnabled) },
         { key: 'branding_outro_enabled', value: String(brandingOutroEnabled) },
+        { key: 'overlay_enabled', value: String(overlayEnabled) },
+        { key: 'overlay_video_path', value: overlayVideoPath },
+        { key: 'overlay_scale_pct', value: String(overlayScalePct) },
+        { key: 'overlay_position', value: overlayPosition },
+        { key: 'overlay_appearances', value: String(overlayAppearances) },
+        { key: 'overlay_end_offset_sec', value: String(overlayEndOffsetSec) },
+        { key: 'overlay_chroma_key', value: overlayChromaKey ?? 'none' },
       ];
       await Promise.allSettled(
         settingPairs.map(({ key, value }) =>
@@ -905,6 +960,134 @@ export function StepMode({ historical }: StepModeProps) {
               </div>
             </div>
           </>
+        )}
+      </div>
+
+      {/* Video Overlay */}
+      <div className="space-y-4 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-zinc-300 uppercase tracking-wider">Overlay de Vídeo</p>
+          <button
+            onClick={() => setOverlayEnabled((v) => !v)}
+            className={[
+              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
+              overlayEnabled ? 'bg-zinc-300' : 'bg-zinc-700',
+            ].join(' ')}
+            role="switch"
+            aria-checked={overlayEnabled}
+          >
+            <span
+              className={[
+                'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                overlayEnabled ? 'translate-x-4' : 'translate-x-1',
+              ].join(' ')}
+            />
+          </button>
+        </div>
+
+        {overlayEnabled && (
+          <div className="space-y-4">
+            {/* File selector */}
+            <div className="space-y-1.5">
+              <label className="text-xs text-zinc-400">Arquivo de Overlay</label>
+              {overlayLibraryFiles.length > 0 ? (
+                <select
+                  value={overlayVideoPath}
+                  onChange={(e) => setOverlayVideoPath(e.target.value)}
+                  className="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                >
+                  <option value="">— escolha um arquivo —</option>
+                  {overlayLibraryFiles.map((f) => (
+                    <option key={f} value={f}>{f}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={overlayVideoPath}
+                  onChange={(e) => setOverlayVideoPath(e.target.value)}
+                  placeholder="/caminho/para/overlay.mp4"
+                  className="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                />
+              )}
+            </div>
+
+            {/* Scale slider */}
+            <div className="flex items-center gap-3">
+              <label className="text-xs text-zinc-400 w-20 flex-shrink-0">Escala</label>
+              <input
+                type="range"
+                min={10}
+                max={200}
+                value={overlayScalePct}
+                onChange={(e) => setOverlayScalePct(Number(e.target.value))}
+                className="flex-1 accent-zinc-300"
+              />
+              <span className="text-xs text-zinc-400 w-10 text-right">{overlayScalePct}%</span>
+            </div>
+
+            {/* Position grid */}
+            <div className="space-y-1.5">
+              <label className="text-xs text-zinc-400">Posição</label>
+              <PositionGrid value={overlayPosition} onChange={setOverlayPosition} />
+            </div>
+
+            {/* Appearances */}
+            <div className="space-y-1.5">
+              <label className="text-xs text-zinc-400">Nº de Aparições</label>
+              <div className="flex gap-2">
+                {([1, 2, 3, 4, 5] as const).map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => setOverlayAppearances(n)}
+                    className={[
+                      'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
+                      overlayAppearances === n
+                        ? 'bg-zinc-300 text-zinc-900 font-medium'
+                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
+                    ].join(' ')}
+                  >
+                    {n}×
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* End offset */}
+            <div className="flex items-center gap-3">
+              <label className="text-xs text-zinc-400 w-20 flex-shrink-0">Offset Final</label>
+              <input
+                type="range"
+                min={0}
+                max={10}
+                value={overlayEndOffsetSec}
+                onChange={(e) => setOverlayEndOffsetSec(Number(e.target.value))}
+                className="flex-1 accent-zinc-300"
+              />
+              <span className="text-xs text-zinc-400 w-6 text-right">{overlayEndOffsetSec}s</span>
+            </div>
+
+            {/* Chroma key */}
+            <div className="space-y-1.5">
+              <label className="text-xs text-zinc-400">Chroma Key</label>
+              <div className="flex flex-wrap gap-2">
+                {(['none', 'green', 'black', 'white', 'blue'] as const).map((key) => (
+                  <button
+                    key={key}
+                    onClick={() => setOverlayChromaKey(key)}
+                    className={[
+                      'rounded px-3 py-1.5 text-xs capitalize transition-colors',
+                      overlayChromaKey === key
+                        ? 'bg-zinc-300 text-zinc-900 font-medium'
+                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
+                    ].join(' ')}
+                  >
+                    {key === 'none' ? 'Nenhum' : key}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         )}
       </div>
 
