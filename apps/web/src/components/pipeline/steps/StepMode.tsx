@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAppStore } from '@/store/appStore';
 import { usePipelineStore } from '@/store/pipelineStore';
 import { AI_DEFAULTS, LONGFORM_DEFAULTS } from '@/types/pipeline';
-import type { AntiDupEffects, AntiDuplicateConfig, CaptionsConfig, GatePayload, ModeConfig, PriorClipsResponse, WorkflowMode } from '@/types/pipeline';
+import type { AntiDupEffects, AntiDuplicateConfig, BackgroundMusicConfig, CaptionsConfig, GatePayload, ModeConfig, PriorClipsResponse, WorkflowMode } from '@/types/pipeline';
 
 interface StepModeProps {
   historical?: GatePayload;
@@ -69,6 +69,14 @@ export function StepMode({ historical }: StepModeProps) {
   const [captionsShadowDistance, setCaptionsShadowDistance] = useState<number>(4);
   const [captionsVerticalOffset, setCaptionsVerticalOffset] = useState<number>(0);
 
+  // ── Background Music state ─────────────────────────────────────────────────
+  const [musicEnabled, setMusicEnabled] = useState<boolean>(false);
+  const [musicMode, setMusicMode] = useState<BackgroundMusicConfig['mode']>('random');
+  const [musicCustomPath, setMusicCustomPath] = useState<string>('');
+  const [musicSelectedTrack, setMusicSelectedTrack] = useState<string>('');
+  const [musicVolumePct, setMusicVolumePct] = useState<number>(7);
+  const [musicLibraryTracks, setMusicLibraryTracks] = useState<string[]>([]);
+
   // ── Derived validation (computed — not useState) ───────────────────────────
   const isMinDurationInvalid = selectedMode === 'ai' && minDurationSecs >= clipDurationSecs;
 
@@ -122,6 +130,13 @@ export function StepMode({ historical }: StepModeProps) {
         if (cfg.captions.shadow_color != null) setCaptionsShadowColor(cfg.captions.shadow_color);
         if (cfg.captions.shadow_distance != null) setCaptionsShadowDistance(cfg.captions.shadow_distance);
         if (cfg.captions.vertical_offset != null) setCaptionsVerticalOffset(cfg.captions.vertical_offset);
+      }
+      if (cfg.background_music) {
+        setMusicEnabled(cfg.background_music.enabled);
+        setMusicMode(cfg.background_music.mode);
+        if (cfg.background_music.custom_path) setMusicCustomPath(cfg.background_music.custom_path);
+        if (cfg.background_music.selected_track) setMusicSelectedTrack(cfg.background_music.selected_track);
+        setMusicVolumePct(cfg.background_music.volume_pct);
       }
       setIsLoadingPreference(false);
       return;
@@ -194,6 +209,12 @@ export function StepMode({ historical }: StepModeProps) {
         setCaptionsShadowColor(data.find((s) => s.key === 'captions_shadow_color')?.value ?? '#000000');
         setCaptionsShadowDistance(parseIntKey('captions_shadow_distance', 4));
         setCaptionsVerticalOffset(parseIntKey('captions_vertical_offset', 0));
+        setMusicEnabled(parseBoolKey('music_enabled', false));
+        const musicModeVal = data.find((s) => s.key === 'music_mode')?.value;
+        setMusicMode(musicModeVal === 'library' ? 'library' : musicModeVal === 'custom' ? 'custom' : 'random');
+        setMusicCustomPath(data.find((s) => s.key === 'music_custom_path')?.value ?? '');
+        setMusicSelectedTrack(data.find((s) => s.key === 'music_selected_track')?.value ?? '');
+        setMusicVolumePct(parseIntKey('music_volume_pct', 7));
       } catch (err) {
         console.warn('[StepMode] failed to load preference, defaulting to longform', err);
         setSelectedMode('longform');
@@ -223,6 +244,14 @@ export function StepMode({ historical }: StepModeProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!musicEnabled || musicMode !== 'library') return;
+    void fetch(`${goUrl}/api/music-library`)
+      .then((r) => r.json())
+      .then((tracks: string[]) => setMusicLibraryTracks(tracks))
+      .catch(() => setMusicLibraryTracks([]));
+  }, [goUrl, musicEnabled, musicMode]);
+
   // ── setEffect helper ───────────────────────────────────────────────────────
   const setEffect = (key: keyof AntiDupEffects, value: boolean | number) => {
     setAntiDupEffects((prev) => ({ ...prev, [key]: value }));
@@ -230,6 +259,13 @@ export function StepMode({ historical }: StepModeProps) {
 
   // ── buildModeConfig ────────────────────────────────────────────────────────
   function buildModeConfig(): ModeConfig {
+    const musicCfg: BackgroundMusicConfig | undefined = musicEnabled ? {
+      enabled: true,
+      mode: musicMode,
+      custom_path: musicCustomPath || undefined,
+      selected_track: musicSelectedTrack || undefined,
+      volume_pct: musicVolumePct,
+    } : undefined;
     const captionsCfg: CaptionsConfig | undefined = captionsEnabled ? {
       enabled: true,
       preset: captionsPreset,
@@ -267,6 +303,7 @@ export function StepMode({ historical }: StepModeProps) {
         skip_regenerate: skipRegenerate,
         upload_options: { privacy: uploadPrivacy, schedule_enabled: uploadScheduleEnabled, auto_enabled: uploadAutoEnabled, dry_run: uploadDryRun },
         captions: captionsCfg,
+        background_music: musicCfg,
       };
     }
     return {
@@ -278,6 +315,7 @@ export function StepMode({ historical }: StepModeProps) {
       skip_regenerate: skipRegenerate,
       upload_options: { privacy: uploadPrivacy, schedule_enabled: uploadScheduleEnabled, auto_enabled: uploadAutoEnabled, dry_run: uploadDryRun },
       captions: captionsCfg,
+      background_music: musicCfg,
     };
   }
 
@@ -330,6 +368,11 @@ export function StepMode({ historical }: StepModeProps) {
         { key: 'captions_shadow_color', value: captionsShadowColor },
         { key: 'captions_shadow_distance', value: String(captionsShadowDistance) },
         { key: 'captions_vertical_offset', value: String(captionsVerticalOffset) },
+        { key: 'music_enabled', value: String(musicEnabled) },
+        { key: 'music_mode', value: musicMode },
+        { key: 'music_custom_path', value: musicCustomPath },
+        { key: 'music_selected_track', value: musicSelectedTrack },
+        { key: 'music_volume_pct', value: String(musicVolumePct) },
       ];
       await Promise.allSettled(
         settingPairs.map(({ key, value }) =>
@@ -813,6 +856,108 @@ export function StepMode({ historical }: StepModeProps) {
               </div>
             </div>
           </>
+        )}
+      </div>
+
+      {/* Música de Fundo */}
+      <div className="space-y-4 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-zinc-300 uppercase tracking-wider">Música de Fundo</p>
+          <button
+            onClick={() => setMusicEnabled((v) => !v)}
+            className={[
+              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
+              musicEnabled ? 'bg-zinc-300' : 'bg-zinc-700',
+            ].join(' ')}
+            role="switch"
+            aria-checked={musicEnabled}
+          >
+            <span
+              className={[
+                'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                musicEnabled ? 'translate-x-4' : 'translate-x-1',
+              ].join(' ')}
+            />
+          </button>
+        </div>
+
+        {musicEnabled && (
+          <div className="space-y-4">
+            {/* Mode selector */}
+            <div className="space-y-1.5">
+              <label className="text-xs text-zinc-400">Seleção</label>
+              <div className="flex gap-2">
+                {([
+                  ['random', 'Aleatório'],
+                  ['library', 'Biblioteca'],
+                  ['custom', 'Arquivo'],
+                ] as [BackgroundMusicConfig['mode'], string][]).map(([m, label]) => (
+                  <button
+                    key={m}
+                    onClick={() => setMusicMode(m)}
+                    className={[
+                      'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
+                      musicMode === m
+                        ? 'bg-zinc-300 text-zinc-900 font-medium'
+                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
+                    ].join(' ')}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Library track list */}
+            {musicMode === 'library' && (
+              <div className="space-y-1.5">
+                <label className="text-xs text-zinc-400">Faixa</label>
+                {musicLibraryTracks.length === 0 ? (
+                  <p className="text-xs text-zinc-600">Nenhuma faixa encontrada. Configure o caminho da biblioteca nas configurações.</p>
+                ) : (
+                  <select
+                    value={musicSelectedTrack}
+                    onChange={(e) => setMusicSelectedTrack(e.target.value)}
+                    className="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                  >
+                    <option value="">— escolha uma faixa —</option>
+                    {musicLibraryTracks.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
+
+            {/* Custom path input */}
+            {musicMode === 'custom' && (
+              <div className="space-y-1.5">
+                <label className="text-xs text-zinc-400">Caminho do arquivo</label>
+                <input
+                  type="text"
+                  value={musicCustomPath}
+                  onChange={(e) => setMusicCustomPath(e.target.value)}
+                  placeholder="/caminho/para/musica.mp3"
+                  className="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                />
+              </div>
+            )}
+
+            {/* Volume slider */}
+            <div className="flex items-center gap-3">
+              <label className="text-xs text-zinc-400 w-16 flex-shrink-0">Volume</label>
+              <input
+                type="range"
+                min={0}
+                max={30}
+                value={musicVolumePct}
+                onChange={(e) => setMusicVolumePct(Number(e.target.value))}
+                className="flex-1 accent-zinc-300"
+              />
+              <span className="text-xs text-zinc-400 w-8 text-right">{musicVolumePct}%</span>
+            </div>
+            <p className="text-xs text-zinc-600">Recomendado: 5–10%</p>
+          </div>
         )}
       </div>
 

@@ -123,6 +123,15 @@ export interface CaptionsConfig {
   vertical_offset?: number; // -100–100
 }
 
+// ── BackgroundMusicConfig ─────────────────────────────────────────────────────
+export interface BackgroundMusicConfig {
+  enabled: boolean;
+  mode: 'random' | 'library' | 'custom';
+  custom_path?: string;
+  selected_track?: string;
+  volume_pct: number; // 0–30
+}
+
 // ── ModeConfig ────────────────────────────────────────────────────────────────
 
 export interface ModeConfig {
@@ -144,6 +153,7 @@ export interface ModeConfig {
     dry_run: boolean;
   };
   captions?: CaptionsConfig;
+  background_music?: BackgroundMusicConfig;
 }
 
 export const AI_DEFAULTS: Omit<ModeConfig, 'mode'> = {
