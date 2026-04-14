@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAppStore } from '@/store/appStore';
 import { usePipelineStore } from '@/store/pipelineStore';
 import { AI_DEFAULTS, LONGFORM_DEFAULTS } from '@/types/pipeline';
-import type { AntiDupEffects, AntiDuplicateConfig, GatePayload, ModeConfig, PriorClipsResponse, WorkflowMode } from '@/types/pipeline';
+import type { AntiDupEffects, AntiDuplicateConfig, CaptionsConfig, GatePayload, ModeConfig, PriorClipsResponse, WorkflowMode } from '@/types/pipeline';
 
 interface StepModeProps {
   historical?: GatePayload;
@@ -51,6 +51,24 @@ export function StepMode({ historical }: StepModeProps) {
   const [uploadAutoEnabled, setUploadAutoEnabled] = useState<boolean>(false);
   const [uploadDryRun, setUploadDryRun] = useState<boolean>(false);
 
+  // ── Captions state ─────────────────────────────────────────────────────────
+  const [captionsEnabled, setCaptionsEnabled] = useState<boolean>(false);
+  const [captionsPreset, setCaptionsPreset] = useState<CaptionsConfig['preset']>('simple');
+  const [captionsFontFamily, setCaptionsFontFamily] = useState<string>('');
+  const [captionsBold, setCaptionsBold] = useState<boolean>(false);
+  const [captionsItalic, setCaptionsItalic] = useState<boolean>(false);
+  const [captionsUppercase, setCaptionsUppercase] = useState<boolean>(false);
+  const [captionsFontSize, setCaptionsFontSize] = useState<number>(32);
+  const [captionsTextColor, setCaptionsTextColor] = useState<string>('#ffffff');
+  const [captionsBgEnabled, setCaptionsBgEnabled] = useState<boolean>(false);
+  const [captionsOutlineEnabled, setCaptionsOutlineEnabled] = useState<boolean>(false);
+  const [captionsOutlineColor, setCaptionsOutlineColor] = useState<string>('#000000');
+  const [captionsOutlineWidth, setCaptionsOutlineWidth] = useState<number>(2);
+  const [captionsShadowEnabled, setCaptionsShadowEnabled] = useState<boolean>(false);
+  const [captionsShadowColor, setCaptionsShadowColor] = useState<string>('#000000');
+  const [captionsShadowDistance, setCaptionsShadowDistance] = useState<number>(4);
+  const [captionsVerticalOffset, setCaptionsVerticalOffset] = useState<number>(0);
+
   // ── Derived validation (computed — not useState) ───────────────────────────
   const isMinDurationInvalid = selectedMode === 'ai' && minDurationSecs >= clipDurationSecs;
 
@@ -86,6 +104,24 @@ export function StepMode({ historical }: StepModeProps) {
         setUploadScheduleEnabled(cfg.upload_options.schedule_enabled);
         setUploadAutoEnabled(cfg.upload_options.auto_enabled);
         setUploadDryRun(cfg.upload_options.dry_run);
+      }
+      if (cfg.captions) {
+        setCaptionsEnabled(cfg.captions.enabled);
+        setCaptionsPreset(cfg.captions.preset);
+        if (cfg.captions.font_family != null) setCaptionsFontFamily(cfg.captions.font_family);
+        if (cfg.captions.bold != null) setCaptionsBold(cfg.captions.bold);
+        if (cfg.captions.italic != null) setCaptionsItalic(cfg.captions.italic);
+        if (cfg.captions.uppercase != null) setCaptionsUppercase(cfg.captions.uppercase);
+        if (cfg.captions.font_size != null) setCaptionsFontSize(cfg.captions.font_size);
+        if (cfg.captions.text_color != null) setCaptionsTextColor(cfg.captions.text_color);
+        if (cfg.captions.bg_enabled != null) setCaptionsBgEnabled(cfg.captions.bg_enabled);
+        if (cfg.captions.outline_enabled != null) setCaptionsOutlineEnabled(cfg.captions.outline_enabled);
+        if (cfg.captions.outline_color != null) setCaptionsOutlineColor(cfg.captions.outline_color);
+        if (cfg.captions.outline_width != null) setCaptionsOutlineWidth(cfg.captions.outline_width);
+        if (cfg.captions.shadow_enabled != null) setCaptionsShadowEnabled(cfg.captions.shadow_enabled);
+        if (cfg.captions.shadow_color != null) setCaptionsShadowColor(cfg.captions.shadow_color);
+        if (cfg.captions.shadow_distance != null) setCaptionsShadowDistance(cfg.captions.shadow_distance);
+        if (cfg.captions.vertical_offset != null) setCaptionsVerticalOffset(cfg.captions.vertical_offset);
       }
       setIsLoadingPreference(false);
       return;
@@ -141,6 +177,23 @@ export function StepMode({ historical }: StepModeProps) {
         setUploadScheduleEnabled(parseBoolKey('upload_schedule_enabled', false));
         setUploadAutoEnabled(parseBoolKey('upload_auto_enabled', false));
         setUploadDryRun(parseBoolKey('upload_dry_run', false));
+        setCaptionsEnabled(parseBoolKey('captions_enabled', false));
+        const captionsPresetVal = data.find((s) => s.key === 'captions_preset')?.value;
+        setCaptionsPreset(captionsPresetVal === 'bold' ? 'bold' : captionsPresetVal === 'word_by_word' ? 'word_by_word' : 'simple');
+        setCaptionsFontFamily(data.find((s) => s.key === 'captions_font_family')?.value ?? '');
+        setCaptionsBold(parseBoolKey('captions_bold', false));
+        setCaptionsItalic(parseBoolKey('captions_italic', false));
+        setCaptionsUppercase(parseBoolKey('captions_uppercase', false));
+        setCaptionsFontSize(parseIntKey('captions_font_size', 32));
+        setCaptionsTextColor(data.find((s) => s.key === 'captions_text_color')?.value ?? '#ffffff');
+        setCaptionsBgEnabled(parseBoolKey('captions_bg_enabled', false));
+        setCaptionsOutlineEnabled(parseBoolKey('captions_outline_enabled', false));
+        setCaptionsOutlineColor(data.find((s) => s.key === 'captions_outline_color')?.value ?? '#000000');
+        setCaptionsOutlineWidth(parseIntKey('captions_outline_width', 2));
+        setCaptionsShadowEnabled(parseBoolKey('captions_shadow_enabled', false));
+        setCaptionsShadowColor(data.find((s) => s.key === 'captions_shadow_color')?.value ?? '#000000');
+        setCaptionsShadowDistance(parseIntKey('captions_shadow_distance', 4));
+        setCaptionsVerticalOffset(parseIntKey('captions_vertical_offset', 0));
       } catch (err) {
         console.warn('[StepMode] failed to load preference, defaulting to longform', err);
         setSelectedMode('longform');
@@ -177,6 +230,24 @@ export function StepMode({ historical }: StepModeProps) {
 
   // ── buildModeConfig ────────────────────────────────────────────────────────
   function buildModeConfig(): ModeConfig {
+    const captionsCfg: CaptionsConfig | undefined = captionsEnabled ? {
+      enabled: true,
+      preset: captionsPreset,
+      font_family: captionsFontFamily || undefined,
+      bold: captionsBold,
+      italic: captionsItalic,
+      uppercase: captionsUppercase,
+      font_size: captionsFontSize,
+      text_color: captionsTextColor,
+      bg_enabled: captionsBgEnabled,
+      outline_enabled: captionsOutlineEnabled,
+      outline_color: captionsOutlineColor,
+      outline_width: captionsOutlineWidth,
+      shadow_enabled: captionsShadowEnabled,
+      shadow_color: captionsShadowColor,
+      shadow_distance: captionsShadowDistance,
+      vertical_offset: captionsVerticalOffset,
+    } : undefined;
     const antiDup: AntiDuplicateConfig = {
       enabled: antiDupEnabled,
       mode: antiDupMode,
@@ -195,6 +266,7 @@ export function StepMode({ historical }: StepModeProps) {
         anti_duplicate: antiDup,
         skip_regenerate: skipRegenerate,
         upload_options: { privacy: uploadPrivacy, schedule_enabled: uploadScheduleEnabled, auto_enabled: uploadAutoEnabled, dry_run: uploadDryRun },
+        captions: captionsCfg,
       };
     }
     return {
@@ -205,6 +277,7 @@ export function StepMode({ historical }: StepModeProps) {
       anti_duplicate: antiDup,
       skip_regenerate: skipRegenerate,
       upload_options: { privacy: uploadPrivacy, schedule_enabled: uploadScheduleEnabled, auto_enabled: uploadAutoEnabled, dry_run: uploadDryRun },
+      captions: captionsCfg,
     };
   }
 
@@ -241,6 +314,22 @@ export function StepMode({ historical }: StepModeProps) {
         { key: 'upload_schedule_enabled', value: String(uploadScheduleEnabled) },
         { key: 'upload_auto_enabled', value: String(uploadAutoEnabled) },
         { key: 'upload_dry_run', value: String(uploadDryRun) },
+        { key: 'captions_enabled', value: String(captionsEnabled) },
+        { key: 'captions_preset', value: captionsPreset },
+        { key: 'captions_font_family', value: captionsFontFamily },
+        { key: 'captions_bold', value: String(captionsBold) },
+        { key: 'captions_italic', value: String(captionsItalic) },
+        { key: 'captions_uppercase', value: String(captionsUppercase) },
+        { key: 'captions_font_size', value: String(captionsFontSize) },
+        { key: 'captions_text_color', value: captionsTextColor },
+        { key: 'captions_bg_enabled', value: String(captionsBgEnabled) },
+        { key: 'captions_outline_enabled', value: String(captionsOutlineEnabled) },
+        { key: 'captions_outline_color', value: captionsOutlineColor },
+        { key: 'captions_outline_width', value: String(captionsOutlineWidth) },
+        { key: 'captions_shadow_enabled', value: String(captionsShadowEnabled) },
+        { key: 'captions_shadow_color', value: captionsShadowColor },
+        { key: 'captions_shadow_distance', value: String(captionsShadowDistance) },
+        { key: 'captions_vertical_offset', value: String(captionsVerticalOffset) },
       ];
       await Promise.allSettled(
         settingPairs.map(({ key, value }) =>
@@ -724,6 +813,222 @@ export function StepMode({ historical }: StepModeProps) {
               </div>
             </div>
           </>
+        )}
+      </div>
+
+      {/* Captions */}
+      <div className="space-y-4 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-zinc-300 uppercase tracking-wider">Legendas</p>
+          <button
+            onClick={() => setCaptionsEnabled((v) => !v)}
+            className={[
+              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
+              captionsEnabled ? 'bg-zinc-300' : 'bg-zinc-700',
+            ].join(' ')}
+            role="switch"
+            aria-checked={captionsEnabled}
+          >
+            <span
+              className={[
+                'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                captionsEnabled ? 'translate-x-4' : 'translate-x-1',
+              ].join(' ')}
+            />
+          </button>
+        </div>
+
+        {captionsEnabled && (
+          <div className="space-y-4">
+            {/* Preset selector */}
+            <div className="space-y-1.5">
+              <label className="text-xs text-zinc-400">Preset</label>
+              <div className="flex gap-2">
+                {([
+                  ['simple', 'Simples'],
+                  ['bold', 'Negrito'],
+                  ['word_by_word', 'Palavra a Palavra'],
+                ] as [CaptionsConfig['preset'], string][]).map(([p, label]) => (
+                  <button
+                    key={p}
+                    onClick={() => setCaptionsPreset(p)}
+                    className={[
+                      'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
+                      captionsPreset === p
+                        ? 'bg-zinc-300 text-zinc-900 font-medium'
+                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
+                    ].join(' ')}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Font customization */}
+            <div className="space-y-3">
+              <p className="text-xs text-zinc-500">Personalizar</p>
+
+              <div className="space-y-1.5">
+                <label className="text-xs text-zinc-400">Fonte</label>
+                <input
+                  type="text"
+                  value={captionsFontFamily}
+                  onChange={(e) => setCaptionsFontFamily(e.target.value)}
+                  placeholder="Arial, Roboto, …"
+                  className="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                {([
+                  ['bold', captionsBold, setCaptionsBold, 'Negrito'],
+                  ['italic', captionsItalic, setCaptionsItalic, 'Itálico'],
+                  ['uppercase', captionsUppercase, setCaptionsUppercase, 'Maiúsculas'],
+                ] as [string, boolean, (v: boolean) => void, string][]).map(([key, val, setter, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setter(!val)}
+                    className={[
+                      'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
+                      val ? 'bg-zinc-300 text-zinc-900 font-medium' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
+                    ].join(' ')}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-3">
+                <label className="text-xs text-zinc-400 w-20 flex-shrink-0">Tamanho</label>
+                <input
+                  type="range"
+                  min={12}
+                  max={96}
+                  value={captionsFontSize}
+                  onChange={(e) => setCaptionsFontSize(Number(e.target.value))}
+                  className="flex-1 accent-zinc-300"
+                />
+                <span className="text-xs text-zinc-400 w-8 text-right">{captionsFontSize}px</span>
+              </div>
+            </div>
+
+            {/* Colors */}
+            <div className="space-y-3">
+              <p className="text-xs text-zinc-500">Cores</p>
+
+              <div className="flex items-center gap-3">
+                <label className="text-xs text-zinc-400 w-20 flex-shrink-0">Texto</label>
+                <input
+                  type="color"
+                  value={captionsTextColor}
+                  onChange={(e) => setCaptionsTextColor(e.target.value)}
+                  className="h-7 w-12 cursor-pointer rounded border border-zinc-700 bg-zinc-800"
+                />
+                <span className="text-xs text-zinc-500">{captionsTextColor}</span>
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={captionsBgEnabled}
+                  onChange={(e) => setCaptionsBgEnabled(e.target.checked)}
+                  className="rounded border-zinc-600 bg-zinc-800 text-zinc-300"
+                />
+                <span className="text-xs text-zinc-300">Fundo</span>
+              </label>
+
+              {/* Outline */}
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={captionsOutlineEnabled}
+                    onChange={(e) => setCaptionsOutlineEnabled(e.target.checked)}
+                    className="rounded border-zinc-600 bg-zinc-800 text-zinc-300"
+                  />
+                  <span className="text-xs text-zinc-300">Contorno</span>
+                </label>
+                {captionsOutlineEnabled && (
+                  <div className="ml-6 space-y-2">
+                    <div className="flex items-center gap-3">
+                      <label className="text-xs text-zinc-400 w-16 flex-shrink-0">Cor</label>
+                      <input
+                        type="color"
+                        value={captionsOutlineColor}
+                        onChange={(e) => setCaptionsOutlineColor(e.target.value)}
+                        className="h-7 w-12 cursor-pointer rounded border border-zinc-700 bg-zinc-800"
+                      />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <label className="text-xs text-zinc-400 w-16 flex-shrink-0">Espessura</label>
+                      <input
+                        type="range"
+                        min={1}
+                        max={10}
+                        value={captionsOutlineWidth}
+                        onChange={(e) => setCaptionsOutlineWidth(Number(e.target.value))}
+                        className="flex-1 accent-zinc-300"
+                      />
+                      <span className="text-xs text-zinc-400 w-4">{captionsOutlineWidth}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Shadow */}
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={captionsShadowEnabled}
+                    onChange={(e) => setCaptionsShadowEnabled(e.target.checked)}
+                    className="rounded border-zinc-600 bg-zinc-800 text-zinc-300"
+                  />
+                  <span className="text-xs text-zinc-300">Sombra</span>
+                </label>
+                {captionsShadowEnabled && (
+                  <div className="ml-6 space-y-2">
+                    <div className="flex items-center gap-3">
+                      <label className="text-xs text-zinc-400 w-16 flex-shrink-0">Cor</label>
+                      <input
+                        type="color"
+                        value={captionsShadowColor}
+                        onChange={(e) => setCaptionsShadowColor(e.target.value)}
+                        className="h-7 w-12 cursor-pointer rounded border border-zinc-700 bg-zinc-800"
+                      />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <label className="text-xs text-zinc-400 w-16 flex-shrink-0">Distância</label>
+                      <input
+                        type="range"
+                        min={0}
+                        max={20}
+                        value={captionsShadowDistance}
+                        onChange={(e) => setCaptionsShadowDistance(Number(e.target.value))}
+                        className="flex-1 accent-zinc-300"
+                      />
+                      <span className="text-xs text-zinc-400 w-4">{captionsShadowDistance}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Vertical offset */}
+            <div className="flex items-center gap-3">
+              <label className="text-xs text-zinc-400 w-20 flex-shrink-0">Offset Vertical</label>
+              <input
+                type="range"
+                min={-100}
+                max={100}
+                value={captionsVerticalOffset}
+                onChange={(e) => setCaptionsVerticalOffset(Number(e.target.value))}
+                className="flex-1 accent-zinc-300"
+              />
+              <span className="text-xs text-zinc-400 w-8 text-right">{captionsVerticalOffset}</span>
+            </div>
+          </div>
         )}
       </div>
 

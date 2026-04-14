@@ -103,6 +103,26 @@ export interface AntiDuplicateConfig {
   effects?: AntiDupEffects;
 }
 
+// ── CaptionsConfig ────────────────────────────────────────────────────────────
+export interface CaptionsConfig {
+  enabled: boolean;
+  preset: 'simple' | 'bold' | 'word_by_word';
+  font_family?: string;
+  bold?: boolean;
+  italic?: boolean;
+  uppercase?: boolean;
+  font_size?: number;       // 12–96
+  text_color?: string;      // hex
+  bg_enabled?: boolean;
+  outline_enabled?: boolean;
+  outline_color?: string;
+  outline_width?: number;   // 1–10
+  shadow_enabled?: boolean;
+  shadow_color?: string;
+  shadow_distance?: number; // 0–20
+  vertical_offset?: number; // -100–100
+}
+
 // ── ModeConfig ────────────────────────────────────────────────────────────────
 
 export interface ModeConfig {
@@ -123,6 +143,7 @@ export interface ModeConfig {
     auto_enabled: boolean;
     dry_run: boolean;
   };
+  captions?: CaptionsConfig;
 }
 
 export const AI_DEFAULTS: Omit<ModeConfig, 'mode'> = {
