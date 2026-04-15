@@ -64,6 +64,7 @@ interface PipelineState {
   // Download state (parallel download while on Mode screen)
   downloadComplete: boolean;
   videoReused: boolean;
+  pendingReuse: boolean;
 
   // Preview state
   previewStatus: PreviewStatus;
@@ -87,6 +88,7 @@ interface PipelineState {
   deleteRun: (goUrl: string, id: number) => Promise<void>;
   cancelRun: (goUrl: string, id: number) => Promise<void>;
   clearRun: () => void;
+  confirmReuse: () => void;
 
   // Actions — gate advances
   advance: (goUrl: string, id: number, req: AdvanceRequest) => Promise<void>;
@@ -131,6 +133,7 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
   sseCleanup: null,
   downloadComplete: false,
   videoReused: false,
+  pendingReuse: false,
 
   // Preview state
   previewStatus: 'idle',
@@ -255,6 +258,20 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
       gateHistory: {},
       downloadComplete: false,
       videoReused: false,
+      pendingReuse: false,
+    });
+  },
+
+  confirmReuse: () => {
+    const { run } = get();
+    if (!run) return;
+    set((s) => {
+      const newNavHistory = [...s.navHistory, run.state as RunState];
+      return {
+        pendingReuse: false,
+        navHistory: newNavHistory,
+        navIndex: newNavHistory.length - 1,
+      };
     });
   },
 
@@ -280,10 +297,12 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
       const data = (await res.json()) as { state: RunState; video_reused?: boolean };
+      const isReused = data.video_reused ?? false;
       set((s) => ({
         run: s.run?.id === id ? { ...s.run, state: data.state } : s.run,
-        videoReused: data.video_reused ?? false,
-        downloadComplete: data.video_reused ?? false, // if reused, download is already done
+        videoReused: isReused,
+        downloadComplete: isReused, // if reused, download is already done
+        pendingReuse: isReused, // block auto-navigation if reused
       }));
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'advance failed';
@@ -575,14 +594,23 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
 
         if (evt.type === 'state_changed' || evt.type === 'gate_opened') {
           const payload = evt.data as { run_id: number; state: RunState };
-          set((s) => {
-            const newNavHistory = [...s.navHistory, payload.state];
-            return {
+          const { pendingReuse } = get();
+
+          // If pending reuse, skip auto-navigation to let StepUrl show reuse card
+          if (pendingReuse && payload.state === 'WAITING_MODE') {
+            set((s) => ({
               run: s.run?.id === payload.run_id ? { ...s.run, state: payload.state } : s.run,
-              navHistory: newNavHistory,
-              navIndex: newNavHistory.length - 1,
-            };
-          });
+            }));
+          } else {
+            set((s) => {
+              const newNavHistory = [...s.navHistory, payload.state];
+              return {
+                run: s.run?.id === payload.run_id ? { ...s.run, state: payload.state } : s.run,
+                navHistory: newNavHistory,
+                navIndex: newNavHistory.length - 1,
+              };
+            });
+          }
           // Re-fetch full run so fields like video_path/duration_sec are fresh
           fetch(`${goUrl}/api/pipeline/runs/${payload.run_id}`)
             .then((r) => r.json())

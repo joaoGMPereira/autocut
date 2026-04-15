@@ -64,6 +64,10 @@ export function StepUrl({ historical }: StepUrlProps) {
   const resubmitFromBacked = usePipelineStore((s) => s.resubmitFromBacked);
   const isLoading = usePipelineStore((s) => s.isLoading);
   const error = usePipelineStore((s) => s.error);
+  const videoReused = usePipelineStore((s) => s.videoReused);
+  const pendingReuse = usePipelineStore((s) => s.pendingReuse);
+  const confirmReuse = usePipelineStore((s) => s.confirmReuse);
+  const redownload = usePipelineStore((s) => s.redownload);
   const fetchHistory = useUrlHistoryStore((s) => s.fetchHistory);
   const channels = useChannelStore((s) => s.channels);
   const fetchChannels = useChannelStore((s) => s.fetchChannels);
@@ -180,6 +184,32 @@ export function StepUrl({ historical }: StepUrlProps) {
 
         {!isHistorical && <UrlHistorySection goUrl={goUrl} onSelect={(u) => setUrl(u)} />}
       </div>
+
+      {pendingReuse && videoReused && (
+        <div className="space-y-3 rounded-md border border-zinc-700 bg-zinc-900 p-4">
+          <p className="text-sm text-zinc-300">Video já baixado anteriormente</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => confirmReuse()}
+              className="flex-1 rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-200"
+            >
+              Reusar e continuar
+            </button>
+            <button
+              onClick={() => {
+                const runId = usePipelineStore.getState().activeRunId;
+                if (runId) {
+                  void redownload(goUrl, runId);
+                }
+                confirmReuse();
+              }}
+              className="rounded-md border border-zinc-600 px-4 py-2 text-sm text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 transition-colors"
+            >
+              Re-baixar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

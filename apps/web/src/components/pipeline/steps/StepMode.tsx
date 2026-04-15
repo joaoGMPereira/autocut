@@ -26,8 +26,6 @@ export function StepMode({ historical }: StepModeProps) {
   const previewUrl = usePipelineStore((s) => s.previewUrl);
   const previewError = usePipelineStore((s) => s.previewError);
   const downloadComplete = usePipelineStore((s) => s.downloadComplete);
-  const videoReused = usePipelineStore((s) => s.videoReused);
-  const redownload = usePipelineStore((s) => s.redownload);
   const phaseProgress = usePipelineStore((s) => s.phaseProgress);
   const channels = useChannelStore((s) => s.channels);
   const fetchChannels = useChannelStore((s) => s.fetchChannels);
@@ -2106,40 +2104,8 @@ export function StepMode({ historical }: StepModeProps) {
             </>
           )}
 
-          {/* State: Video reused — show toggle */}
-          {downloadComplete && videoReused && (
-            <>
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium text-zinc-300">Preview</h3>
-                <button
-                  onClick={() => {
-                    if (!activeRunId) return;
-                    const cfg = buildModeConfig();
-                    void generatePreview(goUrl, activeRunId, cfg);
-                  }}
-                  disabled={previewStatus === 'generating'}
-                  className="rounded-md bg-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {previewStatus === 'generating' ? 'Generating…' : previewStatus === 'ready' ? 'Regenerate Preview' : 'Generate Preview'}
-                </button>
-              </div>
-              <div className="flex items-center justify-between rounded-md bg-zinc-800 px-3 py-2">
-                <span className="text-xs text-zinc-400">Reusar video já baixado</span>
-                <button
-                  onClick={() => {
-                    if (!activeRunId) return;
-                    void redownload(goUrl, activeRunId);
-                  }}
-                  className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors underline"
-                >
-                  Re-baixar
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* State: Ready (download complete, not reused) */}
-          {downloadComplete && !videoReused && (
+          {/* State: Ready (download complete) */}
+          {downloadComplete && (
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium text-zinc-300">Preview</h3>
               <button
