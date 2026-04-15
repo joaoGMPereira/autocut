@@ -7,6 +7,8 @@ import { useChannelStore } from '@/store/channelStore';
 import { AI_DEFAULTS, LONGFORM_DEFAULTS } from '@/types/pipeline';
 import type { AntiDupEffects, AntiDuplicateConfig, BackgroundMusicConfig, BrandingConfig, CaptionsConfig, GatePayload, ModeConfig, PriorClipsResponse, TextOverlayItem, TextOverlaysConfig, VideoOverlayConfig, WorkflowMode } from '@/types/pipeline';
 import { PositionGrid } from '@/components/ui/PositionGrid';
+import { TextStyleEditorPanel } from '@/components/post-opt/TextStyleEditorPanel';
+import { DEFAULT_STYLE } from '@/types/text-overlay';
 
 interface StepModeProps {
   historical?: GatePayload;
@@ -116,6 +118,7 @@ export function StepMode({ historical }: StepModeProps) {
   // ── Text Overlays state ────────────────────────────────────────────────────
   const [textOverlaysEnabled, setTextOverlaysEnabled] = useState<boolean>(false);
   const [textOverlayItems, setTextOverlayItems] = useState<TextOverlayItem[]>([]);
+  const [expandedOverlayIdx, setExpandedOverlayIdx] = useState<number | null>(null);
 
   const [presetName, setPresetName] = useState<string>('');
   const [presets, setPresets] = useState<Array<{ name: string; config: ModeConfig; updatedAt: number }>>([]);
@@ -405,14 +408,22 @@ export function StepMode({ historical }: StepModeProps) {
 
   // ── Text Overlay item helpers ──────────────────────────────────────────────
   const addTextOverlayItem = () => {
+    const nextIdx = textOverlayItems.length;
     setTextOverlayItems((prev) => [
       ...prev,
-      { text: '', apply_full: true, start_sec: 0, end_sec: 60, position: 'bottom_center' },
+      { text: '', apply_full: true, start_sec: 0, end_sec: 60, position: 'bottom_center', style: { ...DEFAULT_STYLE } },
     ]);
+    setExpandedOverlayIdx(nextIdx);
   };
 
   const removeTextOverlayItem = (idx: number) => {
     setTextOverlayItems((prev) => prev.filter((_, i) => i !== idx));
+    setExpandedOverlayIdx((prev) => {
+      if (prev === null) return null;
+      if (prev === idx) return null;
+      if (prev > idx) return prev - 1;
+      return prev;
+    });
   };
 
   const updateTextOverlayItem = (idx: number, patch: Partial<TextOverlayItem>) => {
@@ -1199,16 +1210,26 @@ export function StepMode({ historical }: StepModeProps) {
         {textOverlaysEnabled && (
           <div className="space-y-4">
             {/* Item list */}
-            {textOverlayItems.map((item, idx) => (
+            {textOverlayItems.map((item, idx) => {
+              const isExpanded = expandedOverlayIdx === idx;
+              return (
               <div key={idx} className="space-y-3 rounded-md border border-zinc-700 p-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-zinc-400">Overlay #{idx + 1}</span>
-                  <button
-                    onClick={() => removeTextOverlayItem(idx)}
-                    className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
-                  >
-                    Remover
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setExpandedOverlayIdx(isExpanded ? null : idx)}
+                      className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                    >
+                      {isExpanded ? 'Recolher estilo ▲' : 'Editar estilo ▼'}
+                    </button>
+                    <button
+                      onClick={() => removeTextOverlayItem(idx)}
+                      className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+                    >
+                      Remover
+                    </button>
+                  </div>
                 </div>
 
                 {/* Text */}
@@ -1219,6 +1240,15 @@ export function StepMode({ historical }: StepModeProps) {
                   rows={2}
                   className="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-none"
                 />
+
+                {/* Style editor — collapsed by default */}
+                {isExpanded && (
+                  <TextStyleEditorPanel
+                    config={item.style ?? { ...DEFAULT_STYLE }}
+                    onConfigChange={(style) => updateTextOverlayItem(idx, { style })}
+                    showBackgroundOptions
+                  />
+                )}
 
                 {/* Apply full video */}
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -1266,7 +1296,8 @@ export function StepMode({ historical }: StepModeProps) {
                   />
                 </div>
               </div>
-            ))}
+              );
+            })}
 
             {/* Add button */}
             <button

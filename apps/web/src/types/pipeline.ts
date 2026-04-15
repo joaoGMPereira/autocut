@@ -1,3 +1,5 @@
+import type { TextStyleConfig } from './text-overlay';
+
 // ── RunState ──────────────────────────────────────────────────────────────────
 
 export type RunState =
@@ -162,6 +164,7 @@ export interface TextOverlayItem {
   start_sec: number;
   end_sec: number;
   position: string;
+  style?: TextStyleConfig;
 }
 
 export interface TextOverlaysConfig {
