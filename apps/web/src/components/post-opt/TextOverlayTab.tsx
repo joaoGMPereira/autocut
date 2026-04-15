@@ -30,11 +30,12 @@ export function TextOverlayTab() {
   };
 
   const addOverlay = () => {
+    const nextIndex = config.overlays.length;
     setConfig((prev) => ({
       ...prev,
       overlays: [...prev.overlays, { ...DEFAULT_OVERLAY, style: { ...DEFAULT_OVERLAY.style } }],
     }));
-    setExpandedIndex(config.overlays.length); // expand the new one
+    setExpandedIndex(nextIndex);
   };
 
   const removeOverlay = (index: number) => {
@@ -42,7 +43,12 @@ export function TextOverlayTab() {
       ...prev,
       overlays: prev.overlays.filter((_, i) => i !== index),
     }));
-    setExpandedIndex((prev) => (prev === index ? null : prev));
+    setExpandedIndex((prev) => {
+      if (prev === null) return null;
+      if (prev === index) return null;
+      if (prev > index) return prev - 1;
+      return prev;
+    });
   };
 
   return (
