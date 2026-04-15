@@ -14,13 +14,16 @@ import (
 
 // PreviewRequest contains everything needed to generate a preview video.
 type PreviewRequest struct {
-	RunID       int64
-	VideoPath   string
-	DurationSec int64
-	ChannelCfg  database.ChannelConfig
-	ModeCfg     json.RawMessage // raw ModeConfig JSON from POST body
-	DataDir     string          // root dir for output files ({dataDir}/previews/)
-	OnProgress  func(float64)   // callback: percent 0–100
+	RunID          int64
+	VideoPath      string
+	DurationSec    int64
+	ChannelCfg     database.ChannelConfig
+	ModeCfg        json.RawMessage // raw ModeConfig JSON from POST body
+	DataDir        string          // root dir for output files ({dataDir}/previews/)
+	OnProgress     func(float64)   // callback: percent 0–100
+	BlurEdgePct    float64         // 0=disabled, 1-100=edge blur percentage
+	NoiseStrength  float64         // 0=disabled, 1-10=noise strength
+	TranscriptPath string          // optional: path to transcript JSON for real captions
 }
 
 // GeneratePreview produces a preview MP4 for a pipeline run.
@@ -59,13 +62,32 @@ func GeneratePreview(ctx context.Context, req PreviewRequest) (string, error) {
 		startSec = 0
 	}
 
+	// On-demand whisper transcription: if captions are enabled but no transcript exists,
+	// transcribe just the 15-second segment using whisper-cli.
+	transcriptPath := req.TranscriptPath
+	if transcriptPath == "" && req.ChannelCfg.PreviewCaptionsEnabled {
+		if modelPath := FindWhisperModel(req.DataDir); modelPath != "" {
+			log.Info("transcribing preview segment with whisper", "model", modelPath, "start_sec", startSec)
+			if tp, cleanupTranscript, tErr := TranscribeSegment(req.VideoPath, startSec, segmentDuration, modelPath); tErr == nil {
+				transcriptPath = tp
+				defer cleanupTranscript()
+				log.Info("whisper transcription complete", "path", tp)
+			} else {
+				log.Warn("whisper transcription failed, using placeholder captions", "err", tErr)
+			}
+		}
+	}
+
 	// Build ffmpeg args using the shared effect chain
 	effectReq := EffectRequest{
-		VideoPath:   req.VideoPath,
-		StartSec:    startSec,
-		DurationSec: segmentDuration,
-		ChannelCfg:  req.ChannelCfg,
-		OutputPath:  outPath,
+		VideoPath:      req.VideoPath,
+		StartSec:       startSec,
+		DurationSec:    segmentDuration,
+		ChannelCfg:     req.ChannelCfg,
+		OutputPath:     outPath,
+		BlurEdgePct:    req.BlurEdgePct,
+		NoiseStrength:  req.NoiseStrength,
+		TranscriptPath: transcriptPath,
 	}
 	args, cleanups := BuildEffectChain(log, effectReq)
 	for _, fn := range cleanups {

@@ -154,6 +154,14 @@ func (r *PipelineRunRepo) SetVideoPath(ctx context.Context, id int64, path strin
 	return nil
 }
 
+// SetChannelID updates the channel_id for a pipeline run.
+func (r *PipelineRunRepo) SetChannelID(ctx context.Context, id, channelID int64) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE pipeline_runs SET channel_id = ? WHERE id = ?`,
+		channelID, id)
+	return err
+}
+
 // SetDownloadResult atomically persists video_path, video_title, and duration_sec
 // after a successful download. All three fields must be non-empty/non-zero — callers
 // must verify this before transitioning to WAITING_MODE.
@@ -166,6 +174,23 @@ func (r *PipelineRunRepo) SetDownloadResult(ctx context.Context, id int64, path,
 		return fmt.Errorf("set download result pipeline_run %d: %w", id, err)
 	}
 	return nil
+}
+
+// FindTranscriptByURL returns the transcript_path from the most recent run with the given URL
+// that has a non-empty transcript_path. Returns ("", nil) if none found.
+func (r *PipelineRunRepo) FindTranscriptByURL(ctx context.Context, url string) (string, error) {
+	var path string
+	err := r.db.QueryRowContext(ctx,
+		`SELECT transcript_path FROM pipeline_runs WHERE url = ? AND transcript_path != '' ORDER BY id DESC LIMIT 1`,
+		url,
+	).Scan(&path)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("find transcript by url: %w", err)
+	}
+	return path, nil
 }
 
 // FindExistingVideo finds a prior run with the same URL that has a non-empty video_path.

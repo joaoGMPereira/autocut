@@ -2,6 +2,7 @@ package database
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -29,6 +30,7 @@ var allMigrations = []migration{
 	{version: 12, name: "seed_channels_oauth", fn: migrateV12},
 	{version: 13, name: "seed_app_settings_from_channel", fn: migrateV13},
 	{version: 14, name: "seed_channel_configs_and_defaults", fn: migrateV14},
+	{version: 15, name: "seed_overlay_individual_keys", fn: migrateV15},
 }
 
 // migrateV1 creates all 11 application tables.
@@ -835,6 +837,121 @@ func migrateV14(tx *sql.Tx) error {
 		if _, err := tx.Exec(updateIfDefault, u.value, u.key); err != nil {
 			return fmt.Errorf("migrateV14: update app_setting %q: %w", u.key, err)
 		}
+	}
+
+	return nil
+}
+
+// migrateV15 seeds individual overlay keys from the channel_config's
+// preview_video_overlay_config_json field. The frontend (StepMode.tsx) reads
+// 6 individual keys (overlay_enabled, overlay_video_path, etc.) but v13 stored
+// a single overlay_config_json blob which the frontend ignores.
+func migrateV15(tx *sql.Tx) error {
+	const insertSQL = `INSERT OR IGNORE INTO app_settings (key, value, updated_at) VALUES (?, ?, CAST(strftime('%s','now') AS INTEGER) * 1000)`
+
+	seed := func(key, value string) error {
+		_, err := tx.Exec(insertSQL, key, value)
+		if err != nil {
+			return fmt.Errorf("migrateV15: seed app_setting %q: %w", key, err)
+		}
+		return nil
+	}
+
+	// --- Find the favorite channel (or first channel) ---
+	var channelID int64
+	var hasChannel bool
+
+	err := tx.QueryRow(`SELECT id FROM channels WHERE is_favorite = 1 ORDER BY id LIMIT 1`).Scan(&channelID)
+	if err == sql.ErrNoRows {
+		err = tx.QueryRow(`SELECT id FROM channels ORDER BY id LIMIT 1`).Scan(&channelID)
+	}
+	if err == sql.ErrNoRows {
+		hasChannel = false
+	} else if err != nil {
+		return fmt.Errorf("migrateV15: find channel: %w", err)
+	} else {
+		hasChannel = true
+	}
+
+	if hasChannel {
+		var overlayJSON string
+		err = tx.QueryRow(`SELECT preview_video_overlay_config_json FROM channel_config WHERE channel_id = ?`, channelID).Scan(&overlayJSON)
+		if err != nil && err != sql.ErrNoRows {
+			return fmt.Errorf("migrateV15: read channel_config: %w", err)
+		}
+
+		if err == nil && overlayJSON != "" && overlayJSON != "{}" {
+			type appearance struct {
+				StartPct float64 `json:"start_pct"`
+				EndPct   float64 `json:"end_pct"`
+			}
+			var cfg struct {
+				Enabled     bool         `json:"enabled"`
+				Path        string       `json:"path"`
+				ScalePct    int          `json:"scale_pct"`
+				Position    string       `json:"position"`
+				ChromaKey   string       `json:"chroma_key"`
+				Appearances []appearance `json:"appearances"`
+			}
+
+			if jsonErr := json.Unmarshal([]byte(overlayJSON), &cfg); jsonErr == nil {
+				// overlay_enabled: force false if path is empty
+				enabled := cfg.Enabled && cfg.Path != ""
+				if enabled {
+					if err := seed("overlay_enabled", "true"); err != nil {
+						return err
+					}
+				} else {
+					if err := seed("overlay_enabled", "false"); err != nil {
+						return err
+					}
+				}
+
+				if cfg.Path != "" {
+					if err := seed("overlay_video_path", cfg.Path); err != nil {
+						return err
+					}
+				}
+
+				scalePct := cfg.ScalePct
+				if scalePct == 0 {
+					scalePct = 100
+				}
+				if err := seed("overlay_scale_pct", fmt.Sprintf("%d", scalePct)); err != nil {
+					return err
+				}
+
+				position := cfg.Position
+				if position == "" {
+					position = "mid_center"
+				}
+				if err := seed("overlay_position", position); err != nil {
+					return err
+				}
+
+				appearances := len(cfg.Appearances)
+				if appearances == 0 {
+					appearances = 1
+				}
+				if err := seed("overlay_appearances", fmt.Sprintf("%d", appearances)); err != nil {
+					return err
+				}
+
+				chromaKey := cfg.ChromaKey
+				if chromaKey == "" {
+					chromaKey = "none"
+				}
+				if err := seed("overlay_chroma_key", chromaKey); err != nil {
+					return err
+				}
+			}
+			// If JSON is malformed, skip silently (same pattern as v13).
+		}
+	}
+
+	// Delete the stale overlay_config_json key seeded by v13.
+	if _, err := tx.Exec(`DELETE FROM app_settings WHERE key = 'overlay_config_json'`); err != nil {
+		return fmt.Errorf("migrateV15: delete stale overlay_config_json: %w", err)
 	}
 
 	return nil

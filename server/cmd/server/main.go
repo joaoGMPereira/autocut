@@ -73,10 +73,13 @@ func main() {
 	repo := database.NewPipelineRunRepo(db, slog.Default())
 	historyRepo := database.NewURLHistoryRepo(db, slog.Default())
 	settingRepo := database.NewAppSettingRepo(db, slog.Default())
+	channelCfgRepo := database.NewChannelConfigRepo(db, slog.Default())
 	ytDl := downloader.NewYouTubeDownloader("")
 	twDl := downloader.NewTwitchDownloader("")
 
-	pipelineSvc := pipeline.NewService(repo, historyRepo, sseHub, ytDl, twDl, *dir)
+	highlightRepo := database.NewPipelineHighlightRepo(db, slog.Default())
+	clipRepo := database.NewPipelineClipRepo(db, slog.Default())
+	pipelineSvc := pipeline.NewService(repo, historyRepo, highlightRepo, clipRepo, channelCfgRepo, sseHub, ytDl, twDl, *dir)
 	pipelineHandler := handlers.NewPipelineHandler(pipelineSvc, sseHub)
 	downloadHandler := handlers.NewDownloadHandler(sseHub, ytDl, twDl, nil)
 	urlHistoryHandler := handlers.NewURLHistoryHandler(historyRepo)
@@ -101,8 +104,7 @@ func main() {
 	ollamaHandler := handlers.NewOllamaHandler()
 	statsHandler := handlers.NewStatsHandler(stats.New())
 	mediaLibraryHandler := handlers.NewMediaLibraryHandler(settingRepo)
-	channelCfgRepo := database.NewChannelConfigRepo(db, slog.Default())
-	previewHandler := handlers.NewPreviewHandler(repo, channelCfgRepo, *dir, sseHub)
+	previewHandler := handlers.NewPreviewHandler(repo, channelCfgRepo, settingRepo, *dir, sseHub)
 
 	router := api.NewRouter(
 		pipelineHandler,

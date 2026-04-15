@@ -100,8 +100,12 @@ export function StepUrl({ historical }: StepUrlProps) {
     if (!trimmed || !selectedChannelId) return;
     const runId = await createRun(goUrl);
     if (!runId) return;
-    subscribeSSE(goUrl, runId);
+    // advance BEFORE subscribeSSE: the backend publishes state_changed SSE
+    // synchronously during Advance for the reuse case. If SSE is connected
+    // first, the event arrives before the HTTP response sets pendingReuse,
+    // causing auto-navigation that skips the reuse card.
     await advance(goUrl, runId, { url: trimmed, channel_id: selectedChannelId });
+    subscribeSSE(goUrl, runId);
   };
 
   const handleResubmit = async () => {

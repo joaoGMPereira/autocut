@@ -69,8 +69,9 @@ type downloadCompletePayload struct {
 // AdvanceRequest holds all possible gate-advance payloads.
 // Fields are interpreted based on the run's current state.
 type AdvanceRequest struct {
-	URL            string `json:"url"`
-	Mode           string `json:"mode"`
+	URL            string          `json:"url"`
+	ChannelID      *int64          `json:"channel_id"`
+	Mode           string          `json:"mode"`
 	ModeConfigJSON json.RawMessage `json:"mode_config"`
 }
 
@@ -187,6 +188,11 @@ func (s *Service) Advance(ctx context.Context, id int64, req AdvanceRequest) (Ad
 						}
 						return AdvanceResult{}, fmt.Errorf("advance run %d: %w", id, err)
 					}
+					if req.ChannelID != nil {
+						if err := s.repo.SetChannelID(ctx, id, *req.ChannelID); err != nil {
+							s.log.Warn("failed to save channel_id on run", "run_id", id, "err", err)
+						}
+					}
 					// Set download result (video_path, title, duration).
 					if err := s.repo.SetDownloadResult(ctx, id, destPath, existingTitle, existingDuration); err != nil {
 						s.log.Error("set download result failed after reuse", "run_id", id, "err", err)
@@ -212,6 +218,11 @@ func (s *Service) Advance(ctx context.Context, id int64, req AdvanceRequest) (Ad
 				return AdvanceResult{}, fmt.Errorf("run %d not found or not in WAITING_URL state", id)
 			}
 			return AdvanceResult{}, fmt.Errorf("advance run %d: %w", id, err)
+		}
+		if req.ChannelID != nil {
+			if err := s.repo.SetChannelID(ctx, id, *req.ChannelID); err != nil {
+				s.log.Warn("failed to save channel_id on run", "run_id", id, "err", err)
+			}
 		}
 		s.log.Info("pipeline run advancing", "run_id", id, "url", normalized)
 		runCtx, cancel := context.WithCancel(context.Background())

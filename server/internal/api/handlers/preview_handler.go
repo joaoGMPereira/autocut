@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -18,24 +19,27 @@ import (
 
 // PreviewHandler handles pipeline run preview generation requests.
 type PreviewHandler struct {
-	runRepo       *database.PipelineRunRepo
+	runRepo        *database.PipelineRunRepo
 	channelCfgRepo *database.ChannelConfigRepo
-	dataDir       string
-	hub           *hub.SSEHub
-	log           *slog.Logger
-	inFlight      sync.Map // map[int64]chan struct{} — per-run concurrency guard
+	settingRepo    *database.AppSettingRepo
+	dataDir        string
+	hub            *hub.SSEHub
+	log            *slog.Logger
+	inFlight       sync.Map // map[int64]chan struct{} — per-run concurrency guard
 }
 
 // NewPreviewHandler creates a PreviewHandler with all dependencies.
 func NewPreviewHandler(
 	runRepo *database.PipelineRunRepo,
 	channelCfgRepo *database.ChannelConfigRepo,
+	settingRepo *database.AppSettingRepo,
 	dataDir string,
 	h *hub.SSEHub,
 ) *PreviewHandler {
 	return &PreviewHandler{
 		runRepo:        runRepo,
 		channelCfgRepo: channelCfgRepo,
+		settingRepo:    settingRepo,
 		dataDir:        dataDir,
 		hub:            h,
 		log:            slog.With("handler", "preview"),
@@ -112,6 +116,33 @@ func (h *PreviewHandler) PostPreview(w http.ResponseWriter, r *http.Request) {
 
 	// Apply mode overrides from the frontend ModeConfig
 	processor.ApplyModeOverrides(&channelCfg, req.ModeConfig)
+	blurEdgePct, noiseStrength := processor.ParseAntiDupExtras(req.ModeConfig)
+
+	// Resolve relative watermark path: try overlay_library_path from settings, then dataDir
+	overlayLibraryPath, _ := h.settingRepo.Get(r.Context(), "overlay_library_path")
+	resolveVideoOverlayPath(&channelCfg, overlayLibraryPath, h.dataDir)
+
+	// Fallback: use channel avatar as logo when logo is enabled but path is missing
+	if channelCfg.BrandingLogoEnabled && (!channelCfg.BrandingLogoPath.Valid || channelCfg.BrandingLogoPath.String == "") && run.ChannelID.Valid {
+		cid := run.ChannelID.Int64
+		for _, ext := range []string{".jpg", ".jpeg", ".png"} {
+			avatarPath := filepath.Join(h.dataDir, "avatars", fmt.Sprintf("%d%s", cid, ext))
+			if _, err := os.Stat(avatarPath); err == nil {
+				channelCfg.BrandingLogoPath = sql.NullString{String: avatarPath, Valid: true}
+				h.log.Info("logo fallback: using channel avatar", "path", avatarPath)
+				break
+			}
+		}
+	}
+
+	// Resolve transcript path: use run's own path, or look up prior run with same URL
+	transcriptPath := run.TranscriptPath
+	if transcriptPath == "" && run.URL != "" {
+		if found, err := h.runRepo.FindTranscriptByURL(r.Context(), run.URL); err == nil && found != "" {
+			transcriptPath = found
+			h.log.Info("transcript fallback: using prior run", "url", run.URL, "path", found)
+		}
+	}
 
 	// Return 202 immediately, spawn generation goroutine
 	w.Header().Set("Content-Type", "application/json")
@@ -124,12 +155,15 @@ func (h *PreviewHandler) PostPreview(w http.ResponseWriter, r *http.Request) {
 		defer h.inFlight.Delete(id)
 
 		previewReq := processor.PreviewRequest{
-			RunID:       id,
-			VideoPath:   run.VideoPath,
-			DurationSec: run.DurationSec,
-			ChannelCfg:  channelCfg,
-			ModeCfg:     req.ModeConfig,
-			DataDir:     h.dataDir,
+			RunID:          id,
+			VideoPath:      run.VideoPath,
+			DurationSec:    run.DurationSec,
+			ChannelCfg:     channelCfg,
+			ModeCfg:        req.ModeConfig,
+			DataDir:        h.dataDir,
+			BlurEdgePct:    blurEdgePct,
+			NoiseStrength:  noiseStrength,
+			TranscriptPath: transcriptPath,
 			OnProgress: func(pct float64) {
 				h.hub.Publish(jobID, hub.SSEEvent{
 					Type: "preview_progress",
@@ -197,5 +231,40 @@ func (h *PreviewHandler) GetPreviewFile(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "video/mp4")
 	// http.ServeContent handles Range headers, ETag, and 206 automatically
 	http.ServeContent(w, r, filepath.Base(previewPath), stat.ModTime(), f)
+}
+
+// resolveVideoOverlayPath patches cc.PreviewVideoOverlayConfigJSON so that relative
+// video paths are resolved against dataDir. This handles the case where the frontend
+// stores just a filename (e.g. "seguir-1.mp4") without a full path.
+// Search order: overlayLibraryPath, then dataDir.
+func resolveVideoOverlayPath(cc *database.ChannelConfig, overlayLibraryPath, dataDir string) {
+	if cc.PreviewVideoOverlayConfigJSON == "" || cc.PreviewVideoOverlayConfigJSON == "{}" {
+		return
+	}
+	var cfg processor.VideoOverlayConfig
+	if err := json.Unmarshal([]byte(cc.PreviewVideoOverlayConfigJSON), &cfg); err != nil {
+		return
+	}
+	if !cfg.Enabled || cfg.Path == "" {
+		return
+	}
+	if filepath.IsAbs(cfg.Path) {
+		return
+	}
+	// Try overlay library path first, then dataDir
+	searchDirs := []string{overlayLibraryPath, dataDir}
+	for _, dir := range searchDirs {
+		if dir == "" {
+			continue
+		}
+		candidate := filepath.Join(dir, cfg.Path)
+		if _, err := os.Stat(candidate); err == nil {
+			cfg.Path = candidate
+			if b, err := json.Marshal(cfg); err == nil {
+				cc.PreviewVideoOverlayConfigJSON = string(b)
+			}
+			return
+		}
+	}
 }
 

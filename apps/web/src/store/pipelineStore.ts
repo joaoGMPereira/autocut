@@ -298,12 +298,38 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
       const data = (await res.json()) as { state: RunState; video_reused?: boolean };
       const isReused = data.video_reused ?? false;
-      set((s) => ({
-        run: s.run?.id === id ? { ...s.run, state: data.state } : s.run,
-        videoReused: isReused,
-        downloadComplete: isReused, // if reused, download is already done
-        pendingReuse: isReused, // block auto-navigation if reused
-      }));
+      set((s) => {
+        if (isReused) {
+          // Reuse detected — block auto-navigation, let StepUrl show reuse card
+          return {
+            run: s.run?.id === id ? { ...s.run, state: data.state } : s.run,
+            videoReused: true,
+            downloadComplete: true,
+            pendingReuse: true,
+          };
+        }
+        // Normal case — navigate to the new state directly from HTTP response
+        // (SSE state_changed may not arrive if EventSource connects after Advance returns)
+        const newNavHistory = [...s.navHistory, data.state];
+        return {
+          run: s.run?.id === id ? { ...s.run, state: data.state } : s.run,
+          videoReused: false,
+          downloadComplete: false,
+          pendingReuse: false,
+          navHistory: newNavHistory,
+          navIndex: newNavHistory.length - 1,
+        };
+      });
+      // Re-fetch full run for fresh fields (video_path, duration_sec after reuse copy)
+      fetch(`${goUrl}/api/pipeline/runs/${id}`)
+        .then((r) => r.json())
+        .then((rdata: unknown) => {
+          const { run: freshRun } = rdata as { run: Run };
+          set((s) => ({
+            run: s.run?.id === freshRun.id ? { ...freshRun, state: s.run!.state } : s.run,
+          }));
+        })
+        .catch(() => { /* best-effort refresh */ });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'advance failed';
       log.error('[pipelineStore] advance failed', { error: msg });
@@ -603,6 +629,12 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
             }));
           } else {
             set((s) => {
+              // Dedup: advance() may have already pushed this state via HTTP response
+              if (s.navHistory[s.navHistory.length - 1] === payload.state) {
+                return {
+                  run: s.run?.id === payload.run_id ? { ...s.run, state: payload.state } : s.run,
+                };
+              }
               const newNavHistory = [...s.navHistory, payload.state];
               return {
                 run: s.run?.id === payload.run_id ? { ...s.run, state: payload.state } : s.run,
@@ -670,7 +702,7 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
 
         if (evt.type === 'preview_ready') {
           const payload = evt.data as SSEPreviewReadyPayload;
-          set({ previewStatus: 'ready', previewUrl: payload.url, previewPercent: 100 });
+          set({ previewStatus: 'ready', previewUrl: `${payload.url}?t=${Date.now()}`, previewPercent: 100 });
         }
 
         if (evt.type === 'preview_error') {

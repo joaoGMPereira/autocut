@@ -13,11 +13,14 @@ import (
 
 // EffectRequest holds the common config for any video processing job (preview or clip).
 type EffectRequest struct {
-	VideoPath   string
-	StartSec    int
-	DurationSec int64
-	ChannelCfg  database.ChannelConfig
-	OutputPath  string
+	VideoPath      string
+	StartSec       int
+	DurationSec    int64
+	ChannelCfg     database.ChannelConfig
+	OutputPath     string
+	BlurEdgePct    float64 // 0=disabled, 1-100=edge blur percentage
+	NoiseStrength  float64 // 0=disabled, 1-10=noise strength
+	TranscriptPath string  // optional: path to transcript JSON for real captions
 }
 
 // VideoOverlayConfig is parsed from PreviewVideoOverlayConfigJSON.
@@ -31,6 +34,39 @@ type VideoOverlayConfig struct {
 		StartPct float64 `json:"start_pct"`
 		EndPct   float64 `json:"end_pct"`
 	} `json:"appearances"`
+}
+
+// ParseAntiDupExtras extracts blur and noise parameters from a ModeConfig JSON blob.
+func ParseAntiDupExtras(modeCfg json.RawMessage) (blurEdgePct, noiseStrength float64) {
+	var mc struct {
+		AntiDuplicate *struct {
+			Enabled bool `json:"enabled"`
+			Effects *struct {
+				Blur          *bool    `json:"blur"`
+				BlurEdgePct   *float64 `json:"blur_edge_pct"`
+				Noise         *bool    `json:"noise"`
+				NoiseStrength *float64 `json:"noise_strength"`
+			} `json:"effects"`
+		} `json:"anti_duplicate"`
+	}
+	if err := json.Unmarshal(modeCfg, &mc); err != nil {
+		return
+	}
+	ad := mc.AntiDuplicate
+	if ad == nil || !ad.Enabled {
+		return
+	}
+	fx := ad.Effects
+	if fx == nil {
+		return
+	}
+	if fx.Blur != nil && *fx.Blur && fx.BlurEdgePct != nil {
+		blurEdgePct = *fx.BlurEdgePct
+	}
+	if fx.Noise != nil && *fx.Noise && fx.NoiseStrength != nil {
+		noiseStrength = *fx.NoiseStrength
+	}
+	return
 }
 
 // chromaKeyParams maps color names to colorkey filter parameters: {color, similarity, blend}.
@@ -74,6 +110,37 @@ func BuildEffectChain(log *slog.Logger, req EffectRequest) ([]string, []func()) 
 		log.Info("effect layer: crop", "percent", cc.VisualCropPercent)
 	}
 
+	// --- Layer 2b: Zoom ---
+	if cc.VisualZoomEnabled && cc.VisualZoomAmount > 1.0 {
+		z := cc.VisualZoomAmount
+		// Scale up then crop back; round to even dimensions to avoid codec errors
+		zoom := fmt.Sprintf("scale=iw*%.4f:ih*%.4f,crop=trunc(iw/%.4f/2)*2:trunc(ih/%.4f/2)*2", z, z, z, z)
+		simpleFilters = append(simpleFilters, zoom)
+		log.Info("effect layer: zoom", "amount", z)
+	}
+
+	// --- Layer 2c: Speed ---
+	if cc.SpeedEnabled && cc.SpeedFactor > 0 && cc.SpeedFactor != 1.0 {
+		simpleFilters = append(simpleFilters, fmt.Sprintf("setpts=PTS/%.4f", cc.SpeedFactor))
+		log.Info("effect layer: speed", "factor", cc.SpeedFactor)
+	}
+
+	// --- Layer 2d: Blur background ---
+	// Prepend to overlayOps so it runs as a filter_complex split BEFORE logo and video overlay.
+	// The effect: raw video blurred + scaled-to-fill as background; processed video
+	// scaled down as foreground, overlaid centered. This creates the "portrait blur" look.
+	if req.BlurEdgePct > 0 {
+		overlayOps = append([]overlayOp{{kind: opBlurBg, blurEdgePct: req.BlurEdgePct}}, overlayOps...)
+		log.Info("effect layer: blur background", "edge_pct", req.BlurEdgePct)
+	}
+
+	// --- Layer 2e: Noise ---
+	if req.NoiseStrength > 0 {
+		n := int(3 + (req.NoiseStrength/10.0)*27)
+		simpleFilters = append(simpleFilters, fmt.Sprintf("noise=alls=%d:allf=t", n))
+		log.Info("effect layer: noise", "strength", req.NoiseStrength, "ffmpeg_n", n)
+	}
+
 	// --- Layer 3: Logo overlay ---
 	if cc.BrandingLogoEnabled && cc.BrandingLogoPath.Valid && cc.BrandingLogoPath.String != "" {
 		logoPath := cc.BrandingLogoPath.String
@@ -99,23 +166,30 @@ func BuildEffectChain(log *slog.Logger, req EffectRequest) ([]string, []func()) 
 		if err := json.Unmarshal([]byte(cc.PreviewVideoOverlayConfigJSON), &overlayConfig); err != nil {
 			log.Warn("effect layer skipped: video overlay (invalid JSON)", "err", err)
 		}
+	} else {
+		log.Debug("effect layer skipped: video overlay (no config)", "json_len", len(cc.PreviewVideoOverlayConfigJSON))
 	}
 	if overlayConfig.Enabled && overlayConfig.Path != "" {
 		if _, err := os.Stat(overlayConfig.Path); err == nil {
 			extraInputs = append(extraInputs, "-i", overlayConfig.Path)
 			overlayOps = append(overlayOps, overlayOp{
-				kind:      opWatermark,
+				kind:      opVideoOverlay,
 				inputIdx:  inputIdx,
 				chromaKey: overlayConfig.ChromaKey,
 				scalePct:  overlayConfig.ScalePct,
 				position:  overlayConfig.Position,
 			})
 			inputIdx++
-			log.Info("effect layer: watermark overlay", "path", overlayConfig.Path)
+			log.Info("effect layer: video overlay", "path", overlayConfig.Path)
 		} else {
-			log.Warn("effect layer skipped: watermark (file not found)", "path", overlayConfig.Path)
+			log.Warn("effect layer skipped: video overlay (file not found)", "path", overlayConfig.Path)
 		}
 	}
+
+	// postFilters are applied AFTER all overlay compositing (blur-bg, logo, video overlay).
+	// This ensures subtitles and drawtext render at full resolution on the final composited frame,
+	// not on the scaled-down foreground stream (which would make them tiny under blur-bg).
+	var postFilters []string
 
 	// --- Layer 5: Captions ASS burn-in ---
 	if cc.PreviewCaptionsEnabled {
@@ -125,20 +199,34 @@ func BuildEffectChain(log *slog.Logger, req EffectRequest) ([]string, []func()) 
 				log.Warn("caption style JSON parse failed, using defaults", "err", err)
 			}
 		}
-		assPath, cleanup, err := GenerateASS(captionStyle)
+		assPath, cleanup, err := GenerateASSFromTranscript(req.TranscriptPath, req.StartSec, req.DurationSec, captionStyle)
 		if err != nil {
 			log.Warn("effect layer skipped: captions (ASS generation failed)", "err", err)
 		} else {
 			cleanups = append(cleanups, cleanup)
 			escapedPath := strings.ReplaceAll(assPath, "\\", "\\\\")
 			escapedPath = strings.ReplaceAll(escapedPath, ":", "\\:")
-			simpleFilters = append(simpleFilters, fmt.Sprintf("subtitles=%s", escapedPath))
+			postFilters = append(postFilters, fmt.Sprintf("subtitles=%s", escapedPath))
 			log.Info("effect layer: captions", "ass_path", assPath)
 		}
 	}
 
+	// --- Layer 6: Text overlays ---
+	if cc.PreviewTextOverlayConfigJSON != "" && cc.PreviewTextOverlayConfigJSON != "[]" {
+		var items []textOverlayItem
+		if err := json.Unmarshal([]byte(cc.PreviewTextOverlayConfigJSON), &items); err == nil {
+			for _, item := range items {
+				filter := buildDrawtextFilter(item, req.DurationSec)
+				if filter != "" {
+					postFilters = append(postFilters, filter)
+					log.Info("effect layer: text overlay", "text", item.Text)
+				}
+			}
+		}
+	}
+
 	// --- Assemble ffmpeg command ---
-	args := assembleFFmpegArgs(req, simpleFilters, extraInputs, overlayOps)
+	args := assembleFFmpegArgs(req, simpleFilters, postFilters, extraInputs, overlayOps)
 	return args, cleanups
 }
 
@@ -146,30 +234,38 @@ func BuildEffectChain(log *slog.Logger, req EffectRequest) ([]string, []func()) 
 type overlayOpKind int
 
 const (
-	opLogo      overlayOpKind = iota
-	opWatermark
+	opBlurBg       overlayOpKind = iota // blur-background: smaller video over blurred bg
+	opLogo                              // static image watermark (channel avatar/branding logo)
+	opVideoOverlay                      // video overlay (e.g. subscribe animation)
 )
 
-// overlayOp describes a structured overlay operation (logo or watermark).
+// overlayOp describes a structured overlay operation (blur-bg, logo, or video overlay).
 type overlayOp struct {
-	kind      overlayOpKind
-	inputIdx  int
-	opacity   float64 // logo only
-	scale     float64 // logo only
-	chromaKey string  // watermark only
-	scalePct  int     // watermark only
-	position  string
+	kind        overlayOpKind
+	inputIdx    int
+	opacity     float64 // logo only
+	scale       float64 // logo only
+	chromaKey   string  // video overlay only
+	scalePct    int     // video overlay only
+	position    string
+	blurEdgePct float64 // blurBg only
 }
 
 // assembleFFmpegArgs builds the final ffmpeg argument list from collected filters and overlays.
-func assembleFFmpegArgs(req EffectRequest, simpleFilters []string, extraInputs []string, ops []overlayOp) []string {
+// postFilters (subtitles, drawtext) are applied after all overlay compositing so they render
+// at full resolution on the final composited frame.
+func assembleFFmpegArgs(req EffectRequest, simpleFilters []string, postFilters []string, extraInputs []string, ops []overlayOp) []string {
 	hasOverlays := len(ops) > 0
 
 	if !hasOverlays {
-		// Simple case: only -vf filters (eq, crop, subtitles)
+		// Simple case: no overlays — all filters go directly into -vf
+		allFilters := append(simpleFilters, postFilters...)
 		args := []string{"-y", "-ss", fmt.Sprintf("%d", req.StartSec), "-i", req.VideoPath, "-t", fmt.Sprintf("%d", req.DurationSec)}
-		if len(simpleFilters) > 0 {
-			args = append(args, "-vf", strings.Join(simpleFilters, ","))
+		if len(allFilters) > 0 {
+			args = append(args, "-vf", strings.Join(allFilters, ","))
+		}
+		if req.ChannelCfg.SpeedEnabled && req.ChannelCfg.SpeedFactor > 0 && req.ChannelCfg.SpeedFactor != 1.0 {
+			args = append(args, "-af", fmt.Sprintf("atempo=%.4f", req.ChannelCfg.SpeedFactor))
 		}
 		args = append(args, encodingFlags(req.OutputPath)...)
 		return args
@@ -180,9 +276,12 @@ func assembleFFmpegArgs(req EffectRequest, simpleFilters []string, extraInputs [
 	args = append(args, extraInputs...)
 	args = append(args, "-t", fmt.Sprintf("%d", req.DurationSec))
 
-	filterComplex := buildFilterComplex(simpleFilters, ops)
+	filterComplex := buildFilterComplex(simpleFilters, postFilters, ops)
 	args = append(args, "-filter_complex", filterComplex.chain)
 	args = append(args, "-map", filterComplex.videoOut, "-map", "0:a?")
+	if req.ChannelCfg.SpeedEnabled && req.ChannelCfg.SpeedFactor > 0 && req.ChannelCfg.SpeedFactor != 1.0 {
+		args = append(args, "-af", fmt.Sprintf("atempo=%.4f", req.ChannelCfg.SpeedFactor))
+	}
 	args = append(args, encodingFlags(req.OutputPath)...)
 	return args
 }
@@ -194,19 +293,59 @@ type filterComplexResult struct {
 }
 
 // buildFilterComplex constructs the -filter_complex string with proper label chaining.
-func buildFilterComplex(simpleFilters []string, ops []overlayOp) filterComplexResult {
+// postFilters (subtitles, drawtext) are applied last, after all overlay compositing.
+func buildFilterComplex(simpleFilters []string, postFilters []string, ops []overlayOp) filterComplexResult {
 	var parts []string
+
+	// If the first op is blur-bg, pre-split [0:v] so the bg stream and the fg stream
+	// (which gets simple filters applied) are independent — avoids double-consumption
+	// of [0:v] in the same filter_complex graph.
+	hasBlurBg := len(ops) > 0 && ops[0].kind == opBlurBg
+	var bgRawStream string
 	currentLabel := "[0:v]"
 
-	// Apply simple filters first (color grading, crop, subtitles)
+	if hasBlurBg {
+		bgRawStream = "[0_bg_raw]"
+		fgRawStream := "[0_fg_raw]"
+		parts = append(parts, fmt.Sprintf("[0:v]split%s%s", bgRawStream, fgRawStream))
+		currentLabel = fgRawStream
+	}
+
+	// Apply simple filters (color grading, crop, captions, text overlays…)
 	if len(simpleFilters) > 0 {
 		parts = append(parts, fmt.Sprintf("%s%s[base]", currentLabel, strings.Join(simpleFilters, ",")))
 		currentLabel = "[base]"
 	}
 
 	// Apply each overlay operation in order
-	for _, op := range ops {
+	for i, op := range ops {
 		switch op.kind {
+		case opBlurBg:
+			// Blur-background: raw stream → blur + scale-to-fill as BG;
+			// processed stream (currentLabel) → scale down as FG; overlay centered.
+			bgBlurred := fmt.Sprintf("[_bbg%d]", i)
+			fgSmall := fmt.Sprintf("[_bfg%d]", i)
+			outLabel := fmt.Sprintf("[blur_out%d]", i)
+
+			e := op.blurEdgePct / 100.0
+			fgScale := 1.0 - 2*e
+			if fgScale < 0.5 {
+				fgScale = 0.5
+			}
+			sigma := 20.0 + e*30.0 // sigma 20–50: heavier blur for wider edges
+
+			parts = append(parts,
+				// BG: blur the raw (unprocessed) stream and scale to fill the frame
+				fmt.Sprintf("%sgblur=sigma=%.0f,scale=iw:ih:force_original_aspect_ratio=increase,crop=iw:ih%s",
+					bgRawStream, sigma, bgBlurred),
+				// FG: scale down the processed stream (has color grading, captions, etc.)
+				fmt.Sprintf("%sscale=trunc(iw*%.4f/2)*2:trunc(ih*%.4f/2)*2%s",
+					currentLabel, fgScale, fgScale, fgSmall),
+				// Overlay FG centered on blurred BG
+				fmt.Sprintf("%s%soverlay=(W-w)/2:(H-h)/2%s", bgBlurred, fgSmall, outLabel),
+			)
+			currentLabel = outLabel
+
 		case opLogo:
 			outLabel := "[afterlogo]"
 			pos := overlayPosition(op.position, op.scale)
@@ -218,28 +357,36 @@ func buildFilterComplex(simpleFilters []string, ops []overlayOp) filterComplexRe
 			)
 			currentLabel = outLabel
 
-		case opWatermark:
-			outLabel := "[afterwatermark]"
+		case opVideoOverlay:
+			outLabel := "[afterovl]"
 			scaleFilter := fmt.Sprintf("scale=iw*%d/100:-1", op.scalePct)
 			pos := overlayPosition(op.position, float64(op.scalePct)/100.0)
 
 			if params, ok := chromaKeyParams[strings.ToLower(op.chromaKey)]; ok && strings.ToLower(op.chromaKey) != "none" {
 				parts = append(parts,
-					fmt.Sprintf("[%d]%s,colorkey=%s:%s:%s,format=rgba[wm_keyed]",
+					fmt.Sprintf("[%d]%s,colorkey=%s:%s:%s,format=rgba[ovl_keyed]",
 						op.inputIdx, scaleFilter, params[0], params[1], params[2]),
-					fmt.Sprintf("%s[wm_keyed]overlay=%s:eof_action=pass%s",
+					fmt.Sprintf("%s[ovl_keyed]overlay=%s:eof_action=pass%s",
 						currentLabel, pos, outLabel),
 				)
 			} else {
 				parts = append(parts,
-					fmt.Sprintf("[%d]%s,format=rgba[wm_scaled]",
+					fmt.Sprintf("[%d]%s,format=rgba[ovl_scaled]",
 						op.inputIdx, scaleFilter),
-					fmt.Sprintf("%s[wm_scaled]overlay=%s:eof_action=pass%s",
+					fmt.Sprintf("%s[ovl_scaled]overlay=%s:eof_action=pass%s",
 						currentLabel, pos, outLabel),
 				)
 			}
 			currentLabel = outLabel
 		}
+	}
+
+	// Apply post-filters (subtitles, drawtext) to the fully composited output.
+	// These must come AFTER blur-bg/logo/overlay so they render at full frame resolution.
+	if len(postFilters) > 0 {
+		outLabel := "[final_post]"
+		parts = append(parts, fmt.Sprintf("%s%s%s", currentLabel, strings.Join(postFilters, ","), outLabel))
+		currentLabel = outLabel
 	}
 
 	return filterComplexResult{
@@ -309,8 +456,22 @@ func ApplyModeOverrides(cc *database.ChannelConfig, modeCfg json.RawMessage) {
 			} `json:"effects"`
 		} `json:"anti_duplicate"`
 		Captions *struct {
-			Enabled bool   `json:"enabled"`
-			Preset  string `json:"preset"`
+			Enabled        bool    `json:"enabled"`
+			Preset         string  `json:"preset"`
+			FontFamily     *string `json:"font_family"`
+			Bold           *bool   `json:"bold"`
+			Italic         *bool   `json:"italic"`
+			Uppercase      *bool   `json:"uppercase"`
+			FontSize       *int    `json:"font_size"`
+			TextColor      *string `json:"text_color"`
+			BgEnabled      *bool   `json:"bg_enabled"`
+			OutlineEnabled *bool   `json:"outline_enabled"`
+			OutlineColor   *string `json:"outline_color"`
+			OutlineWidth   *int    `json:"outline_width"`
+			ShadowEnabled  *bool   `json:"shadow_enabled"`
+			ShadowColor    *string `json:"shadow_color"`
+			ShadowDistance *int    `json:"shadow_distance"`
+			VerticalOffset *int    `json:"vertical_offset"`
 		} `json:"captions"`
 		Branding *struct {
 			LogoEnabled  bool    `json:"logo_enabled"`
@@ -326,6 +487,10 @@ func ApplyModeOverrides(cc *database.ChannelConfig, modeCfg json.RawMessage) {
 			Position  string  `json:"position"`
 			ChromaKey *string `json:"chroma_key"`
 		} `json:"video_overlay"`
+		TextOverlays *struct {
+			Enabled bool            `json:"enabled"`
+			Items   json.RawMessage `json:"items"`
+		} `json:"text_overlays"`
 	}
 
 	if err := json.Unmarshal(modeCfg, &mc); err != nil {
@@ -375,6 +540,46 @@ func ApplyModeOverrides(cc *database.ChannelConfig, modeCfg json.RawMessage) {
 	// Captions
 	if cap := mc.Captions; cap != nil {
 		cc.PreviewCaptionsEnabled = cap.Enabled
+		if cap.Enabled {
+			style := CaptionTextStyle{Alignment: 2}
+			if cap.FontFamily != nil {
+				style.FontFamily = *cap.FontFamily
+			}
+			if cap.FontSize != nil {
+				style.FontSize = *cap.FontSize
+			}
+			if cap.TextColor != nil {
+				style.PrimaryColor = strings.TrimPrefix(*cap.TextColor, "#")
+			}
+			if cap.Bold != nil {
+				style.Bold = *cap.Bold
+			}
+			if cap.Italic != nil {
+				style.Italic = *cap.Italic
+			}
+			if cap.OutlineEnabled != nil && *cap.OutlineEnabled {
+				if cap.OutlineColor != nil {
+					style.OutlineColor = strings.TrimPrefix(*cap.OutlineColor, "#")
+				}
+				if cap.OutlineWidth != nil {
+					style.OutlineWidth = *cap.OutlineWidth
+				}
+			}
+			if cap.BgEnabled != nil {
+				style.BgEnabled = *cap.BgEnabled
+			}
+			if cap.ShadowEnabled != nil && *cap.ShadowEnabled {
+				if cap.ShadowDistance != nil {
+					style.Shadow = *cap.ShadowDistance
+				}
+			}
+			if cap.VerticalOffset != nil {
+				style.MarginV = *cap.VerticalOffset
+			}
+			if styleJSON, err := json.Marshal(style); err == nil {
+				cc.PreviewCaptionTextStyleJSON = string(styleJSON)
+			}
+		}
 	}
 
 	// Branding
@@ -410,5 +615,124 @@ func ApplyModeOverrides(cc *database.ChannelConfig, modeCfg json.RawMessage) {
 		if cfgJSON, err := json.Marshal(overlay); err == nil {
 			cc.PreviewVideoOverlayConfigJSON = string(cfgJSON)
 		}
+	}
+
+	// Text overlays
+	if to := mc.TextOverlays; to != nil && to.Enabled && len(to.Items) > 0 {
+		cc.PreviewTextOverlayConfigJSON = string(to.Items)
+	}
+}
+
+// --- Text overlay types and helpers ---
+
+type textOverlayStyle struct {
+	FontSize        int     `json:"fontSize"`
+	FontFamily      string  `json:"fontFamily"`
+	TextColor       string  `json:"textColor"`
+	IsBold          bool    `json:"isBold"`
+	IsItalic        bool    `json:"isItalic"`
+	AllCaps         bool    `json:"allCaps"`
+	BackgroundColor *string `json:"backgroundColor"`
+	ShadowColor     *string `json:"shadowColor"`
+	ShadowOffset    int     `json:"shadowOffset"`
+}
+
+type textOverlayItem struct {
+	Text      string            `json:"text"`
+	ApplyFull bool              `json:"apply_full"`
+	StartSec  float64           `json:"start_sec"`
+	EndSec    float64           `json:"end_sec"`
+	Position  string            `json:"position"`
+	Style     *textOverlayStyle `json:"style"`
+}
+
+func buildDrawtextFilter(item textOverlayItem, _ int64) string {
+	text := item.Text
+	if text == "" {
+		return ""
+	}
+
+	// Style defaults
+	fontSize := 48
+	fontColor := "white"
+	fontFamily := "Arial"
+	if s := item.Style; s != nil {
+		if s.FontSize > 0 {
+			fontSize = s.FontSize
+		}
+		if s.TextColor != "" {
+			fontColor = s.TextColor
+		}
+		if s.FontFamily != "" {
+			fontFamily = s.FontFamily
+		}
+		if s.AllCaps {
+			text = strings.ToUpper(text)
+		}
+	}
+
+	// Escape special chars for drawtext
+	text = strings.ReplaceAll(text, "'", "'\\''")
+	text = strings.ReplaceAll(text, ":", "\\:")
+
+	// Position -> x:y expressions
+	x, y := drawtextPosition(item.Position)
+
+	// Timing
+	enable := ""
+	if !item.ApplyFull {
+		enable = fmt.Sprintf(":enable='between(t,%.1f,%.1f)'", item.StartSec, item.EndSec)
+	}
+
+	// Append Bold/Italic suffix to font name — drawtext has no fontstyle option
+	if s := item.Style; s != nil {
+		if s.IsBold && s.IsItalic {
+			fontFamily += " Bold Italic"
+		} else if s.IsBold {
+			fontFamily += " Bold"
+		} else if s.IsItalic {
+			fontFamily += " Italic"
+		}
+	}
+
+	filter := fmt.Sprintf("drawtext=text='%s':fontsize=%d:fontcolor=%s:font='%s':x=%s:y=%s%s",
+		text, fontSize, fontColor, fontFamily, x, y, enable)
+
+	// Shadow
+	if s := item.Style; s != nil && s.ShadowColor != nil && *s.ShadowColor != "" {
+		filter += fmt.Sprintf(":shadowcolor=%s:shadowx=%d:shadowy=%d", *s.ShadowColor, s.ShadowOffset, s.ShadowOffset)
+	}
+
+	// Background box
+	if s := item.Style; s != nil && s.BackgroundColor != nil && *s.BackgroundColor != "" {
+		filter += fmt.Sprintf(":box=1:boxcolor=%s@0.85:boxborderw=12", *s.BackgroundColor)
+	}
+
+	return filter
+}
+
+func drawtextPosition(position string) (x, y string) {
+	pos := strings.ToLower(strings.ReplaceAll(position, "_", ""))
+	switch pos {
+	case "topleft":
+		return "20", "20"
+	case "topcenter":
+		return "(w-tw)/2", "20"
+	case "topright":
+		return "w-tw-20", "20"
+	case "midleft", "middleleft":
+		return "20", "(h-th)/2"
+	case "midcenter", "center", "middlecenter":
+		return "(w-tw)/2", "(h-th)/2"
+	case "midright", "middleright":
+		return "w-tw-20", "(h-th)/2"
+	case "bottomleft":
+		return "20", "h-th-20"
+	case "bottomcenter":
+		return "(w-tw)/2", "h-th-20"
+	case "bottomright":
+		return "w-tw-20", "h-th-20"
+	default:
+		return "(w-tw)/2", "(h-th)/2"
 	}
 }

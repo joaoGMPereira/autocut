@@ -255,6 +255,41 @@ type QuotaUsage struct {
 	UpdatedAt            int64
 }
 
+// PipelineHighlight maps to the v9 pipeline_highlights schema.
+type PipelineHighlight struct {
+	ID          int64   `json:"id"`
+	RunID       int64   `json:"run_id"`
+	StartSec    float64 `json:"start_sec"`
+	EndSec      float64 `json:"end_sec"`
+	AdjStartSec float64 `json:"adj_start_sec"`
+	AdjEndSec   float64 `json:"adj_end_sec"`
+	Score       float64 `json:"score"`
+	Text        string  `json:"text"`
+	Reason      string  `json:"reason"`
+	IsSelected  bool    `json:"is_selected"`
+	CreatedAt   int64   `json:"created_at"`
+}
+
+// PipelineClip maps to the v9 pipeline_clips schema.
+type PipelineClip struct {
+	ID             int64         `json:"id"`
+	RunID          int64         `json:"run_id"`
+	HighlightID    sql.NullInt64 `json:"highlight_id"`
+	FilePath       string        `json:"file_path"`
+	ThumbnailPath  string        `json:"thumbnail_path"`
+	Title          string        `json:"title"`
+	Description    string        `json:"description"`
+	Tags           string        `json:"tags"`
+	ThumbnailStyle string        `json:"thumbnail_style"`
+	IsSelected     bool          `json:"is_selected"`
+	StartSec       float64       `json:"start_sec"`
+	EndSec         float64       `json:"end_sec"`
+	DurationSec    float64       `json:"duration_sec"`
+	UploadStatus   string        `json:"upload_status"`
+	YouTubeID      string        `json:"youtube_id"`
+	CreatedAt      int64         `json:"created_at"`
+}
+
 // URLHistoryEntry represents a persisted URL in the url_history table (migration v11).
 type URLHistoryEntry struct {
 	ID         int64   `json:"id"`
