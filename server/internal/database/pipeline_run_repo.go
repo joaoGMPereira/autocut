@@ -168,6 +168,40 @@ func (r *PipelineRunRepo) SetDownloadResult(ctx context.Context, id int64, path,
 	return nil
 }
 
+// FindExistingVideo finds a prior run with the same URL that has a non-empty video_path.
+// Returns the video_path, video_title, and duration_sec if found.
+func (r *PipelineRunRepo) FindExistingVideo(ctx context.Context, url string) (path, title string, durationSec int64, found bool, err error) {
+	err = r.db.QueryRowContext(ctx,
+		`SELECT video_path, video_title, duration_sec FROM pipeline_runs WHERE url = ? AND video_path != '' ORDER BY id DESC LIMIT 1`,
+		url,
+	).Scan(&path, &title, &durationSec)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", 0, false, nil
+	}
+	if err != nil {
+		return "", "", 0, false, fmt.Errorf("find existing video: %w", err)
+	}
+	return path, title, durationSec, true, nil
+}
+
+// StartDownloadAndAdvance atomically sets url, state=WAITING_MODE, active_phase='download'.
+// Used when no prior video is found and a fresh download is needed.
+func (r *PipelineRunRepo) StartDownloadAndAdvance(ctx context.Context, id int64, url string) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE pipeline_runs SET url = ?, state = 'WAITING_MODE', active_phase = 'download'
+		 WHERE id = ? AND state = 'WAITING_URL'`,
+		url, id,
+	)
+	if err != nil {
+		return fmt.Errorf("start download and advance pipeline_run %d: %w", id, err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 // AdvanceState atomically transitions a run from fromState to toState.
 // Returns sql.ErrNoRows if no row was updated (idempotency signal — run already moved on).
 func (r *PipelineRunRepo) AdvanceState(ctx context.Context, id int64, fromState, toState string) error {

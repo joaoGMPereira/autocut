@@ -40,6 +40,8 @@ type runResponse struct {
 	State       string  `json:"state"`
 	ActivePhase string  `json:"active_phase"`
 	Error       string  `json:"error"`
+	VideoPath   string  `json:"video_path"`
+	DurationSec int64   `json:"duration_sec"`
 	StartedAt   int64   `json:"started_at"`
 	FinishedAt  *int64  `json:"finished_at"`
 }
@@ -85,6 +87,8 @@ func (h *PipelineHandler) GetRun(w http.ResponseWriter, r *http.Request) {
 		State:       run.State,
 		ActivePhase: run.ActivePhase,
 		Error:       run.Error,
+		VideoPath:   run.VideoPath,
+		DurationSec: run.DurationSec,
 		StartedAt:   run.StartedAt,
 	}
 	if run.ChannelID.Valid {
@@ -122,7 +126,7 @@ func (h *PipelineHandler) PostAdvance(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "invalid JSON body", http.StatusBadRequest)
 		return
 	}
-	newState, err := h.svc.Advance(r.Context(), id, req)
+	result, err := h.svc.Advance(r.Context(), id, req)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, errBadRequest(err)) {
@@ -133,7 +137,10 @@ func (h *PipelineHandler) PostAdvance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{"state": newState})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"state":        result.State,
+		"video_reused": result.VideoReused,
+	})
 }
 
 // PostCancel transitions a run to CANCELLED.

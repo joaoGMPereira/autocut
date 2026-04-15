@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -15,18 +18,22 @@ import (
 	"github.com/joaoGMPereira/autocut/server/internal/database"
 	"github.com/joaoGMPereira/autocut/server/internal/downloader"
 	"github.com/joaoGMPereira/autocut/server/internal/hub"
+	"github.com/joaoGMPereira/autocut/server/internal/processor"
 )
 
 // Service orchestrates pipeline run state transitions and background download.
 type Service struct {
-	repo        *database.PipelineRunRepo
-	historyRepo *database.URLHistoryRepo
-	hub         *hub.SSEHub
-	ytDl        *downloader.YouTubeDownloader
-	twDl        *downloader.TwitchDownloader
-	dataDir     string
-	log         *slog.Logger
-	cancelMap   sync.Map // map[int64]context.CancelFunc — one entry per active run
+	repo          *database.PipelineRunRepo
+	historyRepo   *database.URLHistoryRepo
+	highlightRepo *database.PipelineHighlightRepo
+	clipRepo      *database.PipelineClipRepo
+	channelCfgRepo *database.ChannelConfigRepo
+	hub           *hub.SSEHub
+	ytDl          *downloader.YouTubeDownloader
+	twDl          *downloader.TwitchDownloader
+	dataDir       string
+	log           *slog.Logger
+	cancelMap     sync.Map // map[int64]context.CancelFunc — one entry per active run
 }
 
 // videoInfoPayload is the SSE payload for the video_info event.
@@ -53,6 +60,12 @@ type stateChangedPayload struct {
 	State string `json:"state"`
 }
 
+// downloadCompletePayload is the SSE payload for the download_complete event.
+type downloadCompletePayload struct {
+	RunID     int64  `json:"run_id"`
+	VideoPath string `json:"video_path"`
+}
+
 // AdvanceRequest holds all possible gate-advance payloads.
 // Fields are interpreted based on the run's current state.
 type AdvanceRequest struct {
@@ -65,19 +78,25 @@ type AdvanceRequest struct {
 func NewService(
 	repo *database.PipelineRunRepo,
 	historyRepo *database.URLHistoryRepo,
+	highlightRepo *database.PipelineHighlightRepo,
+	clipRepo *database.PipelineClipRepo,
+	channelCfgRepo *database.ChannelConfigRepo,
 	h *hub.SSEHub,
 	ytDl *downloader.YouTubeDownloader,
 	twDl *downloader.TwitchDownloader,
 	dataDir string,
 ) *Service {
 	return &Service{
-		repo:        repo,
-		historyRepo: historyRepo,
-		hub:         h,
-		ytDl:        ytDl,
-		twDl:        twDl,
-		dataDir:     dataDir,
-		log:         slog.With("component", "pipeline.service"),
+		repo:           repo,
+		historyRepo:    historyRepo,
+		highlightRepo:  highlightRepo,
+		clipRepo:       clipRepo,
+		channelCfgRepo: channelCfgRepo,
+		hub:            h,
+		ytDl:           ytDl,
+		twDl:           twDl,
+		dataDir:        dataDir,
+		log:            slog.With("component", "pipeline.service"),
 	}
 }
 
@@ -111,19 +130,25 @@ func (s *Service) GetByID(ctx context.Context, id int64) (*database.PipelineRun,
 	return run, nil
 }
 
+// AdvanceResult holds the outcome of an Advance call.
+type AdvanceResult struct {
+	State       string `json:"state"`
+	VideoReused bool   `json:"video_reused"`
+}
+
 // Advance resolves the current gate state. Polymorphic — behavior depends on run's current state.
-func (s *Service) Advance(ctx context.Context, id int64, req AdvanceRequest) (string, error) {
+func (s *Service) Advance(ctx context.Context, id int64, req AdvanceRequest) (AdvanceResult, error) {
 	run, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", fmt.Errorf("run %d not found", id)
+			return AdvanceResult{}, fmt.Errorf("run %d not found", id)
 		}
-		return "", fmt.Errorf("get run %d: %w", id, err)
+		return AdvanceResult{}, fmt.Errorf("get run %d: %w", id, err)
 	}
 
 	// Terminal states — idempotent.
 	if run.State == StateDone || run.State == StateError || run.State == StateCancelled {
-		return run.State, nil
+		return AdvanceResult{State: run.State}, nil
 	}
 
 	jobKey := fmt.Sprintf("%d", id)
@@ -131,35 +156,80 @@ func (s *Service) Advance(ctx context.Context, id int64, req AdvanceRequest) (st
 	switch run.State {
 	case StateWaitingURL:
 		if req.URL == "" {
-			return "", fmt.Errorf("url is required")
+			return AdvanceResult{}, fmt.Errorf("url is required")
 		}
 		normalized, err := normalizeURL(req.URL)
 		if err != nil {
-			return "", err
+			return AdvanceResult{}, err
 		}
-		if err := s.repo.StartDownload(ctx, id, normalized); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return "", fmt.Errorf("run %d not found or not in WAITING_URL state", id)
+
+		// Check if a prior run already downloaded this URL and the file still exists.
+		existingPath, existingTitle, existingDuration, found, findErr := s.repo.FindExistingVideo(ctx, normalized)
+		if findErr != nil {
+			s.log.Warn("find existing video failed, proceeding with fresh download", "run_id", id, "err", findErr)
+		}
+
+		if found && existingPath != "" {
+			if _, statErr := os.Stat(existingPath); statErr == nil {
+				// Reuse: copy file to new run's pipeline dir.
+				destDir := fmt.Sprintf("%s/downloads/%d", s.dataDir, id)
+				if mkErr := os.MkdirAll(destDir, 0o755); mkErr != nil {
+					return AdvanceResult{}, fmt.Errorf("create download dir: %w", mkErr)
+				}
+				destPath := filepath.Join(destDir, filepath.Base(existingPath))
+				if cpErr := copyFile(existingPath, destPath); cpErr != nil {
+					s.log.Warn("video copy failed, falling back to fresh download", "run_id", id, "err", cpErr)
+				} else {
+					// Transition WAITING_URL → WAITING_MODE with no active_phase (download done).
+					if err := s.repo.StartDownloadAndAdvance(ctx, id, normalized); err != nil {
+						if errors.Is(err, sql.ErrNoRows) {
+							return AdvanceResult{}, fmt.Errorf("run %d not found or not in WAITING_URL state", id)
+						}
+						return AdvanceResult{}, fmt.Errorf("advance run %d: %w", id, err)
+					}
+					// Set download result (video_path, title, duration).
+					if err := s.repo.SetDownloadResult(ctx, id, destPath, existingTitle, existingDuration); err != nil {
+						s.log.Error("set download result failed after reuse", "run_id", id, "err", err)
+					}
+					// Clear active_phase since download is already done.
+					if err := s.repo.SetActivePhase(ctx, id, ""); err != nil {
+						s.log.Error("clear active_phase failed after reuse", "run_id", id, "err", err)
+					}
+
+					s.log.Info("pipeline run reused video", "run_id", id, "url", normalized, "source", existingPath)
+					s.hub.Publish(jobKey, hub.SSEEvent{
+						Type: "state_changed",
+						Data: stateChangedPayload{RunID: id, State: StateWaitingMode},
+					})
+					return AdvanceResult{State: StateWaitingMode, VideoReused: true}, nil
+				}
 			}
-			return "", fmt.Errorf("advance run %d: %w", id, err)
+		}
+
+		// No reuse — start fresh download. Transition to WAITING_MODE immediately with active_phase="download".
+		if err := s.repo.StartDownloadAndAdvance(ctx, id, normalized); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return AdvanceResult{}, fmt.Errorf("run %d not found or not in WAITING_URL state", id)
+			}
+			return AdvanceResult{}, fmt.Errorf("advance run %d: %w", id, err)
 		}
 		s.log.Info("pipeline run advancing", "run_id", id, "url", normalized)
 		runCtx, cancel := context.WithCancel(context.Background())
 		s.cancelMap.Store(id, cancel)
 		go s.runDownload(runCtx, id, normalized)
-		return StateWaitingURL, nil
+		return AdvanceResult{State: StateWaitingMode, VideoReused: false}, nil
 
 	case StateWaitingMode:
 		// Validate mode field from submitted config
 		var configMap map[string]any
 		if len(req.ModeConfigJSON) > 0 {
 			if err := json.Unmarshal(req.ModeConfigJSON, &configMap); err != nil {
-				return "", fmt.Errorf("invalid mode_config JSON: %w", err)
+				return AdvanceResult{}, fmt.Errorf("invalid mode_config JSON: %w", err)
 			}
 		}
 		modeVal, _ := configMap["mode"].(string)
 		if modeVal != "ai" && modeVal != "longform" {
-			return "", fmt.Errorf("invalid mode %q — must be 'ai' or 'longform'", modeVal)
+			return AdvanceResult{}, fmt.Errorf("invalid mode %q — must be 'ai' or 'longform'", modeVal)
 		}
 
 		// Persist mode config before advancing state
@@ -171,33 +241,33 @@ func (s *Service) Advance(ctx context.Context, id int64, req AdvanceRequest) (st
 		if err := s.repo.AdvanceState(ctx, id, StateWaitingMode, StateExecuting); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				if curr, _ := s.repo.GetByID(ctx, id); curr != nil {
-					return curr.State, nil
+					return AdvanceResult{State: curr.State}, nil
 				}
 			}
-			return "", fmt.Errorf("advance run %d: %w", id, err)
+			return AdvanceResult{}, fmt.Errorf("advance run %d: %w", id, err)
 		}
 		s.hub.Publish(jobKey, hub.SSEEvent{
 			Type: "state_changed",
 			Data: stateChangedPayload{RunID: id, State: StateExecuting},
 		})
 		go s.runProcessingStub(id)
-		return StateExecuting, nil
+		return AdvanceResult{State: StateExecuting}, nil
 
 	case StateWaitingReviewHighlights:
 		if err := s.repo.AdvanceState(ctx, id, StateWaitingReviewHighlights, StateGeneratingClips); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				if curr, _ := s.repo.GetByID(ctx, id); curr != nil {
-					return curr.State, nil
+					return AdvanceResult{State: curr.State}, nil
 				}
 			}
-			return "", fmt.Errorf("advance run %d: %w", id, err)
+			return AdvanceResult{}, fmt.Errorf("advance run %d: %w", id, err)
 		}
 		s.hub.Publish(jobKey, hub.SSEEvent{
 			Type: "state_changed",
 			Data: stateChangedPayload{RunID: id, State: StateGeneratingClips},
 		})
-		go s.runClipGenStub(id)
-		return StateGeneratingClips, nil
+		go s.runClipGeneration(id)
+		return AdvanceResult{State: StateGeneratingClips}, nil
 
 	case StateWaitingThumbnailConfig:
 		return s.advanceSimple(ctx, id, StateWaitingThumbnailConfig, StateWaitingReviewMetadata)
@@ -212,39 +282,39 @@ func (s *Service) Advance(ctx context.Context, id int64, req AdvanceRequest) (st
 		if err := s.repo.AdvanceState(ctx, id, StateWaitingUploadConfirm, StateUploading); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				if curr, _ := s.repo.GetByID(ctx, id); curr != nil {
-					return curr.State, nil
+					return AdvanceResult{State: curr.State}, nil
 				}
 			}
-			return "", fmt.Errorf("advance run %d: %w", id, err)
+			return AdvanceResult{}, fmt.Errorf("advance run %d: %w", id, err)
 		}
 		s.hub.Publish(jobKey, hub.SSEEvent{
 			Type: "state_changed",
 			Data: stateChangedPayload{RunID: id, State: StateUploading},
 		})
 		go s.runUploadStub(id)
-		return StateUploading, nil
+		return AdvanceResult{State: StateUploading}, nil
 
 	default:
-		return "", fmt.Errorf("no advance action for state %s", run.State)
+		return AdvanceResult{}, fmt.Errorf("no advance action for state %s", run.State)
 	}
 }
 
 // advanceSimple atomically moves a run from fromState to toState (no background goroutine).
-func (s *Service) advanceSimple(ctx context.Context, id int64, fromState, toState string) (string, error) {
+func (s *Service) advanceSimple(ctx context.Context, id int64, fromState, toState string) (AdvanceResult, error) {
 	jobKey := fmt.Sprintf("%d", id)
 	if err := s.repo.AdvanceState(ctx, id, fromState, toState); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			if curr, _ := s.repo.GetByID(ctx, id); curr != nil {
-				return curr.State, nil
+				return AdvanceResult{State: curr.State}, nil
 			}
 		}
-		return "", fmt.Errorf("advance run: %w", err)
+		return AdvanceResult{}, fmt.Errorf("advance run: %w", err)
 	}
 	s.hub.Publish(jobKey, hub.SSEEvent{
 		Type: "state_changed",
 		Data: stateChangedPayload{RunID: id, State: toState},
 	})
-	return toState, nil
+	return AdvanceResult{State: toState}, nil
 }
 
 // Cancel transitions a run to CANCELLED and terminates the background download.
@@ -434,19 +504,19 @@ func (s *Service) runDownload(ctx context.Context, id int64, videoURL string) {
 		}
 	}
 
-	// Transition to WAITING_MODE.
-	if err := s.repo.Finish(ctx, id, StateWaitingMode, ""); err != nil {
-		s.log.Error("finish run failed", "run_id", id, "err", err)
+	// Clear active_phase — download is done. State is already WAITING_MODE (set during Advance).
+	if err := s.repo.SetActivePhase(ctx, id, ""); err != nil {
+		s.log.Error("clear active_phase failed", "run_id", id, "err", err)
 	}
 
-	// Publish 100% progress then state change.
+	// Publish 100% progress then download_complete event.
 	s.hub.Publish(jobKey, hub.SSEEvent{
 		Type: "phase_progress",
 		Data: phaseProgressPayload{RunID: id, Phase: PhaseDownload, PercentDone: 100},
 	})
 	s.hub.Publish(jobKey, hub.SSEEvent{
-		Type: "state_changed",
-		Data: stateChangedPayload{RunID: id, State: StateWaitingMode},
+		Type: "download_complete",
+		Data: downloadCompletePayload{RunID: id, VideoPath: dlInfo.FilePath},
 	})
 
 	s.log.Info("pipeline download complete", "run_id", id, "duration", metaInfo.Duration.Round(time.Second))
@@ -467,19 +537,164 @@ func (s *Service) runProcessingStub(id int64) {
 	})
 }
 
-// runClipGenStub advances GENERATING_CLIPS → WAITING_THUMBNAIL_CONFIG after a 100ms delay.
-func (s *Service) runClipGenStub(id int64) {
-	time.Sleep(100 * time.Millisecond)
+// runClipGeneration generates clips for all selected highlights with the full effect pipeline.
+func (s *Service) runClipGeneration(id int64) {
+	jobKey := fmt.Sprintf("%d", id)
+	ctx := context.Background()
+	log := s.log.With("run_id", id, "phase", "clip_gen")
+
+	publishError := func(msg string) {
+		log.Error("clip generation failed", "err", msg)
+		_ = s.repo.Finish(ctx, id, StateError, msg)
+		s.hub.Publish(jobKey, hub.SSEEvent{
+			Type: "error",
+			Data: map[string]interface{}{"run_id": id, "state": StateError, "message": msg},
+		})
+	}
+
+	// Load run for video_path, duration, channel, mode config
+	run, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		publishError(fmt.Sprintf("load run: %s", err))
+		return
+	}
+	if run.VideoPath == "" {
+		publishError("no video_path — download may have failed")
+		return
+	}
+
+	// Load channel config for effect layers
+	var channelCfg database.ChannelConfig
+	if run.ChannelID.Valid && s.channelCfgRepo != nil {
+		cc, err := s.channelCfgRepo.GetByChannelID(ctx, run.ChannelID.Int64)
+		if err != nil {
+			log.Warn("channel config lookup failed, using defaults", "channel_id", run.ChannelID.Int64, "err", err)
+		} else {
+			channelCfg = *cc
+		}
+	}
+
+	// Fetch selected highlights
+	highlights, err := s.highlightRepo.ListSelectedByRun(ctx, id)
+	if err != nil {
+		publishError(fmt.Sprintf("load highlights: %s", err))
+		return
+	}
+	if len(highlights) == 0 {
+		log.Warn("no selected highlights — advancing without clips")
+		s.advanceClipGenDone(id)
+		return
+	}
+
+	totalClips := len(highlights)
+	log.Info("starting clip generation", "total_clips", totalClips)
+
+	for i, hl := range highlights {
+		// Use adjusted boundaries if set, otherwise original
+		startSec := hl.AdjStartSec
+		endSec := hl.AdjEndSec
+		if startSec == 0 && endSec == 0 {
+			startSec = hl.StartSec
+			endSec = hl.EndSec
+		}
+
+		// Create clip row
+		clip := &database.PipelineClip{
+			RunID:       id,
+			HighlightID: sql.NullInt64{Int64: hl.ID, Valid: true},
+			StartSec:    startSec,
+			EndSec:      endSec,
+			DurationSec: endSec - startSec,
+			IsSelected:  true,
+			Title:       hl.Text,
+		}
+		clipID, err := s.clipRepo.Create(ctx, clip)
+		if err != nil {
+			log.Error("create clip row failed", "highlight_id", hl.ID, "err", err)
+			continue
+		}
+
+		// Publish per-clip progress
+		clipPct := float64(i) / float64(totalClips) * 100
+		s.hub.Publish(jobKey, hub.SSEEvent{
+			Type: "phase_progress",
+			Data: phaseProgressPayload{RunID: id, Phase: "cut", PercentDone: clipPct},
+		})
+
+		// Generate clip with all effect layers
+		clipReq := processor.ClipRequest{
+			RunID:      id,
+			ClipID:     clipID,
+			VideoPath:  run.VideoPath,
+			StartSec:   startSec,
+			EndSec:     endSec,
+			ChannelCfg: channelCfg,
+			ModeCfg:    json.RawMessage(run.ModeConfigJSON),
+			DataDir:    s.dataDir,
+			OnProgress: func(pct float64) {
+				// Scale per-clip progress within the overall range
+				overallPct := (float64(i) + pct/100) / float64(totalClips) * 100
+				s.hub.Publish(jobKey, hub.SSEEvent{
+					Type: "phase_progress",
+					Data: phaseProgressPayload{RunID: id, Phase: "cut", PercentDone: overallPct},
+				})
+			},
+		}
+
+		outPath, err := processor.GenerateClip(ctx, clipReq)
+		if err != nil {
+			log.Error("clip generation failed", "clip_id", clipID, "highlight_id", hl.ID, "err", err)
+			_ = s.clipRepo.UpdateStatus(ctx, clipID, "error")
+			continue // continue with next clip
+		}
+
+		// Update clip with file path
+		_ = s.clipRepo.UpdateFilePath(ctx, clipID, outPath)
+		_ = s.clipRepo.UpdateStatus(ctx, clipID, "ready")
+		log.Info("clip generated", "clip_id", clipID, "path", outPath, "progress", fmt.Sprintf("%d/%d", i+1, totalClips))
+	}
+
+	// Publish 100% progress
+	s.hub.Publish(jobKey, hub.SSEEvent{
+		Type: "phase_progress",
+		Data: phaseProgressPayload{RunID: id, Phase: "cut", PercentDone: 100},
+	})
+
+	s.advanceClipGenDone(id)
+}
+
+// advanceClipGenDone transitions from GENERATING_CLIPS to WAITING_THUMBNAIL_CONFIG.
+func (s *Service) advanceClipGenDone(id int64) {
 	jobKey := fmt.Sprintf("%d", id)
 	ctx := context.Background()
 	if err := s.repo.AdvanceState(ctx, id, StateGeneratingClips, StateWaitingThumbnailConfig); err != nil {
-		s.log.Error("clip gen stub advance failed", "run_id", id, "err", err)
+		s.log.Error("clip gen advance failed", "run_id", id, "err", err)
 		return
 	}
 	s.hub.Publish(jobKey, hub.SSEEvent{
 		Type: "state_changed",
 		Data: stateChangedPayload{RunID: id, State: StateWaitingThumbnailConfig},
 	})
+}
+
+// copyFile copies src to dst using io.Copy.
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("open source: %w", err)
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return fmt.Errorf("create dest: %w", err)
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return fmt.Errorf("copy: %w", err)
+	}
+	return out.Close()
 }
 
 // runUploadStub advances UPLOADING → DONE after a 100ms delay.
