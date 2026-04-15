@@ -42,6 +42,7 @@ interface ChannelState {
   removeChannel: (goUrl: string, id: number) => Promise<void>;
   selectChannel: (id: number | null) => void;
   loadChannelConfig: (goUrl: string, channelId: number) => Promise<void>;
+  refreshConnectedChannels: (goUrl: string) => Promise<void>;
 }
 
 export const useChannelStore = create<ChannelState>((set, get) => ({
@@ -94,6 +95,30 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
 
   selectChannel: (id) => {
     set({ selectedChannelId: id });
+  },
+
+  refreshConnectedChannels: async (goUrl) => {
+    const channels = get().channels.length > 0
+      ? get().channels
+      : await (async () => {
+          const res = await fetch(`${goUrl}/api/channels`);
+          if (!res.ok) return [] as Channel[];
+          return (await res.json()) as Channel[];
+        })();
+
+    const connected = channels.filter((ch) => !!ch.RefreshToken);
+    if (connected.length === 0) return;
+
+    log.info('refreshing tokens', { count: connected.length });
+    await Promise.allSettled(
+      connected.map((ch) =>
+        fetch(`${goUrl}/api/channels/${ch.ID}/auth/refresh`, { method: 'POST' })
+          .then((r) => { if (!r.ok) throw new Error(`${r.status}`); })
+          .then(() => log.info('token refreshed', { id: ch.ID }))
+          .catch((err) => log.warn('token refresh failed', { id: ch.ID, err: String(err) }))
+      )
+    );
+    await get().fetchChannels(goUrl);
   },
 
   loadChannelConfig: async (goUrl, channelId) => {

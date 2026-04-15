@@ -1,0 +1,9 @@
+
+ RUN  v4.1.2 /Users/joaogabriel/Projects/YoutubeProjects/AutoCut/apps/web
+
+
+ Test Files  8 passed (8)
+      Tests  24 passed (24)
+   Start at  13:36:08
+   Duration  1.34s (transform 615ms, setup 666ms, import 2.00s, tests 509ms, environment 5.12s)
+

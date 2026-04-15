@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Loader2, ArrowUpCircle, X } from 'lucide-react';
 import { useSetupCheck } from '@/hooks/useSetupCheck';
 import { SetupGate } from './SetupGate';
+import { useAppStore } from '@/store/appStore';
+import { useChannelStore } from '@/store/channelStore';
 
 const BACKEND_TIMEOUT_MS = 3_000;
 
@@ -17,6 +19,9 @@ export function SetupProvider({ children }: SetupProviderProps) {
   const [timedOut, setTimedOut] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false);
+  const goUrl = useAppStore((s) => s.goUrl);
+  const refreshConnectedChannels = useChannelStore((s) => s.refreshConnectedChannels);
+  const refreshedRef = useRef(false);
 
   const updatableTools = tools.filter((t) => t.updateAvailable);
 
@@ -33,6 +38,13 @@ export function SetupProvider({ children }: SetupProviderProps) {
 
     return () => clearTimeout(timer);
   }, [isLoading]);
+
+  // Refresh OAuth tokens for connected channels once the backend is ready
+  useEffect(() => {
+    if (!isReady || refreshedRef.current) return;
+    refreshedRef.current = true;
+    void refreshConnectedChannels(goUrl);
+  }, [isReady, goUrl, refreshConnectedChannels]);
 
   const handleComplete = useCallback(() => {
     setDismissed(true);
