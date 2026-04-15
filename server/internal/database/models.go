@@ -201,10 +201,10 @@ type MusicBlacklistEntry struct {
 
 // Kotlin: AppSettingsTable in Tables.kt
 type AppSetting struct {
-	ID        int64
-	Key       string
-	Value     string
-	UpdatedAt int64
+	ID        int64  `json:"id"`
+	Key       string `json:"key"`
+	Value     string `json:"value"`
+	UpdatedAt int64  `json:"updated_at"`
 }
 
 // Kotlin: data class OAuthClientSecret in OAuthClientSecretRepository.kt

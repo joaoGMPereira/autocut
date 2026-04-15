@@ -12,7 +12,7 @@ import {
 interface BackConfirmDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  variant: 'cancel-operation' | 'leave-page';
+  variant: 'cancel-operation' | 'leave-page' | 'start-over';
   onConfirm: () => void;
 }
 
@@ -26,6 +26,11 @@ const VARIANTS = {
     title: 'Leave pipeline?',
     body: 'Leaving this page will cancel your active pipeline run.',
     confirmLabel: 'Leave',
+  },
+  'start-over': {
+    title: 'Start over?',
+    body: 'This will cancel the current pipeline run and return you to the beginning.',
+    confirmLabel: 'Start Over',
   },
 } as const;
 

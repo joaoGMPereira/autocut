@@ -301,12 +301,30 @@ export interface SSEVideoInfoPayload {
   channel_name?: string;
 }
 
+export interface SSEPreviewProgressPayload {
+  run_id: number;
+  percent: number;
+}
+
+export interface SSEPreviewReadyPayload {
+  run_id: number;
+  url: string;
+}
+
+export interface SSEPreviewErrorPayload {
+  run_id: number;
+  message: string;
+}
+
 export interface SSEEvent {
   type:
     | 'state_changed'
     | 'gate_opened'
     | 'phase_progress'
     | 'video_info'
+    | 'preview_progress'
+    | 'preview_ready'
+    | 'preview_error'
     | 'done'
     | 'error'
     | 'cancelled'
@@ -316,6 +334,9 @@ export interface SSEEvent {
     | SSEGateOpenedPayload
     | SSEPhaseProgressPayload
     | SSEVideoInfoPayload
+    | SSEPreviewProgressPayload
+    | SSEPreviewReadyPayload
+    | SSEPreviewErrorPayload
     | { run_id: number; state: RunState; message?: string };
 }
 

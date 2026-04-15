@@ -62,14 +62,23 @@ function waitForService(url: string, healthPath = '/health', timeoutMs = 30000):
 
 // ─── Go server ────────────────────────────────────────────────────────────────
 
+function getAssetsDir(): string {
+  if (IS_DEV) {
+    return path.join(__dirname, '..', '..', '..', 'assets');
+  }
+  return path.join(process.resourcesPath, 'assets');
+}
+
 function startGoServer(): void {
   const bin = getGoBinPath();
   const dir = getAppDataDir();
+  const assetsPath = getAssetsDir();
 
   goProcess = spawn(bin, [
     '-host', '127.0.0.1',
     '-port', String(GO_PORT),
     '-dir', dir,
+    '-assets-dir', assetsPath,
   ], {
     detached: false,
     stdio: ['ignore', 'pipe', 'pipe'],

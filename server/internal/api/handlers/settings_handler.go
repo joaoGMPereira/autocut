@@ -13,6 +13,7 @@ import (
 type AppSettingRepoFace interface {
 	List(ctx context.Context) ([]database.AppSetting, error)
 	Set(ctx context.Context, key, value string) error
+	Delete(ctx context.Context, key string) error
 }
 
 // SettingsHandler handles app-settings CRUD.
@@ -70,4 +71,23 @@ func (h *SettingsHandler) PutSetting(w http.ResponseWriter, r *http.Request) {
 	slog.Info("setting updated", "key", body.Key)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"key": body.Key, "value": body.Value})
+}
+
+// DeleteSetting removes a single setting by key.
+// DELETE /api/settings?key=xxx → 204
+func (h *SettingsHandler) DeleteSetting(w http.ResponseWriter, r *http.Request) {
+	key := r.URL.Query().Get("key")
+	if key == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"code": "invalid_request", "message": "key query param is required"})
+		return
+	}
+	if err := h.repo.Delete(r.Context(), key); err != nil {
+		slog.Error("delete setting failed", "key", key, "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	slog.Info("setting deleted", "key", key)
+	w.WriteHeader(http.StatusNoContent)
 }

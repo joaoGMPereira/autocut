@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useAppStore } from '@/store/appStore';
-import { usePipelineStore } from '@/store/pipelineStore';
+import { usePipelineStore, type PreviewStatus } from '@/store/pipelineStore';
+import { useChannelStore } from '@/store/channelStore';
 import { AI_DEFAULTS, LONGFORM_DEFAULTS } from '@/types/pipeline';
 import type { AntiDupEffects, AntiDuplicateConfig, BackgroundMusicConfig, BrandingConfig, CaptionsConfig, GatePayload, ModeConfig, PriorClipsResponse, TextOverlayItem, TextOverlaysConfig, VideoOverlayConfig, WorkflowMode } from '@/types/pipeline';
 import { PositionGrid } from '@/components/ui/PositionGrid';
@@ -17,8 +18,18 @@ export function StepMode({ historical }: StepModeProps) {
   const advance = usePipelineStore((s) => s.advance);
   const run = usePipelineStore((s) => s.run);
   const videoInfo = usePipelineStore((s) => s.videoInfo);
+  const generatePreview = usePipelineStore((s) => s.generatePreview);
+  const previewStatus = usePipelineStore((s) => s.previewStatus);
+  const previewPercent = usePipelineStore((s) => s.previewPercent);
+  const previewUrl = usePipelineStore((s) => s.previewUrl);
+  const previewError = usePipelineStore((s) => s.previewError);
+  const channels = useChannelStore((s) => s.channels);
+  const fetchChannels = useChannelStore((s) => s.fetchChannels);
 
   const isHistorical = historical !== undefined;
+
+  // ── Resolve channel logo for branding preview ─────────────────────────────
+  const activeChannel = channels.find((c) => c.ID === run?.channel_id) ?? channels.find((c) => c.IsFavorite) ?? channels[0] ?? null;
 
   // ── Primary selection ──────────────────────────────────────────────────────
   const [selectedMode, setSelectedMode] = useState<WorkflowMode>('longform');
@@ -107,6 +118,8 @@ export function StepMode({ historical }: StepModeProps) {
   const [textOverlayItems, setTextOverlayItems] = useState<TextOverlayItem[]>([]);
 
   const [presetName, setPresetName] = useState<string>('');
+  const [presets, setPresets] = useState<Array<{ name: string; config: ModeConfig; updatedAt: number }>>([]);
+  const [activePresetName, setActivePresetName] = useState<string | null>(null);
 
   // ── Derived validation (computed — not useState) ───────────────────────────
   const isMinDurationInvalid = selectedMode === 'ai' && minDurationSecs >= clipDurationSecs;
@@ -115,86 +128,95 @@ export function StepMode({ historical }: StepModeProps) {
   const [isLoadingPreference, setIsLoadingPreference] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
+  // ── Apply a ModeConfig to all state (used by presets + historical) ─────────
+  const applyModeConfig = (cfg: ModeConfig) => {
+    setSelectedMode(cfg.mode);
+    if (cfg.sensitivity_pct != null) setSensitivityPct(cfg.sensitivity_pct);
+    if (cfg.skip_music_mins !== undefined) setSkipMusicMins(cfg.skip_music_mins);
+    if (cfg.force_regenerate != null) setForceRegenerate(cfg.force_regenerate);
+    if (cfg.skip_transcription != null) setSkipTranscription(cfg.skip_transcription);
+    if (cfg.segment_secs != null) setSegmentSecs(cfg.segment_secs);
+    setMinPartSecs(cfg.min_part_secs ?? 0);
+    if (cfg.max_duration_secs != null && cfg.max_duration_secs > 0) setClipDurationSecs(cfg.max_duration_secs);
+    if (cfg.min_duration_secs != null) setMinDurationSecs(cfg.min_duration_secs);
+    if (cfg.anti_duplicate) {
+      setAntiDupEnabled(cfg.anti_duplicate.enabled);
+      setAntiDupMode(cfg.anti_duplicate.mode);
+      if (cfg.anti_duplicate?.effects) setAntiDupEffects(cfg.anti_duplicate.effects);
+    }
+    if (cfg.skip_regenerate != null) setSkipRegenerate(cfg.skip_regenerate);
+    if (cfg.upload_options) {
+      setUploadPrivacy(cfg.upload_options.privacy);
+      setUploadScheduleEnabled(cfg.upload_options.schedule_enabled);
+      setUploadAutoEnabled(cfg.upload_options.auto_enabled);
+      setUploadDryRun(cfg.upload_options.dry_run);
+    }
+    if (cfg.captions) {
+      setCaptionsEnabled(cfg.captions.enabled);
+      setCaptionsPreset(cfg.captions.preset);
+      if (cfg.captions.font_family != null) setCaptionsFontFamily(cfg.captions.font_family);
+      if (cfg.captions.bold != null) setCaptionsBold(cfg.captions.bold);
+      if (cfg.captions.italic != null) setCaptionsItalic(cfg.captions.italic);
+      if (cfg.captions.uppercase != null) setCaptionsUppercase(cfg.captions.uppercase);
+      if (cfg.captions.font_size != null) setCaptionsFontSize(cfg.captions.font_size);
+      if (cfg.captions.text_color != null) setCaptionsTextColor(cfg.captions.text_color);
+      if (cfg.captions.bg_enabled != null) setCaptionsBgEnabled(cfg.captions.bg_enabled);
+      if (cfg.captions.outline_enabled != null) setCaptionsOutlineEnabled(cfg.captions.outline_enabled);
+      if (cfg.captions.outline_color != null) setCaptionsOutlineColor(cfg.captions.outline_color);
+      if (cfg.captions.outline_width != null) setCaptionsOutlineWidth(cfg.captions.outline_width);
+      if (cfg.captions.shadow_enabled != null) setCaptionsShadowEnabled(cfg.captions.shadow_enabled);
+      if (cfg.captions.shadow_color != null) setCaptionsShadowColor(cfg.captions.shadow_color);
+      if (cfg.captions.shadow_distance != null) setCaptionsShadowDistance(cfg.captions.shadow_distance);
+      if (cfg.captions.vertical_offset != null) setCaptionsVerticalOffset(cfg.captions.vertical_offset);
+    }
+    if (cfg.background_music) {
+      setMusicEnabled(cfg.background_music.enabled);
+      setMusicMode(cfg.background_music.mode);
+      if (cfg.background_music.custom_path) setMusicCustomPath(cfg.background_music.custom_path);
+      if (cfg.background_music.selected_track) setMusicSelectedTrack(cfg.background_music.selected_track);
+      setMusicVolumePct(cfg.background_music.volume_pct);
+    }
+    if (cfg.branding) {
+      setBrandingLogoEnabled(cfg.branding.logo_enabled);
+      if (cfg.branding.logo_path != null) {
+        setBrandingLogoPath(cfg.branding.logo_path);
+        setBrandingLogoIsCustom(true);
+      }
+      setBrandingLogoPosition(cfg.branding.logo_position);
+      setBrandingLogoOpacity(cfg.branding.logo_opacity);
+      setBrandingLogoScale(cfg.branding.logo_scale);
+      setBrandingLogoPulse(cfg.branding.logo_pulse);
+      setBrandingIntroEnabled(cfg.branding.intro_enabled);
+      setBrandingOutroEnabled(cfg.branding.outro_enabled);
+    }
+    if (cfg.video_overlay) {
+      setOverlayEnabled(cfg.video_overlay.enabled);
+      if (cfg.video_overlay.video_path) setOverlayVideoPath(cfg.video_overlay.video_path);
+      setOverlayScalePct(cfg.video_overlay.scale_pct);
+      setOverlayPosition(cfg.video_overlay.position);
+      setOverlayAppearances(cfg.video_overlay.appearances);
+      setOverlayEndOffsetSec(cfg.video_overlay.end_offset_sec);
+      if (cfg.video_overlay.chroma_key) setOverlayChromaKey(cfg.video_overlay.chroma_key);
+    }
+    if (cfg.text_overlays) {
+      setTextOverlaysEnabled(cfg.text_overlays.enabled);
+      setTextOverlayItems(cfg.text_overlays.items);
+    }
+  };
+
+  // ── Fetch channels if not loaded (needed for logo preview) ────────────────
+  useEffect(() => {
+    if (channels.length === 0) void fetchChannels(goUrl);
+  }, [goUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Mount effect: historical pre-fill or fetch preference ──────────────────
   useEffect(() => {
     console.log('[StepMode] mount — isHistorical:', isHistorical);
 
     // Priority 1: historical back-navigation pre-fill
     if (historical?.kind === 'mode' && historical.mode_config) {
-      const cfg = historical.mode_config;
-      console.log('[StepMode] pre-filling from historical mode_config', cfg);
-      setSelectedMode(cfg.mode);
-      if (cfg.sensitivity_pct != null) setSensitivityPct(cfg.sensitivity_pct);
-      if (cfg.skip_music_mins !== undefined) setSkipMusicMins(cfg.skip_music_mins);
-      if (cfg.force_regenerate != null) setForceRegenerate(cfg.force_regenerate);
-      if (cfg.skip_transcription != null) setSkipTranscription(cfg.skip_transcription);
-      if (cfg.segment_secs != null) setSegmentSecs(cfg.segment_secs);
-      setMinPartSecs(cfg.min_part_secs ?? 0);
-      if (cfg.max_duration_secs != null && cfg.max_duration_secs > 0) setClipDurationSecs(cfg.max_duration_secs);
-      if (cfg.min_duration_secs != null) setMinDurationSecs(cfg.min_duration_secs);
-      if (cfg.anti_duplicate) {
-        setAntiDupEnabled(cfg.anti_duplicate.enabled);
-        setAntiDupMode(cfg.anti_duplicate.mode);
-        if (cfg.anti_duplicate?.effects) setAntiDupEffects(cfg.anti_duplicate.effects);
-      }
-      if (cfg.skip_regenerate != null) setSkipRegenerate(cfg.skip_regenerate);
-      if (cfg.upload_options) {
-        setUploadPrivacy(cfg.upload_options.privacy);
-        setUploadScheduleEnabled(cfg.upload_options.schedule_enabled);
-        setUploadAutoEnabled(cfg.upload_options.auto_enabled);
-        setUploadDryRun(cfg.upload_options.dry_run);
-      }
-      if (cfg.captions) {
-        setCaptionsEnabled(cfg.captions.enabled);
-        setCaptionsPreset(cfg.captions.preset);
-        if (cfg.captions.font_family != null) setCaptionsFontFamily(cfg.captions.font_family);
-        if (cfg.captions.bold != null) setCaptionsBold(cfg.captions.bold);
-        if (cfg.captions.italic != null) setCaptionsItalic(cfg.captions.italic);
-        if (cfg.captions.uppercase != null) setCaptionsUppercase(cfg.captions.uppercase);
-        if (cfg.captions.font_size != null) setCaptionsFontSize(cfg.captions.font_size);
-        if (cfg.captions.text_color != null) setCaptionsTextColor(cfg.captions.text_color);
-        if (cfg.captions.bg_enabled != null) setCaptionsBgEnabled(cfg.captions.bg_enabled);
-        if (cfg.captions.outline_enabled != null) setCaptionsOutlineEnabled(cfg.captions.outline_enabled);
-        if (cfg.captions.outline_color != null) setCaptionsOutlineColor(cfg.captions.outline_color);
-        if (cfg.captions.outline_width != null) setCaptionsOutlineWidth(cfg.captions.outline_width);
-        if (cfg.captions.shadow_enabled != null) setCaptionsShadowEnabled(cfg.captions.shadow_enabled);
-        if (cfg.captions.shadow_color != null) setCaptionsShadowColor(cfg.captions.shadow_color);
-        if (cfg.captions.shadow_distance != null) setCaptionsShadowDistance(cfg.captions.shadow_distance);
-        if (cfg.captions.vertical_offset != null) setCaptionsVerticalOffset(cfg.captions.vertical_offset);
-      }
-      if (cfg.background_music) {
-        setMusicEnabled(cfg.background_music.enabled);
-        setMusicMode(cfg.background_music.mode);
-        if (cfg.background_music.custom_path) setMusicCustomPath(cfg.background_music.custom_path);
-        if (cfg.background_music.selected_track) setMusicSelectedTrack(cfg.background_music.selected_track);
-        setMusicVolumePct(cfg.background_music.volume_pct);
-      }
-      if (cfg.branding) {
-        setBrandingLogoEnabled(cfg.branding.logo_enabled);
-        if (cfg.branding.logo_path != null) {
-          setBrandingLogoPath(cfg.branding.logo_path);
-          setBrandingLogoIsCustom(true);
-        }
-        setBrandingLogoPosition(cfg.branding.logo_position);
-        setBrandingLogoOpacity(cfg.branding.logo_opacity);
-        setBrandingLogoScale(cfg.branding.logo_scale);
-        setBrandingLogoPulse(cfg.branding.logo_pulse);
-        setBrandingIntroEnabled(cfg.branding.intro_enabled);
-        setBrandingOutroEnabled(cfg.branding.outro_enabled);
-      }
-      if (cfg.video_overlay) {
-        setOverlayEnabled(cfg.video_overlay.enabled);
-        if (cfg.video_overlay.video_path) setOverlayVideoPath(cfg.video_overlay.video_path);
-        setOverlayScalePct(cfg.video_overlay.scale_pct);
-        setOverlayPosition(cfg.video_overlay.position);
-        setOverlayAppearances(cfg.video_overlay.appearances);
-        setOverlayEndOffsetSec(cfg.video_overlay.end_offset_sec);
-        if (cfg.video_overlay.chroma_key) setOverlayChromaKey(cfg.video_overlay.chroma_key);
-      }
-      if (cfg.text_overlays) {
-        setTextOverlaysEnabled(cfg.text_overlays.enabled);
-        setTextOverlayItems(cfg.text_overlays.items);
-      }
+      console.log('[StepMode] pre-filling from historical mode_config');
+      applyModeConfig(historical.mode_config);
       setIsLoadingPreference(false);
       return;
     }
@@ -205,6 +227,40 @@ export function StepMode({ historical }: StepModeProps) {
         console.log('[StepMode] fetching settings from', goUrl);
         const res = await fetch(`${goUrl}/api/settings`);
         const data = (await res.json()) as Array<{ key: string; value: string }>;
+
+        // Extract saved presets (keys starting with "preset_"), sort newest first
+        const loadedPresets: Array<{ name: string; config: ModeConfig; updatedAt: number }> = [];
+        for (const s of data) {
+          if (s.key.startsWith('preset_')) {
+            try {
+              const config = JSON.parse(s.value) as ModeConfig;
+              loadedPresets.push({ name: s.key.slice('preset_'.length), config, updatedAt: (s as { key: string; value: string; updated_at?: number }).updated_at ?? 0 });
+            } catch { /* skip malformed */ }
+          }
+        }
+        loadedPresets.sort((a, b) => b.updatedAt - a.updatedAt);
+        setPresets(loadedPresets);
+
+        // Auto-apply the most recently updated preset (first in sorted list)
+        if (loadedPresets.length > 0) {
+          const latest = loadedPresets[0];
+          console.log('[StepMode] auto-applying most recent preset:', latest.name);
+          applyModeConfig(latest.config);
+          setActivePresetName(latest.name);
+          setPresetName(latest.name);
+          setIsLoadingPreference(false);
+          // Still check for prior clips
+          if (run?.url) {
+            try {
+              const prRes = await fetch(`${goUrl}/api/pipeline/runs/prior-clips?url=${encodeURIComponent(run.url)}`);
+              if (prRes.ok) {
+                const prData = (await prRes.json()) as PriorClipsResponse;
+                if (prData.exists && prData.run_id != null) setPriorRunId(prData.run_id);
+              }
+            } catch { /* non-fatal */ }
+          }
+          return;
+        }
 
         // Helper functions to parse settings values
         const parseIntKey = (key: string, fallback: number): number => {
@@ -365,14 +421,42 @@ export function StepMode({ historical }: StepModeProps) {
 
   const handleSavePreset = async () => {
     if (!presetName.trim()) return;
+    const name = presetName.trim();
     const cfg = buildModeConfig();
     try {
       await fetch(`${goUrl}/api/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: `preset_${presetName.trim()}`, value: JSON.stringify(cfg) }),
+        body: JSON.stringify({ key: `preset_${name}`, value: JSON.stringify(cfg) }),
       });
+      // Update local state — put updated preset first (most recent)
+      const now = Date.now();
+      setPresets((prev) => {
+        const filtered = prev.filter((p) => p.name !== name);
+        return [{ name, config: cfg, updatedAt: now }, ...filtered];
+      });
+      setActivePresetName(name);
       setPresetName('');
+    } catch {
+      // non-fatal
+    }
+  };
+
+  const handleSelectPreset = (name: string) => {
+    const preset = presets.find((p) => p.name === name);
+    if (!preset) return;
+    applyModeConfig(preset.config);
+    setActivePresetName(name);
+    setPresetName(name);
+  };
+
+  const handleDeletePreset = async (name: string) => {
+    try {
+      await fetch(`${goUrl}/api/settings?key=${encodeURIComponent(`preset_${name}`)}`, {
+        method: 'DELETE',
+      });
+      setPresets((prev) => prev.filter((p) => p.name !== name));
+      if (activePresetName === name) setActivePresetName(null);
     } catch {
       // non-fatal
     }
@@ -608,6 +692,39 @@ export function StepMode({ historical }: StepModeProps) {
         </div>
       )}
 
+      {/* Preset Carousel */}
+      {presets.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-zinc-400">Presets</p>
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+            {presets.map((p) => (
+              <div
+                key={p.name}
+                className="flex-shrink-0 group"
+              >
+                <button
+                  onClick={() => handleSelectPreset(p.name)}
+                  className={[
+                    'relative rounded-lg border px-3 py-2 text-xs font-medium transition-colors',
+                    activePresetName === p.name
+                      ? 'border-zinc-400 bg-zinc-800 text-zinc-100'
+                      : 'border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200',
+                  ].join(' ')}
+                >
+                  <span className="pr-4">{p.name}</span>
+                  <span
+                    onClick={(e) => { e.stopPropagation(); void handleDeletePreset(p.name); }}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                  >
+                    &times;
+                  </span>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Reuse Existing Clips — only shown when prior run exists */}
       {priorRunId !== null && (
         <div className="rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3">
@@ -699,37 +816,53 @@ export function StepMode({ historical }: StepModeProps) {
         <div className="space-y-4 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
           <p className="text-xs font-medium text-zinc-300 uppercase tracking-wider">AI Configuration</p>
 
-          {/* Target Clip Duration */}
+          {/* Target Clip Duration — dynamic based on video length, same logic as Long Form */}
           <div className="space-y-1.5">
             <label className="text-xs text-zinc-400">Target Clip Duration</label>
-            <div className="flex gap-2">
-              {([900, 1200, 1800] as const).map((secs) => (
-                <button
-                  key={secs}
-                  onClick={() => setClipDurationSecs(secs)}
-                  className={[
-                    'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
-                    clipDurationSecs === secs
-                      ? 'bg-zinc-300 text-zinc-900 font-medium'
-                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
-                  ].join(' ')}
-                >
-                  {secs === 900 ? '15 min' : secs === 1200 ? '20 min' : '30 min'}
-                </button>
-              ))}
+            <div className="flex gap-2 flex-wrap">
+              {(() => {
+                const MIN_PART = 480; // 8 min
+                const totalSec = videoInfo?.durationSec ?? 0;
+                const suggestions: [number, string][] = [];
+                for (const parts of [3, 2, 1]) {
+                  if (totalSec === 0) break;
+                  const partSec = Math.round(totalSec / parts / 60) * 60;
+                  if (partSec >= MIN_PART) {
+                    const mins = Math.round(partSec / 60);
+                    suggestions.push([partSec, `${mins} min`]);
+                  }
+                }
+                const options: [number, string][] = suggestions.length > 0
+                  ? suggestions
+                  : [[1020, '17 min'], [1560, '26 min'], [3120, '52 min']];
+                return options.map(([secs, label]) => (
+                  <button
+                    key={secs}
+                    onClick={() => setClipDurationSecs(secs)}
+                    className={[
+                      'rounded px-2 py-1.5 text-xs transition-colors',
+                      clipDurationSecs === secs
+                        ? 'bg-zinc-300 text-zinc-900 font-medium'
+                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
+                    ].join(' ')}
+                  >
+                    {label}
+                  </button>
+                ));
+              })()}
             </div>
           </div>
 
           {/* Minimum Clip Duration */}
           <div className="space-y-1.5">
             <label className="text-xs text-zinc-400">Minimum Clip Duration</label>
-            <div className="flex gap-2">
-              {([240, 360, 480, 600] as const).map((secs) => (
+            <div className="flex gap-2 flex-wrap">
+              {([60, 120, 300, 480, 600, 900] as const).map((secs) => (
                 <button
                   key={secs}
                   onClick={() => setMinDurationSecs(secs)}
                   className={[
-                    'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
+                    'rounded px-2 py-1.5 text-xs transition-colors',
                     minDurationSecs === secs
                       ? 'bg-zinc-300 text-zinc-900 font-medium'
                       : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
@@ -1303,40 +1436,58 @@ export function StepMode({ historical }: StepModeProps) {
           {brandingLogoEnabled && (
             <div className="space-y-3 pl-1">
               {/* Logo source */}
-              <div className="space-y-1.5">
-                <label className="text-xs text-zinc-400">Logo</label>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => { setBrandingLogoIsCustom(false); setBrandingLogoPath(''); }}
-                    className={[
-                      'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
-                      !brandingLogoIsCustom
-                        ? 'bg-zinc-300 text-zinc-900 font-medium'
-                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
-                    ].join(' ')}
-                  >
-                    Do canal (auto)
-                  </button>
-                  <button
-                    onClick={() => setBrandingLogoIsCustom(true)}
-                    className={[
-                      'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
-                      brandingLogoIsCustom
-                        ? 'bg-zinc-300 text-zinc-900 font-medium'
-                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
-                    ].join(' ')}
-                  >
-                    Arquivo custom
-                  </button>
-                </div>
+              <div className="space-y-2">
+                <label className="text-xs text-zinc-400">Logo para watermark</label>
+
+                {/* Auto — channel logo preview row */}
+                {!brandingLogoIsCustom && (
+                  <div className="flex items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2">
+                    {activeChannel ? (
+                      <img
+                        src={`${goUrl}/api/channels/${activeChannel.ID}/avatar`}
+                        alt=""
+                        className="h-9 w-9 rounded-full object-cover flex-shrink-0"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; (e.currentTarget.nextElementSibling as HTMLElement | null)?.style.setProperty('display', 'flex'); }}
+                      />
+                    ) : null}
+                    <div
+                      className="h-9 w-9 rounded-full flex-shrink-0 items-center justify-center text-xs font-bold text-white"
+                      style={{ display: activeChannel ? 'none' : 'flex', background: activeChannel ? `hsl(${(activeChannel.ID * 67) % 360}, 55%, 40%)` : '#52525b' }}
+                    >
+                      {activeChannel ? (activeChannel.ChannelTitle || activeChannel.Name).charAt(0).toUpperCase() : '?'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-zinc-200 truncate">
+                        {activeChannel?.ChannelTitle || activeChannel?.Name || 'Logo do canal (automático)'}
+                      </p>
+                      <p className="text-xs text-zinc-500">Baixado do YouTube</p>
+                    </div>
+                    <button
+                      onClick={() => setBrandingLogoIsCustom(true)}
+                      className="text-xs text-zinc-400 hover:text-zinc-200 flex-shrink-0 transition-colors"
+                    >
+                      Trocar
+                    </button>
+                  </div>
+                )}
+
+                {/* Custom path input */}
                 {brandingLogoIsCustom && (
-                  <input
-                    type="text"
-                    value={brandingLogoPath}
-                    onChange={(e) => setBrandingLogoPath(e.target.value)}
-                    placeholder="/caminho/para/logo.png"
-                    className="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
-                  />
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={brandingLogoPath}
+                      onChange={(e) => setBrandingLogoPath(e.target.value)}
+                      placeholder="/caminho/para/logo.png"
+                      className="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                    />
+                    <button
+                      onClick={() => { setBrandingLogoIsCustom(false); setBrandingLogoPath(''); }}
+                      className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                    >
+                      ← Usar logo do canal
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -1860,23 +2011,80 @@ export function StepMode({ historical }: StepModeProps) {
         </div>
       </div>
 
-      {/* Save Preset */}
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={presetName}
-          onChange={(e) => setPresetName(e.target.value)}
-          placeholder="Nome do preset…"
-          className="flex-1 rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
-        />
-        <button
-          onClick={() => void handleSavePreset()}
-          disabled={!presetName.trim()}
-          className="rounded border border-zinc-600 px-3 py-1.5 text-xs text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          Salvar Preset
-        </button>
-      </div>
+      {/* Save / Update Preset */}
+      {(() => {
+        const nameExists = presets.some((p) => p.name === presetName.trim());
+        return (
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={presetName}
+              onChange={(e) => {
+                setPresetName(e.target.value);
+                setActivePresetName(presets.find((p) => p.name === e.target.value.trim())?.name ?? null);
+              }}
+              onKeyDown={(e) => { if (e.key === 'Enter' && presetName.trim()) void handleSavePreset(); }}
+              placeholder="Nome do preset…"
+              className="flex-1 rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+            />
+            <button
+              onClick={() => void handleSavePreset()}
+              disabled={!presetName.trim()}
+              className="rounded border border-zinc-600 px-3 py-1.5 text-xs text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {nameExists ? 'Atualizar' : 'Criar'}
+            </button>
+          </div>
+        );
+      })()}
+
+      {/* Preview section */}
+      {!isLoadingPreference && run?.video_path && (
+        <div className="space-y-3 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-zinc-300">Preview</h3>
+            <button
+              onClick={() => {
+                if (!activeRunId) return;
+                const cfg = buildModeConfig();
+                void generatePreview(goUrl, activeRunId, cfg);
+              }}
+              disabled={previewStatus === 'generating'}
+              className="rounded-md bg-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {previewStatus === 'generating' ? 'Generating…' : previewStatus === 'ready' ? 'Regenerate Preview' : 'Generate Preview'}
+            </button>
+          </div>
+
+          {/* Progress bar */}
+          {previewStatus === 'generating' && (
+            <div className="space-y-1">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800">
+                <div
+                  className="h-full rounded-full bg-blue-500 transition-all duration-300"
+                  style={{ width: `${Math.min(100, previewPercent)}%` }}
+                />
+              </div>
+              <p className="text-xs text-zinc-500">{Math.round(previewPercent)}%</p>
+            </div>
+          )}
+
+          {/* Error */}
+          {previewStatus === 'error' && previewError && (
+            <p className="text-xs text-red-400">{previewError}</p>
+          )}
+
+          {/* Video player */}
+          {previewStatus === 'ready' && previewUrl && (
+            <video
+              src={`${goUrl}${previewUrl}`}
+              controls
+              preload="metadata"
+              className="w-full rounded-md"
+            />
+          )}
+        </div>
+      )}
 
       {/* Submit button */}
       {!isLoadingPreference && (

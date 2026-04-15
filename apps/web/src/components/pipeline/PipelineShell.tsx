@@ -21,6 +21,7 @@ export function PipelineShell({ children }: PipelineShellProps) {
   const activeRunId = usePipelineStore((s) => s.activeRunId);
 
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showStartOverDialog, setShowStartOverDialog] = useState(false);
 
   const { showLeaveDialog, setShowLeaveDialog } = useBackNavigation(
     activeRunId,
@@ -35,6 +36,8 @@ export function PipelineShell({ children }: PipelineShellProps) {
   const isCompute = isComputeState(currentState);
   // Back button on gate steps (except WAITING_URL) — purely local nav, no API call
   const canGateBack = isGateState(displayedState) && displayedState !== 'WAITING_URL' && navIndex > 0;
+  // Start over button on WAITING_URL — resets entire pipeline to fresh state
+  const canUrlStartOver = displayedState === 'WAITING_URL' && run !== null;
 
   const handleGateBack = () => {
     console.log('[PipelineShell] gateBack triggered', displayedState);
@@ -47,6 +50,18 @@ export function PipelineShell({ children }: PipelineShellProps) {
   };
 
   const handleCancelConfirm = () => {
+    if (activeRunId !== null) {
+      void cancelRun(goUrl, activeRunId).then(() => clearRun());
+    } else {
+      clearRun();
+    }
+  };
+
+  const handleStartOver = () => {
+    setShowStartOverDialog(true);
+  };
+
+  const handleStartOverConfirm = () => {
     if (activeRunId !== null) {
       void cancelRun(goUrl, activeRunId).then(() => clearRun());
     } else {
@@ -99,6 +114,16 @@ export function PipelineShell({ children }: PipelineShellProps) {
             </button>
           </div>
         )}
+        {canUrlStartOver && (
+          <div className="shrink-0 border-t border-border bg-background/80 backdrop-blur-sm px-6 py-3 flex items-center">
+            <button
+              onClick={handleStartOver}
+              className="rounded-md border border-border px-4 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+            >
+              ← Start Over
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Right: context panel — 300px */}
@@ -118,6 +143,13 @@ export function PipelineShell({ children }: PipelineShellProps) {
         onOpenChange={setShowLeaveDialog}
         variant="leave-page"
         onConfirm={handleLeaveConfirm}
+      />
+
+      <BackConfirmDialog
+        open={showStartOverDialog}
+        onOpenChange={setShowStartOverDialog}
+        variant="start-over"
+        onConfirm={handleStartOverConfirm}
       />
     </div>
   );

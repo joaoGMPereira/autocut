@@ -5,6 +5,8 @@ import { useAppStore } from '@/store/appStore';
 import { usePipelineStore } from '@/store/pipelineStore';
 import type { PhaseProgress, VideoInfo } from '@/store/pipelineStore';
 import { useUrlHistoryStore } from '@/store/urlHistoryStore';
+import { useChannelStore } from '@/store/channelStore';
+import { ChannelCard, isAuthenticated } from '@/components/channels/ChannelCard';
 import type { GatePayload, UrlHistoryEntry } from '@/types/pipeline';
 
 function DownloadProgressCard({ videoInfo, phaseProgress }: { videoInfo: VideoInfo | null; phaseProgress: PhaseProgress | null }) {
@@ -118,15 +120,28 @@ export function StepUrl({ historical }: StepUrlProps) {
   const phaseProgress = usePipelineStore((s) => s.phaseProgress);
   const videoInfo = usePipelineStore((s) => s.videoInfo);
   const fetchHistory = useUrlHistoryStore((s) => s.fetchHistory);
+  const channels = useChannelStore((s) => s.channels);
+  const fetchChannels = useChannelStore((s) => s.fetchChannels);
 
   const historicalUrl = historical?.kind === 'url' ? historical.url : undefined;
   const [url, setUrl] = useState(historicalUrl ?? '');
-  // True between "Start" click and the first phase_progress SSE event
   const [isPending, setIsPending] = useState(false);
+
+  // Select favorite authenticated channel by default
+  const defaultChannel = channels.find((c) => isAuthenticated(c) && c.IsFavorite) ?? channels.find(isAuthenticated) ?? null;
+  const [selectedChannelId, setSelectedChannelId] = useState<number | null>(null);
 
   useEffect(() => {
     void fetchHistory(goUrl);
-  }, [goUrl, fetchHistory]);
+    if (channels.length === 0) void fetchChannels(goUrl);
+  }, [goUrl, fetchHistory]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-select favorite once channels load
+  useEffect(() => {
+    if (selectedChannelId === null && defaultChannel) {
+      setSelectedChannelId(defaultChannel.ID);
+    }
+  }, [channels]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Clear pending once download actually starts (SSE fires)
   useEffect(() => {
@@ -134,19 +149,19 @@ export function StepUrl({ historical }: StepUrlProps) {
   }, [phaseProgress]);
 
   const isHistorical = historical !== undefined;
-  // Only show download UI when NOT navigated back — phaseProgress may still be
-  // populated from the original run when the user clicks Back to this step.
   const isDownloading = !isHistorical && phaseProgress?.phase === 'download';
   const showPreparing = !isHistorical && isPending && !isDownloading;
+  const selectedChannel = channels.find((c) => c.ID === selectedChannelId) ?? null;
+  const canStart = !!selectedChannelId && !!selectedChannel && isAuthenticated(selectedChannel);
 
   const handleStart = async () => {
     const trimmed = url.trim();
-    if (!trimmed) return;
+    if (!trimmed || !selectedChannelId) return;
     setIsPending(true);
     const runId = await createRun(goUrl);
     if (!runId) { setIsPending(false); return; }
     subscribeSSE(goUrl, runId);
-    await advance(goUrl, runId, { url: trimmed });
+    await advance(goUrl, runId, { url: trimmed, channel_id: selectedChannelId });
   };
 
   const handleResubmit = async () => {
@@ -156,7 +171,7 @@ export function StepUrl({ historical }: StepUrlProps) {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && !isLoading && !isDownloading && !showPreparing) {
+    if (e.key === 'Enter' && !isLoading && !isDownloading && !showPreparing && canStart) {
       if (isHistorical) void handleResubmit();
       else void handleStart();
     }
@@ -172,6 +187,29 @@ export function StepUrl({ historical }: StepUrlProps) {
       {isHistorical && (
         <div className="rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-xs text-zinc-400">
           Reviewing previous submission. Re-submitting will restart the pipeline from this step.
+        </div>
+      )}
+
+      {/* Channel selection */}
+      {!isHistorical && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-zinc-400">Canal</p>
+          {channels.length === 0 ? (
+            <p className="text-xs text-zinc-600">Nenhum canal configurado. Adicione um canal nas configurações.</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {channels.map((ch) => (
+                <ChannelCard
+                  key={ch.ID}
+                  channel={ch}
+                  goUrl={goUrl}
+                  selected={selectedChannelId === ch.ID}
+                  onSelect={(c) => setSelectedChannelId(c.ID)}
+                  showOAuth={!isAuthenticated(ch)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -193,11 +231,17 @@ export function StepUrl({ historical }: StepUrlProps) {
 
           <button
             onClick={() => void (isHistorical ? handleResubmit() : handleStart())}
-            disabled={isLoading || !url.trim()}
+            disabled={isLoading || !url.trim() || (!isHistorical && !canStart)}
             className="w-full rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {isLoading ? 'Starting…' : isHistorical ? 'Re-submit' : 'Start Pipeline'}
           </button>
+
+          {!isHistorical && !canStart && channels.length > 0 && (
+            <p className="text-xs text-zinc-500 text-center">
+              {!selectedChannelId ? 'Selecione um canal para continuar' : 'Autorize o canal para continuar'}
+            </p>
+          )}
 
           {error && (
             <p className="text-xs text-red-400">{error}</p>

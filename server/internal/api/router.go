@@ -60,12 +60,14 @@ func NewRouter(
 	// App settings endpoints
 	mux.HandleFunc("GET /api/settings", seth.GetSettings)
 	mux.HandleFunc("PUT /api/settings", seth.PutSetting)
+	mux.HandleFunc("DELETE /api/settings", seth.DeleteSetting)
 
 	// Channel endpoints
 	mux.HandleFunc("GET /api/channels", ch.GetChannels)
 	mux.HandleFunc("POST /api/channels", ch.PostChannel)
 	mux.HandleFunc("GET /api/channels/{id}", ch.GetChannel)
 	mux.HandleFunc("DELETE /api/channels/{id}", ch.DeleteChannel)
+	mux.HandleFunc("GET /api/channels/{id}/avatar", ch.GetAvatar)
 	mux.HandleFunc("POST /api/channels/{id}/auth", oh.InitOAuthFlow)
 	mux.HandleFunc("POST /api/channels/{id}/auth/refresh", oh.RefreshToken)
 
@@ -82,8 +84,9 @@ func NewRouter(
 	mux.HandleFunc("GET /api/music-library", mlh.GetMusicLibrary)
 	mux.HandleFunc("GET /api/overlay-library", mlh.GetOverlayLibrary)
 
-	// Preview endpoint
+	// Preview endpoints
 	mux.HandleFunc("POST /api/pipeline/runs/{id}/preview", pvh.PostPreview)
+	mux.HandleFunc("GET /api/pipeline/runs/{id}/preview/file", pvh.GetPreviewFile)
 
 	// Stats endpoint
 	mux.HandleFunc("GET /api/stats", sth.GetStats)

@@ -1,6 +1,10 @@
 package database
 
-import "database/sql"
+import (
+	"database/sql"
+	"fmt"
+	"time"
+)
 
 type migration struct {
 	version int
@@ -23,6 +27,8 @@ var allMigrations = []migration{
 	{version: 10, name: "pipeline_run_video_meta", fn: migrateV10},
 	{version: 11, name: "url_history", fn: migrateV11},
 	{version: 12, name: "seed_channels_oauth", fn: migrateV12},
+	{version: 13, name: "seed_app_settings_from_channel", fn: migrateV13},
+	{version: 14, name: "seed_channel_configs_and_defaults", fn: migrateV14},
 }
 
 // migrateV1 creates all 11 application tables.
@@ -485,6 +491,357 @@ func migrateV12(tx *sql.Tx) error {
 			('cortes_react',        'UCNcaOXuxyjSwrbEhgZWA-NA', 'Cortes e React',                 (SELECT id FROM oauth_client_secrets WHERE name = 'OAuth cortes_react'),          0);
 	`)
 	return err
+}
+
+// migrateV13 seeds ~35 app_settings keys from the favorite channel's config on fresh install.
+// If no channels exist, only the fixed defaults are seeded.
+// Uses INSERT OR IGNORE so existing settings are never overwritten.
+func migrateV13(tx *sql.Tx) error {
+	const insertSQL = `INSERT OR IGNORE INTO app_settings (key, value, updated_at) VALUES (?, ?, CAST(strftime('%s','now') AS INTEGER) * 1000)`
+
+	// Helper to seed a key-value pair.
+	seed := func(key, value string) error {
+		_, err := tx.Exec(insertSQL, key, value)
+		if err != nil {
+			return fmt.Errorf("seed app_setting %q: %w", key, err)
+		}
+		return nil
+	}
+
+	// Helper to format a bool as "true"/"false".
+	boolStr := func(b bool) string {
+		if b {
+			return "true"
+		}
+		return "false"
+	}
+
+	// --- Find the favorite channel (or first channel) ---
+	var channelID int64
+	var hasChannel bool
+
+	err := tx.QueryRow(`SELECT id FROM channels WHERE is_favorite = 1 ORDER BY id LIMIT 1`).Scan(&channelID)
+	if err == sql.ErrNoRows {
+		err = tx.QueryRow(`SELECT id FROM channels ORDER BY id LIMIT 1`).Scan(&channelID)
+	}
+	if err == sql.ErrNoRows {
+		hasChannel = false
+	} else if err != nil {
+		return fmt.Errorf("migrateV13: find channel: %w", err)
+	} else {
+		hasChannel = true
+	}
+
+	// --- Seed from channel_config if a channel exists ---
+	if hasChannel {
+		var (
+			brandingLogoEnabled  bool
+			brandingLogoPath     sql.NullString
+			brandingLogoPosition string
+			brandingLogoOpacity  float64
+			brandingLogoScale    float64
+			brandingIntroEnabled bool
+			brandingIntroPath    sql.NullString
+			brandingOutroEnabled bool
+			brandingOutroPath    sql.NullString
+			captionsEnabled      bool
+			captionStyle         string
+			overlayConfigJSON    string
+			musicEnabled         bool
+			musicPath            sql.NullString
+			musicVolume          float64
+			antiDupEnabled       bool
+			antiDupMode          string
+		)
+
+		err = tx.QueryRow(`SELECT
+			branding_logo_enabled, branding_logo_path, branding_logo_position, branding_logo_opacity, branding_logo_scale,
+			branding_intro_enabled, branding_intro_path,
+			branding_outro_enabled, branding_outro_path,
+			preview_captions_enabled, preview_caption_style,
+			preview_video_overlay_config_json,
+			audio_music_enabled, audio_music_path, audio_music_volume,
+			anti_duplicate_enabled, anti_duplicate_mode
+			FROM channel_config WHERE channel_id = ?`, channelID).Scan(
+			&brandingLogoEnabled, &brandingLogoPath, &brandingLogoPosition, &brandingLogoOpacity, &brandingLogoScale,
+			&brandingIntroEnabled, &brandingIntroPath,
+			&brandingOutroEnabled, &brandingOutroPath,
+			&captionsEnabled, &captionStyle,
+			&overlayConfigJSON,
+			&musicEnabled, &musicPath, &musicVolume,
+			&antiDupEnabled, &antiDupMode,
+		)
+
+		if err != nil && err != sql.ErrNoRows {
+			return fmt.Errorf("migrateV13: read channel_config: %w", err)
+		}
+
+		if err == nil {
+			// We have channel_config — map fields to app_settings.
+
+			// branding_logo_enabled: force false if path is NULL or empty
+			logoEnabled := brandingLogoEnabled && brandingLogoPath.Valid && brandingLogoPath.String != ""
+			if err := seed("branding_logo_enabled", boolStr(logoEnabled)); err != nil {
+				return err
+			}
+			// branding_logo_path: only insert if non-NULL/non-empty
+			if brandingLogoPath.Valid && brandingLogoPath.String != "" {
+				if err := seed("branding_logo_path", brandingLogoPath.String); err != nil {
+					return err
+				}
+			}
+			if err := seed("branding_logo_position", brandingLogoPosition); err != nil {
+				return err
+			}
+			if err := seed("branding_logo_opacity", fmt.Sprintf("%d", int(brandingLogoOpacity*100))); err != nil {
+				return err
+			}
+			if err := seed("branding_logo_scale", fmt.Sprintf("%d", int(brandingLogoScale*100))); err != nil {
+				return err
+			}
+
+			// branding_intro_enabled: force false if path is NULL
+			introEnabled := brandingIntroEnabled && brandingIntroPath.Valid
+			if err := seed("branding_intro_enabled", boolStr(introEnabled)); err != nil {
+				return err
+			}
+
+			// branding_outro_enabled: force false if path is NULL
+			outroEnabled := brandingOutroEnabled && brandingOutroPath.Valid
+			if err := seed("branding_outro_enabled", boolStr(outroEnabled)); err != nil {
+				return err
+			}
+
+			if err := seed("captions_enabled", boolStr(captionsEnabled)); err != nil {
+				return err
+			}
+			if err := seed("captions_preset", captionStyle); err != nil {
+				return err
+			}
+			if err := seed("overlay_config_json", overlayConfigJSON); err != nil {
+				return err
+			}
+
+			if err := seed("music_enabled", boolStr(musicEnabled)); err != nil {
+				return err
+			}
+			// music_custom_path: only if non-NULL/non-empty
+			if musicPath.Valid && musicPath.String != "" {
+				if err := seed("music_custom_path", musicPath.String); err != nil {
+					return err
+				}
+			}
+			if err := seed("music_volume_pct", fmt.Sprintf("%d", int(musicVolume*100))); err != nil {
+				return err
+			}
+
+			if err := seed("anti_dup_enabled", boolStr(antiDupEnabled)); err != nil {
+				return err
+			}
+			if err := seed("anti_dup_mode", antiDupMode); err != nil {
+				return err
+			}
+		}
+		// If err == sql.ErrNoRows (no config), we skip channel-derived settings
+		// and just seed the fixed defaults below.
+	}
+
+	// --- Fixed defaults (always seed) ---
+	fixedDefaults := [][2]string{
+		{"workflow_mode_default", "ai"},
+		{"ai_sensitivity_pct", "70"},
+		{"ai_clip_duration_secs", "1200"},
+		{"ai_min_duration_secs", "480"},
+		{"ai_force_regenerate", "true"},
+		{"ai_skip_transcription", "false"},
+		{"upload_privacy", "private"},
+		{"upload_dry_run", "false"},
+		{"anti_dup_effect_speed_boost", "true"},
+		{"anti_dup_effect_crop", "true"},
+		{"anti_dup_effect_color_grading", "true"},
+		{"anti_dup_effect_noise", "true"},
+		{"anti_dup_effect_noise_strength", "3"},
+		{"anti_dup_effect_zoom", "true"},
+		{"anti_dup_effect_transitions", "true"},
+	}
+	for _, kv := range fixedDefaults {
+		if err := seed(kv[0], kv[1]); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// migrateV14 seeds channel_config rows for all 4 predefined channels with real values
+// from the Kotlin Youtube companion app (PredefinedChannels.kt + channel_preferences.json).
+// Also re-seeds app_settings with correct enabled defaults since v13 got NULLs.
+// Uses INSERT OR IGNORE for channel_config so existing configs are never overwritten.
+func migrateV14(tx *sql.Tx) error {
+	now := fmt.Sprintf("%d", nowMillis())
+
+	// Per-channel config data from PredefinedChannels.kt
+	type channelSeed struct {
+		youtubeID          string
+		gradientStart      string
+		gradientEnd        string
+		categoryID         int
+		playlistCortes     string
+		playlistShorts     string
+		tags               string
+		pinnedComment      string
+	}
+
+	channels := []channelSeed{
+		{
+			youtubeID:      "UCSwTDK61hsBFV4CToQtFl-g",
+			gradientStart:  "#FAF98C",
+			gradientEnd:    "#176BFF",
+			categoryID:     28,
+			playlistCortes: "PLz4FQFPuKNaz7blXwx_pgNBdk8KWEzWwC",
+			playlistShorts: "PLz4FQFPuKNazfULbLOaiwPykDBBhzRrZW",
+			tags:           "javascript,canvas,gemini,html,programação,css,vibecoding,gameplay,gamedev,jogo no navegador,ia,ia vs ia,codando com ia,criando jogos com ia,google gemini,inteligência artificial,chatgpt,desenvolvimento de jogos,jogos com ia,do zero",
+			pinnedComment:  "Se inscreva no canal, comente e deixe o like! ❤️",
+		},
+		{
+			youtubeID:      "UCpGpj9G3W1ofZGG2kcIWvnQ",
+			gradientStart:  "#C80E0E",
+			gradientEnd:    "#0F0F0F",
+			categoryID:     17,
+			playlistCortes: "PL1gfq1_qdCBAOCCaQpuLtO-Byq65B6up8",
+			playlistShorts: "PL1gfq1_qdCBCdTiDk3YxVC8WKxXe187ZM",
+			tags:           "renato cariani,bodybuilding,bodybuilder,fisiologia,farmacia,farmacologia,treino,musculação,educação fisica,quimica,cariane,emagrecer,dieta,alimentação,saudavel,natural,suplemento,perder peso,receita,fit,toguro,mansão maromba,sabor,sabor energético",
+			pinnedComment:  "Se inscreva no canal, comente e deixe o like! ❤️",
+		},
+		{
+			youtubeID:      "UCpjSuvMTQAq6SKuRE_SoaDQ",
+			gradientStart:  "#FAE70D",
+			gradientEnd:    "#F43414",
+			categoryID:     24,
+			playlistCortes: "PLKj6HM7XxhZnZhjwjuhTTZsuMdxvciYLT",
+			playlistShorts: "PLKj6HM7XxhZlwC-6lHg084F39b8RuaYDJ",
+			tags:           "nerd,ei nerd,peter jordan,ucm,marvel,dc,dc comics,cinema,filmes,animes,quadrinhos,hqs,series,geek,cultura pop,seriados,heróis,super herois,peter jordan,peteraqui,einerdtv,ei nerd,cortes peter jordan,cortes einerdtv,cortes ei nerd,canal do peter jordan,canal ei nerd,reação do peter jordan,peter jordan reagindo,react peter jordan,react ei nerd,quadro ei nerd,nerdices do peter jordan,opinião do peter jordan,análise do peter jordan,crítica do peter jordan",
+			pinnedComment:  "Se inscreva no canal, comente e deixe o like! ❤️",
+		},
+		{
+			youtubeID:      "UCNcaOXuxyjSwrbEhgZWA-NA",
+			gradientStart:  "#F27121",
+			gradientEnd:    "#8A2387",
+			categoryID:     24,
+			playlistCortes: "PLnpzTyt6JdHJ6vSWuiIvv5BXxcdKyi8QY",
+			playlistShorts: "PLnpzTyt6JdHKUc4qiASAug0VkSGgFOB2U",
+			tags:           "brino,react,engraçado,brunozor,bruninzor,reagindo,assistindo,bruninho,brinozor,videos engraçados,video react,experimentando,comida,viagem,humor,curiosidade,tiktoks,história,entretenimento,luxo",
+			pinnedComment:  "Se inscreva no canal, comente e deixe o like! ❤️",
+		},
+	}
+
+	// Shared processing config from channel_preferences.json
+	const insertChannelConfig = `INSERT OR IGNORE INTO channel_config (
+		channel_id,
+		gradient_color_start, gradient_color_end,
+		thumbnail_font_family, thumbnail_text_color_1, thumbnail_text_color_2, thumbnail_text_color_3,
+		made_for_kids, default_category_id,
+		default_playlist_id_cortes, default_playlist_id_shorts,
+		default_tags, pinned_comment_template,
+		anti_duplicate_enabled, anti_duplicate_mode,
+		speed_enabled, speed_factor,
+		visual_crop_enabled, visual_crop_percent,
+		visual_zoom_enabled, visual_zoom_amount,
+		visual_color_grading_enabled, visual_brightness, visual_saturation, visual_contrast,
+		branding_logo_enabled, branding_logo_position, branding_logo_opacity, branding_logo_scale,
+		branding_intro_enabled, branding_generate_intro_from_logo, branding_intro_duration,
+		branding_outro_enabled,
+		audio_music_enabled, audio_music_volume, audio_random_music,
+		preview_captions_enabled, preview_caption_style,
+		created_at, updated_at
+	) VALUES (
+		?,
+		?, ?,
+		'Impact', '#FFFFFF', '#FFFF00', '#000000',
+		0, ?,
+		?, ?,
+		?, ?,
+		1, 'SUBTLE',
+		1, 1.02,
+		1, 0.02,
+		0, 1.03,
+		1, 0.02, 1.05, 1.02,
+		0, 'BOTTOM_RIGHT', 0.3, 0.1,
+		0, 1, 3.0,
+		0,
+		1, 0.08, 1,
+		1, 'BOLD',
+		?, ?
+	)`
+
+	for _, ch := range channels {
+		var internalID int64
+		err := tx.QueryRow(`SELECT id FROM channels WHERE channel_id = ?`, ch.youtubeID).Scan(&internalID)
+		if err == sql.ErrNoRows {
+			continue // channel not seeded, skip
+		}
+		if err != nil {
+			return fmt.Errorf("migrateV14: lookup channel %s: %w", ch.youtubeID, err)
+		}
+
+		_, err = tx.Exec(insertChannelConfig,
+			internalID,
+			ch.gradientStart, ch.gradientEnd,
+			ch.categoryID,
+			ch.playlistCortes, ch.playlistShorts,
+			ch.tags, ch.pinnedComment,
+			now, now,
+		)
+		if err != nil {
+			return fmt.Errorf("migrateV14: seed channel_config for %s: %w", ch.youtubeID, err)
+		}
+	}
+
+	// Re-seed app_settings with correct enabled defaults.
+	// v13 may have seeded these with empty/false because channel_config didn't exist yet.
+	// Only update settings still at their empty/default state.
+	type settingUpdate struct {
+		key   string
+		value string
+	}
+	updates := []settingUpdate{
+		{"anti_dup_enabled", "true"},
+		{"anti_dup_mode", "SUBTLE"},
+		{"anti_dup_effect_speed_boost", "true"},
+		{"anti_dup_effect_crop", "true"},
+		{"anti_dup_effect_color_grading", "true"},
+		{"anti_dup_effect_noise", "true"},
+		{"anti_dup_effect_noise_strength", "3"},
+		{"anti_dup_effect_zoom", "true"},
+		{"anti_dup_effect_transitions", "true"},
+		{"captions_enabled", "true"},
+		{"captions_preset", "BOLD"},
+		{"music_enabled", "true"},
+		{"music_volume_pct", "8"},
+		{"branding_logo_position", "BOTTOM_RIGHT"},
+		{"branding_logo_opacity", "30"},
+		{"branding_logo_scale", "10"},
+	}
+
+	insertOrIgnore := `INSERT OR IGNORE INTO app_settings (key, value, updated_at) VALUES (?, ?, ` + now + `)`
+	updateIfDefault := `UPDATE app_settings SET value = ?, updated_at = ` + now + ` WHERE key = ? AND (value = '' OR value = 'false' OR value = '0')`
+
+	for _, u := range updates {
+		// First try to insert (for fresh installs where v13 didn't seed this key)
+		if _, err := tx.Exec(insertOrIgnore, u.key, u.value); err != nil {
+			return fmt.Errorf("migrateV14: insert app_setting %q: %w", u.key, err)
+		}
+		// Then update if the value is still at its empty/default state
+		if _, err := tx.Exec(updateIfDefault, u.value, u.key); err != nil {
+			return fmt.Errorf("migrateV14: update app_setting %q: %w", u.key, err)
+		}
+	}
+
+	return nil
+}
+
+func nowMillis() int64 {
+	return time.Now().UnixMilli()
 }
 
 // migrateV7 creates the video_comments table for FP-016 (Comment Sync).

@@ -60,6 +60,8 @@ extraResources:
     to: web-standalone
     filter:
       - "**/*"
+  - from: ../../assets/shared
+    to: assets/shared
 
 # ─── Auto-Update ──────────────────────────────────────────────────────────────
 publish:

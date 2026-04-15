@@ -16,6 +16,9 @@ import type {
   SSEEvent,
   SSEPhaseProgressPayload,
   SSEVideoInfoPayload,
+  SSEPreviewProgressPayload,
+  SSEPreviewReadyPayload,
+  SSEPreviewErrorPayload,
   GatePayload,
 } from '@/types/pipeline';
 import { GATE_STATE_ORDER } from '@/types/pipeline';
@@ -41,6 +44,8 @@ export interface VideoInfo {
 
 // ── Store interface ───────────────────────────────────────────────────────────
 
+export type PreviewStatus = 'idle' | 'generating' | 'ready' | 'error';
+
 interface PipelineState {
   // Active run
   activeRunId: number | null;   // kept for backward-compat (equals run?.id ?? null)
@@ -54,6 +59,12 @@ interface PipelineState {
   isLoading: boolean;
   error: string | null;
   sseCleanup: (() => void) | null;
+
+  // Preview state
+  previewStatus: PreviewStatus;
+  previewPercent: number;
+  previewUrl: string | null;
+  previewError: string | null;
 
   // Navigation history
   navHistory: RunState[];
@@ -90,6 +101,9 @@ interface PipelineState {
   loadHighlights: (goUrl: string, id: number) => Promise<void>;
   loadClips: (goUrl: string, id: number) => Promise<void>;
 
+  // Actions — preview
+  generatePreview: (goUrl: string, runId: number, modeConfig: ModeConfig) => Promise<void>;
+
   // Actions — SSE
   subscribeSSE: (goUrl: string, runId: number) => () => void;
   stopSSE: () => void;
@@ -109,6 +123,12 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
   isLoading: false,
   error: null,
   sseCleanup: null,
+
+  // Preview state
+  previewStatus: 'idle',
+  previewPercent: 0,
+  previewUrl: null,
+  previewError: null,
 
   navHistory: [],
   navIndex: 0,
@@ -218,6 +238,10 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
       phaseProgress: null,
       videoInfo: null,
       error: null,
+      previewStatus: 'idle',
+      previewPercent: 0,
+      previewUrl: null,
+      previewError: null,
       navHistory: [],
       navIndex: 0,
       gateHistory: {},
@@ -488,6 +512,29 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
     }
   },
 
+  // ── Preview ──────────────────────────────────────────────────────────────
+
+  generatePreview: async (goUrl, runId, modeConfig) => {
+    log.info('[pipelineStore] generating preview', { runId });
+    set({ previewStatus: 'generating', previewPercent: 0, previewUrl: null, previewError: null });
+    try {
+      const res = await fetch(`${goUrl}/api/pipeline/runs/${runId}/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode_config: modeConfig }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `Failed: ${res.status}`);
+      }
+      // SSE events will update previewStatus from here
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Preview generation failed';
+      log.error('[pipelineStore] generatePreview failed', { error: msg });
+      set({ previewStatus: 'error', previewError: msg, previewPercent: 0 });
+    }
+  },
+
   // ── SSE ────────────────────────────────────────────────────────────────────
 
   subscribeSSE: (goUrl, runId) => {
@@ -539,6 +586,21 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
               payload.warning,
             );
           }
+        }
+
+        if (evt.type === 'preview_progress') {
+          const payload = evt.data as SSEPreviewProgressPayload;
+          set({ previewStatus: 'generating', previewPercent: payload.percent });
+        }
+
+        if (evt.type === 'preview_ready') {
+          const payload = evt.data as SSEPreviewReadyPayload;
+          set({ previewStatus: 'ready', previewUrl: payload.url, previewPercent: 100 });
+        }
+
+        if (evt.type === 'preview_error') {
+          const payload = evt.data as SSEPreviewErrorPayload;
+          set({ previewStatus: 'error', previewError: payload.message, previewPercent: 0 });
         }
 
         if (evt.type === 'done') {

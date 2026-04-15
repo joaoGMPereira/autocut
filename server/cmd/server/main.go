@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log/slog"
 	"net/http"
@@ -24,6 +25,7 @@ func main() {
 	dir := flag.String("dir", defaultDataDir(), "Data directory (DB + downloads)")
 	host := flag.String("host", "127.0.0.1", "Host to listen on")
 	port := flag.String("port", "4070", "Port to listen on")
+	assetsDir := flag.String("assets-dir", "", "Bundled assets directory (music, overlays)")
 	migrateOnly := flag.Bool("migrate-only", false, "Run DB migrations and exit")
 	flag.Parse()
 
@@ -61,6 +63,12 @@ func main() {
 		return
 	}
 
+	// Seed asset library paths from bundled assets on first boot.
+	settingRepoEarly := database.NewAppSettingRepo(db, slog.Default())
+	if *assetsDir != "" {
+		seedAssetPaths(settingRepoEarly, *assetsDir)
+	}
+
 	sseHub := hub.New()
 	repo := database.NewPipelineRunRepo(db, slog.Default())
 	historyRepo := database.NewURLHistoryRepo(db, slog.Default())
@@ -88,12 +96,13 @@ func main() {
 	}
 	channelRepo := database.NewChannelRepo(db, slog.Default(), cipher)
 	sessionMgr := internaloauth.NewSessionManager(channelRepo)
-	channelHandler := handlers.NewChannelHandler(channelRepo)
+	channelHandler := handlers.NewChannelHandler(channelRepo, *dir)
 	oauthHandler := handlers.NewOAuthHandler(db, channelRepo, sessionMgr)
 	ollamaHandler := handlers.NewOllamaHandler()
 	statsHandler := handlers.NewStatsHandler(stats.New())
 	mediaLibraryHandler := handlers.NewMediaLibraryHandler(settingRepo)
-	previewHandler := handlers.NewPreviewHandler()
+	channelCfgRepo := database.NewChannelConfigRepo(db, slog.Default())
+	previewHandler := handlers.NewPreviewHandler(repo, channelCfgRepo, *dir, sseHub)
 
 	router := api.NewRouter(
 		pipelineHandler,
@@ -114,6 +123,36 @@ func main() {
 	if err := http.ListenAndServe(addr, router); err != nil {
 		slog.Error("server error", "err", err)
 		os.Exit(1)
+	}
+}
+
+// seedAssetPaths seeds music_library_path and overlay_library_path in app_settings
+// from the bundled assets directory if they are not yet set.
+func seedAssetPaths(repo *database.AppSettingRepo, assetsDir string) {
+	ctx := context.Background()
+	type assetSeed struct {
+		key  string
+		path string
+	}
+	seeds := []assetSeed{
+		{"music_library_path", filepath.Join(assetsDir, "shared", "music")},
+		{"overlay_library_path", filepath.Join(assetsDir, "shared", "overlays")},
+	}
+	for _, s := range seeds {
+		current, _ := repo.Get(ctx, s.key)
+		if current != "" {
+			continue // user already configured, don't overwrite
+		}
+		info, err := os.Stat(s.path)
+		if err != nil || !info.IsDir() {
+			slog.Warn("bundled asset dir not found, skipping", "key", s.key, "path", s.path)
+			continue
+		}
+		if err := repo.Set(ctx, s.key, s.path); err != nil {
+			slog.Warn("failed to seed asset path", "key", s.key, "err", err)
+		} else {
+			slog.Info("seeded asset path", "key", s.key, "path", s.path)
+		}
 	}
 }
 

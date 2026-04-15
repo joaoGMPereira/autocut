@@ -45,12 +45,13 @@ func NewSessionManager(channelRepo *database.ChannelRepo) *SessionManager {
 
 // StartSession initiates an OAuth loopback flow for channelID.
 // It picks a free port, starts a local callback server (5-min timeout), and returns the auth URL.
-// Returns ErrSessionActive if a session is already in progress for this channel.
+// If a session is already in progress it is cancelled and replaced with a new one.
 func (m *SessionManager) StartSession(channelID int64, baseCfg *oauth2.Config) (string, error) {
 	m.mu.Lock()
-	if _, exists := m.sessions[channelID]; exists {
-		m.mu.Unlock()
-		return "", ErrSessionActive
+	if existing, exists := m.sessions[channelID]; exists {
+		existing.cancel() // cancel previous session; runCallbackServer will delete it
+		delete(m.sessions, channelID)
+		slog.Info("oauth session replaced", "channel_id", channelID)
 	}
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")

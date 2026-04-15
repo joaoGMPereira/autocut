@@ -1,22 +1,54 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
+	"sync"
+
+	"github.com/joaoGMPereira/autocut/server/internal/database"
+	"github.com/joaoGMPereira/autocut/server/internal/hub"
+	"github.com/joaoGMPereira/autocut/server/internal/processor"
 )
 
 // PreviewHandler handles pipeline run preview generation requests.
-type PreviewHandler struct{}
-
-// NewPreviewHandler creates a PreviewHandler.
-func NewPreviewHandler() *PreviewHandler {
-	return &PreviewHandler{}
+type PreviewHandler struct {
+	runRepo       *database.PipelineRunRepo
+	channelCfgRepo *database.ChannelConfigRepo
+	dataDir       string
+	hub           *hub.SSEHub
+	log           *slog.Logger
+	inFlight      sync.Map // map[int64]chan struct{} — per-run concurrency guard
 }
 
-// PostPreview accepts a preview generation request.
-// The actual ffmpeg composition is not yet implemented; this returns 202 Accepted.
-// POST /api/pipeline/runs/{id}/preview
+// NewPreviewHandler creates a PreviewHandler with all dependencies.
+func NewPreviewHandler(
+	runRepo *database.PipelineRunRepo,
+	channelCfgRepo *database.ChannelConfigRepo,
+	dataDir string,
+	h *hub.SSEHub,
+) *PreviewHandler {
+	return &PreviewHandler{
+		runRepo:        runRepo,
+		channelCfgRepo: channelCfgRepo,
+		dataDir:        dataDir,
+		hub:            h,
+		log:            slog.With("handler", "preview"),
+	}
+}
+
+// postPreviewRequest is the JSON body for POST /preview.
+type postPreviewRequest struct {
+	ModeConfig json.RawMessage `json:"mode_config"`
+}
+
+// PostPreview handles POST /api/pipeline/runs/{id}/preview.
+// Starts preview generation asynchronously, returns 202 Accepted.
 func (h *PreviewHandler) PostPreview(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -24,11 +56,143 @@ func (h *PreviewHandler) PostPreview(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid run id", http.StatusBadRequest)
 		return
 	}
+
+	// Parse request body
+	var req postPreviewRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.ModeConfig == nil {
+		req.ModeConfig = json.RawMessage("{}")
+	}
+
+	// Look up the run
+	run, err := h.runRepo.GetByID(r.Context(), id)
+	if err != nil {
+		h.log.Error("run lookup failed", "id", id, "err", err)
+		http.Error(w, "run not found", http.StatusNotFound)
+		return
+	}
+
+	// Validate video_path exists on disk
+	if run.VideoPath == "" {
+		jsonError(w, "source video not found", http.StatusUnprocessableEntity)
+		return
+	}
+	if _, err := os.Stat(run.VideoPath); os.IsNotExist(err) {
+		jsonError(w, "source video not found", http.StatusUnprocessableEntity)
+		return
+	}
+
+	// Check ffmpeg availability
+	if !processor.FFmpegAvailable() {
+		jsonError(w, "ffmpeg not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Concurrency guard — prevent duplicate ffmpeg spawns for same run
+	if _, loaded := h.inFlight.LoadOrStore(id, make(chan struct{})); loaded {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		_ = json.NewEncoder(w).Encode(map[string]any{"run_id": id, "status": "pending"})
+		return
+	}
+
+	// Load channel config
+	var channelCfg database.ChannelConfig
+	if run.ChannelID.Valid {
+		cc, err := h.channelCfgRepo.GetByChannelID(r.Context(), run.ChannelID.Int64)
+		if err != nil {
+			h.log.Warn("channel config lookup failed, using defaults", "channel_id", run.ChannelID.Int64, "err", err)
+		} else {
+			channelCfg = *cc
+		}
+	}
+
+	// Return 202 immediately, spawn generation goroutine
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"run_id":  id,
-		"status":  "pending",
-		"message": "Preview generation is not yet implemented. The ffmpeg processor will be wired in a future update.",
-	})
+	_ = json.NewEncoder(w).Encode(map[string]any{"run_id": id, "status": "pending"})
+
+	jobID := fmt.Sprintf("%d", id)
+
+	go func() {
+		defer h.inFlight.Delete(id)
+
+		previewReq := processor.PreviewRequest{
+			RunID:       id,
+			VideoPath:   run.VideoPath,
+			DurationSec: run.DurationSec,
+			ChannelCfg:  channelCfg,
+			ModeCfg:     req.ModeConfig,
+			DataDir:     h.dataDir,
+			OnProgress: func(pct float64) {
+				h.hub.Publish(jobID, hub.SSEEvent{
+					Type: "preview_progress",
+					Data: map[string]any{"run_id": id, "percent": pct},
+				})
+			},
+		}
+
+		outPath, err := processor.GeneratePreview(context.Background(), previewReq)
+		if err != nil {
+			h.log.Error("preview generation failed", "run_id", id, "err", err)
+			h.hub.Publish(jobID, hub.SSEEvent{
+				Type: "preview_error",
+				Data: map[string]any{"run_id": id, "message": err.Error()},
+			})
+			return
+		}
+
+		_ = outPath // path used by GET endpoint
+		h.hub.Publish(jobID, hub.SSEEvent{
+			Type: "preview_ready",
+			Data: map[string]any{
+				"run_id": id,
+				"url":    fmt.Sprintf("/api/pipeline/runs/%d/preview/file", id),
+			},
+		})
+	}()
 }
+
+// GetPreviewFile handles GET /api/pipeline/runs/{id}/preview/file.
+// Serves the generated preview MP4 with Range/206 support.
+func (h *PreviewHandler) GetPreviewFile(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		http.Error(w, "invalid run id", http.StatusBadRequest)
+		return
+	}
+
+	// Find preview file by glob pattern
+	previewDir := filepath.Join(h.dataDir, "previews")
+	pattern := filepath.Join(previewDir, fmt.Sprintf("%d_*.mp4", id))
+	matches, err := filepath.Glob(pattern)
+	if err != nil || len(matches) == 0 {
+		http.Error(w, "preview not found", http.StatusNotFound)
+		return
+	}
+
+	// Use the most recent match (in case of multiple cache entries)
+	previewPath := matches[len(matches)-1]
+
+	f, err := os.Open(previewPath)
+	if err != nil {
+		http.Error(w, "preview not found", http.StatusNotFound)
+		return
+	}
+	defer f.Close()
+
+	stat, err := f.Stat()
+	if err != nil {
+		http.Error(w, "preview not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "video/mp4")
+	// http.ServeContent handles Range headers, ETag, and 206 automatically
+	http.ServeContent(w, r, filepath.Base(previewPath), stat.ModTime(), f)
+}
+
