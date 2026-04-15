@@ -606,6 +606,9 @@ func (s *Service) runClipGeneration(id int64) {
 		}
 	}
 
+	// Apply mode overrides so clip generation uses the same effect config as preview
+	processor.ApplyModeOverrides(&channelCfg, json.RawMessage(run.ModeConfigJSON))
+
 	// Fetch selected highlights
 	highlights, err := s.highlightRepo.ListSelectedByRun(ctx, id)
 	if err != nil {

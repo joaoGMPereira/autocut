@@ -110,6 +110,9 @@ func (h *PreviewHandler) PostPreview(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Apply mode overrides from the frontend ModeConfig
+	processor.ApplyModeOverrides(&channelCfg, req.ModeConfig)
+
 	// Return 202 immediately, spawn generation goroutine
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
