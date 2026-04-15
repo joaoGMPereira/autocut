@@ -224,7 +224,7 @@ export function TextStyleEditorPanel({
               min={-1000}
               max={1000}
               value={config.verticalOffset}
-              onChange={(e) => update({ verticalOffset: parseInt(e.target.value) || 0 })}
+              onChange={(e) => update({ verticalOffset: parseInt(e.target.value, 10) || 0 })}
               className="w-16 h-8 rounded border border-zinc-700 bg-zinc-900 text-center text-sm text-zinc-200 [appearance:textfield]"
             />
             <button
