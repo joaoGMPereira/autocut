@@ -1,122 +1,194 @@
 'use client';
 
 import { useState } from 'react';
+import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { PositionGrid } from './PositionGrid';
-import { useEffectsStore } from '@/store/effectsStore';
+import { TextStyleEditorPanel } from './TextStyleEditorPanel';
+import {
+  DEFAULT_OVERLAY,
+  type TextOverlayConfig,
+  type TimedTextOverlay,
+} from '@/types/text-overlay';
 
 export function TextOverlayTab() {
-  const [videoPath, setVideoPath] = useState('');
-  const [text, setText] = useState('');
-  const [fontName, setFontName] = useState('Arial');
-  const [fontSize, setFontSize] = useState(48);
-  const [color, setColor] = useState('#FFFFFF');
-  const [position, setPosition] = useState('mid_center');
-  const [startSec, setStartSec] = useState(0);
-  const [endSec, setEndSec] = useState(5);
-  const [outputPath, setOutputPath] = useState('');
+  const [config, setConfig] = useState<TextOverlayConfig>({
+    enabled: false,
+    overlays: [],
+  });
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
-  const { applyEffect, textJob } = useEffectsStore();
-  const isRunning = textJob.status === 'running';
+  const updateOverlay = (index: number, patch: Partial<TimedTextOverlay>) => {
+    setConfig((prev) => ({
+      ...prev,
+      overlays: prev.overlays.map((o, i) => (i === index ? { ...o, ...patch } : o)),
+    }));
+  };
 
-  const handleApply = () => {
-    if (!videoPath || !text || !outputPath) return;
-    void applyEffect(
-      'api/effects/text',
-      {
-        video_path: videoPath,
-        text,
-        font_name: fontName,
-        font_size: fontSize,
-        color,
-        position,
-        start_sec: startSec,
-        end_sec: endSec,
-        output_path: outputPath,
-      },
-      'textJob',
-    );
+  const addOverlay = () => {
+    setConfig((prev) => ({
+      ...prev,
+      overlays: [...prev.overlays, { ...DEFAULT_OVERLAY, style: { ...DEFAULT_OVERLAY.style } }],
+    }));
+    setExpandedIndex(config.overlays.length); // expand the new one
+  };
+
+  const removeOverlay = (index: number) => {
+    setConfig((prev) => ({
+      ...prev,
+      overlays: prev.overlays.filter((_, i) => i !== index),
+    }));
+    setExpandedIndex((prev) => (prev === index ? null : prev));
   };
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex gap-3">
-        <div className="flex flex-col gap-1.5 flex-1">
-          <Label htmlFor="tx-video">Video Path</Label>
-          <Input id="tx-video" placeholder="/path/to/video.mp4" value={videoPath} onChange={(e) => setVideoPath(e.target.value)} />
+      {/* Master toggle */}
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4 flex items-center justify-between gap-4">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-sm font-medium text-zinc-200">Adicionar Overlays de Texto</span>
+          <span className="text-xs text-zinc-500">Textos permanentes ou temporários sobre o vídeo</span>
         </div>
-        <div className="flex flex-col gap-1.5 flex-1">
-          <Label htmlFor="tx-output">Output Path</Label>
-          <Input id="tx-output" placeholder="/path/to/output.mp4" value={outputPath} onChange={(e) => setOutputPath(e.target.value)} />
-        </div>
+        <Switch
+          checked={config.enabled}
+          onCheckedChange={(v) => setConfig((prev) => ({ ...prev, enabled: v }))}
+          aria-label="Adicionar Overlays de Texto"
+        />
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="tx-text">Text</Label>
-        <Input id="tx-text" placeholder="Overlay text…" value={text} onChange={(e) => setText(e.target.value)} />
-      </div>
+      {config.enabled && (
+        <>
+          {/* Overlay list */}
+          {config.overlays.map((overlay, index) => {
+            const isExpanded = expandedIndex === index;
+            return (
+              <div
+                key={index}
+                className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 flex flex-col gap-3"
+              >
+                {/* Header row */}
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={overlay.text}
+                    onChange={(e) => updateOverlay(index, { text: e.target.value })}
+                    className="flex-1 h-9"
+                    aria-label="Texto do overlay"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setExpandedIndex(isExpanded ? null : index)}
+                    className="h-9 w-9 rounded border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-zinc-400"
+                    aria-label={isExpanded ? 'Recolher overlay' : 'Expandir overlay'}
+                  >
+                    {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeOverlay(index)}
+                    className="h-9 w-9 rounded border border-red-900/40 bg-red-950/30 hover:bg-red-900/50 flex items-center justify-center text-red-400"
+                    aria-label="Remover overlay"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
 
-      <div className="flex gap-3">
-        <div className="flex flex-col gap-1.5 flex-1">
-          <Label htmlFor="tx-font">Font Name</Label>
-          <Input id="tx-font" placeholder="Arial" value={fontName} onChange={(e) => setFontName(e.target.value)} />
-        </div>
-        <div className="flex flex-col gap-1.5 w-20">
-          <Label htmlFor="tx-color">Color</Label>
-          <input
-            id="tx-color"
-            type="color"
-            value={color}
-            onChange={(e) => setColor(e.target.value)}
-            className="h-9 w-full rounded-md border border-input bg-transparent cursor-pointer"
-          />
-        </div>
-      </div>
+                {/* Expanded: style editor + timing + position */}
+                {isExpanded && (
+                  <div className="flex flex-col gap-4 pt-1">
+                    <TextStyleEditorPanel
+                      config={overlay.style}
+                      onConfigChange={(style) => updateOverlay(index, { style })}
+                      showBackgroundOptions
+                    />
 
-      <div className="flex flex-col gap-2">
-        <Label>Font Size: <span className="font-mono text-[#00D4FF]">{fontSize}px</span></Label>
-        <Slider min={12} max={120} step={1} value={[fontSize]} onValueChange={([v]) => setFontSize(v)} className="max-w-xs" />
-      </div>
+                    {/* Apply to whole video */}
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id={`whole-${index}`}
+                        checked={overlay.applyToWholeVideo}
+                        onCheckedChange={(v) =>
+                          updateOverlay(index, { applyToWholeVideo: v === true })
+                        }
+                      />
+                      <label
+                        htmlFor={`whole-${index}`}
+                        className="text-sm text-zinc-300 cursor-pointer select-none"
+                      >
+                        Aplicar no vídeo todo
+                      </label>
+                    </div>
 
-      <div className="flex gap-6">
-        <div className="flex flex-col gap-2">
-          <Label>Position</Label>
-          <PositionGrid value={position} onChange={setPosition} />
-        </div>
-        <div className="flex flex-col gap-3 justify-center">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="tx-start">Start (sec)</Label>
-            <Input
-              id="tx-start"
-              type="number"
-              className="w-24"
-              value={startSec}
-              onChange={(e) => setStartSec(parseFloat(e.target.value) || 0)}
-            />
+                    {/* Start / End time */}
+                    {!overlay.applyToWholeVideo && (
+                      <div className="flex gap-3">
+                        <div className="flex flex-col gap-1.5 flex-1">
+                          <Label className="text-xs text-zinc-400">Início (s)</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={overlay.startTime}
+                            onChange={(e) =>
+                              updateOverlay(index, { startTime: parseFloat(e.target.value) || 0 })
+                            }
+                            className="h-9"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5 flex-1">
+                          <Label className="text-xs text-zinc-400">Fim (s)</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            placeholder="Até o fim"
+                            value={overlay.endTime ?? ''}
+                            onChange={(e) =>
+                              updateOverlay(index, {
+                                endTime: e.target.value ? parseFloat(e.target.value) : null,
+                              })
+                            }
+                            className="h-9"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Position */}
+                    <div className="flex flex-col gap-2">
+                      <Label className="text-xs text-zinc-400">Posição:</Label>
+                      <PositionGrid
+                        value={overlay.position}
+                        onChange={(pos) => updateOverlay(index, { position: pos as TimedTextOverlay['position'] })}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Add button */}
+          <button
+            type="button"
+            onClick={addOverlay}
+            className="w-full h-11 rounded-lg border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-sm font-medium transition-colors"
+          >
+            + Adicionar Texto
+          </button>
+
+          {/* Apply — disabled until backend exists */}
+          <div className="relative group self-start">
+            <Button disabled className="opacity-40 cursor-not-allowed">
+              Apply Text Overlay
+            </Button>
+            <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 hidden group-hover:block bg-zinc-800 text-zinc-300 text-xs rounded px-2 py-1 whitespace-nowrap pointer-events-none">
+              Backend em desenvolvimento
+            </div>
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="tx-end">End (sec)</Label>
-            <Input
-              id="tx-end"
-              type="number"
-              className="w-24"
-              value={endSec}
-              onChange={(e) => setEndSec(parseFloat(e.target.value) || 0)}
-            />
-          </div>
-        </div>
-      </div>
-
-      <Button
-        onClick={handleApply}
-        disabled={isRunning || !videoPath || !text || !outputPath}
-        className="self-start"
-      >
-        {isRunning ? 'Applying…' : 'Apply Text Overlay'}
-      </Button>
+        </>
+      )}
     </div>
   );
 }
