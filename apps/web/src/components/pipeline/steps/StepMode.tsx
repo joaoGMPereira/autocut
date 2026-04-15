@@ -25,6 +25,10 @@ export function StepMode({ historical }: StepModeProps) {
   const previewPercent = usePipelineStore((s) => s.previewPercent);
   const previewUrl = usePipelineStore((s) => s.previewUrl);
   const previewError = usePipelineStore((s) => s.previewError);
+  const downloadComplete = usePipelineStore((s) => s.downloadComplete);
+  const videoReused = usePipelineStore((s) => s.videoReused);
+  const redownload = usePipelineStore((s) => s.redownload);
+  const phaseProgress = usePipelineStore((s) => s.phaseProgress);
   const channels = useChannelStore((s) => s.channels);
   const fetchChannels = useChannelStore((s) => s.fetchChannels);
 
@@ -2070,25 +2074,90 @@ export function StepMode({ historical }: StepModeProps) {
       })()}
 
       {/* Preview section */}
-      {!isLoadingPreference && run?.video_path && (
+      {!isLoadingPreference && (
         <div className="space-y-3 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-zinc-300">Preview</h3>
-            <button
-              onClick={() => {
-                if (!activeRunId) return;
-                const cfg = buildModeConfig();
-                void generatePreview(goUrl, activeRunId, cfg);
-              }}
-              disabled={previewStatus === 'generating'}
-              className="rounded-md bg-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {previewStatus === 'generating' ? 'Generating…' : previewStatus === 'ready' ? 'Regenerate Preview' : 'Generate Preview'}
-            </button>
-          </div>
+          {/* State: Downloading */}
+          {!downloadComplete && (
+            <>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium text-zinc-300">Preview</h3>
+                <span className="text-xs text-zinc-500">Aguardando download...</span>
+              </div>
+              {phaseProgress?.phase === 'download' && (
+                <div className="space-y-1">
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800">
+                    <div
+                      className="h-full rounded-full bg-zinc-500 transition-all duration-300"
+                      style={{ width: `${Math.min(100, phaseProgress.percentDone)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-zinc-500">
+                    <span>Baixando video... {Math.round(phaseProgress.percentDone)}%</span>
+                    {phaseProgress.etaSec != null && <span>ETA {phaseProgress.etaSec}s</span>}
+                  </div>
+                </div>
+              )}
+              {!phaseProgress && (
+                <div className="flex items-center gap-2 text-xs text-zinc-500">
+                  <span className="inline-block h-3 w-3 rounded-full border-2 border-zinc-500 border-t-transparent animate-spin" />
+                  <span>Preparando download...</span>
+                </div>
+              )}
+            </>
+          )}
 
-          {/* Progress bar */}
-          {previewStatus === 'generating' && (
+          {/* State: Video reused — show toggle */}
+          {downloadComplete && videoReused && (
+            <>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium text-zinc-300">Preview</h3>
+                <button
+                  onClick={() => {
+                    if (!activeRunId) return;
+                    const cfg = buildModeConfig();
+                    void generatePreview(goUrl, activeRunId, cfg);
+                  }}
+                  disabled={previewStatus === 'generating'}
+                  className="rounded-md bg-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {previewStatus === 'generating' ? 'Generating…' : previewStatus === 'ready' ? 'Regenerate Preview' : 'Generate Preview'}
+                </button>
+              </div>
+              <div className="flex items-center justify-between rounded-md bg-zinc-800 px-3 py-2">
+                <span className="text-xs text-zinc-400">Reusar video já baixado</span>
+                <button
+                  onClick={() => {
+                    if (!activeRunId) return;
+                    void redownload(goUrl, activeRunId);
+                  }}
+                  className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors underline"
+                >
+                  Re-baixar
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* State: Ready (download complete, not reused) */}
+          {downloadComplete && !videoReused && (
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-zinc-300">Preview</h3>
+              <button
+                onClick={() => {
+                  if (!activeRunId) return;
+                  const cfg = buildModeConfig();
+                  void generatePreview(goUrl, activeRunId, cfg);
+                }}
+                disabled={previewStatus === 'generating'}
+                className="rounded-md bg-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {previewStatus === 'generating' ? 'Generating…' : previewStatus === 'ready' ? 'Regenerate Preview' : 'Generate Preview'}
+              </button>
+            </div>
+          )}
+
+          {/* Preview generation progress (shared across ready/reused states) */}
+          {downloadComplete && previewStatus === 'generating' && (
             <div className="space-y-1">
               <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800">
                 <div
@@ -2101,12 +2170,12 @@ export function StepMode({ historical }: StepModeProps) {
           )}
 
           {/* Error */}
-          {previewStatus === 'error' && previewError && (
+          {downloadComplete && previewStatus === 'error' && previewError && (
             <p className="text-xs text-red-400">{previewError}</p>
           )}
 
           {/* Video player */}
-          {previewStatus === 'ready' && previewUrl && (
+          {downloadComplete && previewStatus === 'ready' && previewUrl && (
             <video
               src={`${goUrl}${previewUrl}`}
               controls

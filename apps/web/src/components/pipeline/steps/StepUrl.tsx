@@ -3,63 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useAppStore } from '@/store/appStore';
 import { usePipelineStore } from '@/store/pipelineStore';
-import type { PhaseProgress, VideoInfo } from '@/store/pipelineStore';
 import { useUrlHistoryStore } from '@/store/urlHistoryStore';
 import { useChannelStore } from '@/store/channelStore';
 import { ChannelCard, isAuthenticated } from '@/components/channels/ChannelCard';
 import type { GatePayload, UrlHistoryEntry } from '@/types/pipeline';
-
-function DownloadProgressCard({ videoInfo, phaseProgress }: { videoInfo: VideoInfo | null; phaseProgress: PhaseProgress | null }) {
-  const pct = phaseProgress?.percentDone ?? 0;
-  return (
-    <div className="rounded-md border border-border bg-background p-4 space-y-3">
-      {videoInfo && (
-        <div className="flex gap-3 items-start">
-          {videoInfo.thumbnailUrl && (
-            <img
-              src={videoInfo.thumbnailUrl}
-              alt=""
-              className="w-20 h-12 object-cover rounded shrink-0"
-            />
-          )}
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">{videoInfo.title}</p>
-            <p className="text-xs text-zinc-500">{videoInfo.durationSec}s</p>
-          </div>
-        </div>
-      )}
-      <div className="space-y-1">
-        <div className="flex justify-between text-xs text-zinc-500">
-          <span>Downloading…</span>
-          <span>{Math.round(pct)}%</span>
-        </div>
-        <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden">
-          <div
-            className="h-full rounded-full bg-zinc-300 transition-all duration-300"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-        {(phaseProgress?.speedKbs != null || phaseProgress?.etaSec != null) && (
-          <div className="flex gap-3 text-xs text-zinc-600">
-            {phaseProgress.speedKbs != null && <span>{phaseProgress.speedKbs} KB/s</span>}
-            {phaseProgress.etaSec != null && <span>ETA {phaseProgress.etaSec}s</span>}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function PreparingCard() {
-  return (
-    <div className="rounded-md border border-border bg-background p-4">
-      <div className="flex items-center gap-2 text-sm text-zinc-500">
-        <span className="inline-block h-3 w-3 rounded-full border-2 border-zinc-500 border-t-transparent animate-spin" />
-        <span>Preparing download…</span>
-      </div>
-    </div>
-  );
-}
 
 function UrlHistorySection({ goUrl, onSelect }: { goUrl: string; onSelect: (url: string) => void }) {
   const history = useUrlHistoryStore((s) => s.history);
@@ -117,15 +64,12 @@ export function StepUrl({ historical }: StepUrlProps) {
   const resubmitFromBacked = usePipelineStore((s) => s.resubmitFromBacked);
   const isLoading = usePipelineStore((s) => s.isLoading);
   const error = usePipelineStore((s) => s.error);
-  const phaseProgress = usePipelineStore((s) => s.phaseProgress);
-  const videoInfo = usePipelineStore((s) => s.videoInfo);
   const fetchHistory = useUrlHistoryStore((s) => s.fetchHistory);
   const channels = useChannelStore((s) => s.channels);
   const fetchChannels = useChannelStore((s) => s.fetchChannels);
 
   const historicalUrl = historical?.kind === 'url' ? historical.url : undefined;
   const [url, setUrl] = useState(historicalUrl ?? '');
-  const [isPending, setIsPending] = useState(false);
 
   // Select favorite authenticated channel by default
   const defaultChannel = channels.find((c) => isAuthenticated(c) && c.IsFavorite) ?? channels.find(isAuthenticated) ?? null;
@@ -143,23 +87,15 @@ export function StepUrl({ historical }: StepUrlProps) {
     }
   }, [channels]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Clear pending once download actually starts (SSE fires)
-  useEffect(() => {
-    if (phaseProgress !== null) setIsPending(false);
-  }, [phaseProgress]);
-
   const isHistorical = historical !== undefined;
-  const isDownloading = !isHistorical && phaseProgress?.phase === 'download';
-  const showPreparing = !isHistorical && isPending && !isDownloading;
   const selectedChannel = channels.find((c) => c.ID === selectedChannelId) ?? null;
   const canStart = !!selectedChannelId && !!selectedChannel && isAuthenticated(selectedChannel);
 
   const handleStart = async () => {
     const trimmed = url.trim();
     if (!trimmed || !selectedChannelId) return;
-    setIsPending(true);
     const runId = await createRun(goUrl);
-    if (!runId) { setIsPending(false); return; }
+    if (!runId) return;
     subscribeSSE(goUrl, runId);
     await advance(goUrl, runId, { url: trimmed, channel_id: selectedChannelId });
   };
@@ -171,7 +107,7 @@ export function StepUrl({ historical }: StepUrlProps) {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && !isLoading && !isDownloading && !showPreparing && canStart) {
+    if (e.key === 'Enter' && !isLoading && canStart) {
       if (isHistorical) void handleResubmit();
       else void handleStart();
     }
@@ -213,43 +149,37 @@ export function StepUrl({ historical }: StepUrlProps) {
         </div>
       )}
 
-      {isDownloading ? (
-        <DownloadProgressCard videoInfo={videoInfo} phaseProgress={phaseProgress} />
-      ) : showPreparing ? (
-        <PreparingCard />
-      ) : (
-        <div className="space-y-3">
-          <input
-            type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="https://www.youtube.com/watch?v=..."
-            disabled={isLoading}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500 disabled:opacity-50"
-          />
+      <div className="space-y-3">
+        <input
+          type="url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="https://www.youtube.com/watch?v=..."
+          disabled={isLoading}
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500 disabled:opacity-50"
+        />
 
-          <button
-            onClick={() => void (isHistorical ? handleResubmit() : handleStart())}
-            disabled={isLoading || !url.trim() || (!isHistorical && !canStart)}
-            className="w-full rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {isLoading ? 'Starting…' : isHistorical ? 'Re-submit' : 'Start Pipeline'}
-          </button>
+        <button
+          onClick={() => void (isHistorical ? handleResubmit() : handleStart())}
+          disabled={isLoading || !url.trim() || (!isHistorical && !canStart)}
+          className="w-full rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {isLoading ? 'Starting…' : isHistorical ? 'Re-submit' : 'Start Pipeline'}
+        </button>
 
-          {!isHistorical && !canStart && channels.length > 0 && (
-            <p className="text-xs text-zinc-500 text-center">
-              {!selectedChannelId ? 'Selecione um canal para continuar' : 'Autorize o canal para continuar'}
-            </p>
-          )}
+        {!isHistorical && !canStart && channels.length > 0 && (
+          <p className="text-xs text-zinc-500 text-center">
+            {!selectedChannelId ? 'Selecione um canal para continuar' : 'Autorize o canal para continuar'}
+          </p>
+        )}
 
-          {error && (
-            <p className="text-xs text-red-400">{error}</p>
-          )}
+        {error && (
+          <p className="text-xs text-red-400">{error}</p>
+        )}
 
-          {!isHistorical && <UrlHistorySection goUrl={goUrl} onSelect={(u) => setUrl(u)} />}
-        </div>
-      )}
+        {!isHistorical && <UrlHistorySection goUrl={goUrl} onSelect={(u) => setUrl(u)} />}
+      </div>
     </div>
   );
 }
