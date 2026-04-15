@@ -160,6 +160,22 @@ func (h *PipelineHandler) PostCancel(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"state": newState})
 }
 
+// PostRedownload forces a fresh video download for a run in WAITING_MODE state.
+// POST /api/pipeline/runs/{id}/redownload
+func (h *PipelineHandler) PostRedownload(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseRunID(w, r)
+	if !ok {
+		return
+	}
+	if err := h.svc.Redownload(r.Context(), id); err != nil {
+		h.log.Error("redownload failed", "run_id", id, "err", err)
+		jsonError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
 // GetPriorClips checks if a prior completed run exists for a given URL.
 // GET /api/pipeline/runs/prior-clips?url=<encoded>
 func (h *PipelineHandler) GetPriorClips(w http.ResponseWriter, r *http.Request) {

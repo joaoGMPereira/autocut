@@ -33,6 +33,7 @@ func NewRouter(
 	mux.HandleFunc("GET /api/pipeline/runs/{id}/stream", ph.GetRunStream)
 	mux.HandleFunc("POST /api/pipeline/runs/{id}/advance", ph.PostAdvance)
 	mux.HandleFunc("POST /api/pipeline/runs/{id}/cancel", ph.PostCancel)
+	mux.HandleFunc("POST /api/pipeline/runs/{id}/redownload", ph.PostRedownload)
 
 	// URL history endpoints (consumed by urlHistoryStore.ts)
 	mux.HandleFunc("GET /api/url-history", uhh.GetHistory)

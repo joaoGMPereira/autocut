@@ -317,6 +317,38 @@ func (s *Service) advanceSimple(ctx context.Context, id int64, fromState, toStat
 	return AdvanceResult{State: toState}, nil
 }
 
+// Redownload clears the current video_path and starts a fresh download.
+// Only valid when the run is in WAITING_MODE state.
+func (s *Service) Redownload(ctx context.Context, id int64) error {
+	run, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("run %d not found", id)
+		}
+		return fmt.Errorf("get run %d: %w", id, err)
+	}
+	if run.State != StateWaitingMode {
+		return fmt.Errorf("redownload only valid in WAITING_MODE state, current state: %s", run.State)
+	}
+	if run.URL == "" {
+		return fmt.Errorf("run %d has no URL to redownload", id)
+	}
+
+	if err := s.repo.SetVideoPath(ctx, id, ""); err != nil {
+		return fmt.Errorf("clear video_path: %w", err)
+	}
+	if err := s.repo.SetActivePhase(ctx, id, PhaseDownload); err != nil {
+		return fmt.Errorf("set active_phase: %w", err)
+	}
+
+	runCtx, cancel := context.WithCancel(context.Background())
+	s.cancelMap.Store(id, cancel)
+	go s.runDownload(runCtx, id, run.URL)
+
+	s.log.Info("pipeline run redownload started", "run_id", id, "url", run.URL)
+	return nil
+}
+
 // Cancel transitions a run to CANCELLED and terminates the background download.
 func (s *Service) Cancel(ctx context.Context, id int64) (string, error) {
 	if err := s.repo.Cancel(ctx, id); err != nil {
