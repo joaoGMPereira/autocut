@@ -16,6 +16,7 @@ import type {
   SSEEvent,
   SSEPhaseProgressPayload,
   SSEVideoInfoPayload,
+  SSEDownloadCompletePayload,
   SSEPreviewProgressPayload,
   SSEPreviewReadyPayload,
   SSEPreviewErrorPayload,
@@ -60,6 +61,10 @@ interface PipelineState {
   error: string | null;
   sseCleanup: (() => void) | null;
 
+  // Download state (parallel download while on Mode screen)
+  downloadComplete: boolean;
+  videoReused: boolean;
+
   // Preview state
   previewStatus: PreviewStatus;
   previewPercent: number;
@@ -103,6 +108,7 @@ interface PipelineState {
 
   // Actions — preview
   generatePreview: (goUrl: string, runId: number, modeConfig: ModeConfig) => Promise<void>;
+  redownload: (goUrl: string, runId: number) => Promise<void>;
 
   // Actions — SSE
   subscribeSSE: (goUrl: string, runId: number) => () => void;
@@ -123,6 +129,8 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
   isLoading: false,
   error: null,
   sseCleanup: null,
+  downloadComplete: false,
+  videoReused: false,
 
   // Preview state
   previewStatus: 'idle',
@@ -245,6 +253,8 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
       navHistory: [],
       navIndex: 0,
       gateHistory: {},
+      downloadComplete: false,
+      videoReused: false,
     });
   },
 
@@ -269,8 +279,12 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
         body: JSON.stringify(req),
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
-      const data = (await res.json()) as { state: RunState };
-      set((s) => ({ run: s.run?.id === id ? { ...s.run, state: data.state } : s.run }));
+      const data = (await res.json()) as { state: RunState; video_reused?: boolean };
+      set((s) => ({
+        run: s.run?.id === id ? { ...s.run, state: data.state } : s.run,
+        videoReused: data.video_reused ?? false,
+        downloadComplete: data.video_reused ?? false, // if reused, download is already done
+      }));
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'advance failed';
       log.error('[pipelineStore] advance failed', { error: msg });
@@ -535,6 +549,19 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
     }
   },
 
+  redownload: async (goUrl, runId) => {
+    log.info('[pipelineStore] redownload', { runId });
+    set({ downloadComplete: false, videoReused: false, previewStatus: 'idle', previewUrl: null });
+    try {
+      const res = await fetch(`${goUrl}/api/pipeline/runs/${runId}/redownload`, { method: 'POST' });
+      if (!res.ok) throw new Error(`Failed: ${res.status}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Redownload failed';
+      log.error('[pipelineStore] redownload failed', { error: msg });
+      set({ error: msg });
+    }
+  },
+
   // ── SSE ────────────────────────────────────────────────────────────────────
 
   subscribeSSE: (goUrl, runId) => {
@@ -556,6 +583,15 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
               navIndex: newNavHistory.length - 1,
             };
           });
+          // Re-fetch full run so fields like video_path/duration_sec are fresh
+          fetch(`${goUrl}/api/pipeline/runs/${payload.run_id}`)
+            .then((r) => r.json())
+            .then((data: { run: Run }) => {
+              set((s) => ({
+                run: s.run?.id === data.run.id ? { ...data.run, state: s.run.state } : s.run,
+              }));
+            })
+            .catch(() => { /* best-effort refresh */ });
         }
 
         if (evt.type === 'video_info') {
@@ -568,6 +604,17 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
               channelName: payload.channel_name,
             },
           });
+        }
+
+        if (evt.type === 'download_complete') {
+          const payload = evt.data as SSEDownloadCompletePayload;
+          set((s) => ({
+            downloadComplete: true,
+            phaseProgress: null, // clear download progress
+            run: s.run?.id === payload.run_id
+              ? { ...s.run, video_path: payload.video_path }
+              : s.run,
+          }));
         }
 
         if (evt.type === 'phase_progress') {

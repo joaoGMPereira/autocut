@@ -319,12 +319,18 @@ export interface SSEPreviewErrorPayload {
   message: string;
 }
 
+export interface SSEDownloadCompletePayload {
+  run_id: number;
+  video_path: string;
+}
+
 export interface SSEEvent {
   type:
     | 'state_changed'
     | 'gate_opened'
     | 'phase_progress'
     | 'video_info'
+    | 'download_complete'
     | 'preview_progress'
     | 'preview_ready'
     | 'preview_error'
@@ -337,6 +343,7 @@ export interface SSEEvent {
     | SSEGateOpenedPayload
     | SSEPhaseProgressPayload
     | SSEVideoInfoPayload
+    | SSEDownloadCompletePayload
     | SSEPreviewProgressPayload
     | SSEPreviewReadyPayload
     | SSEPreviewErrorPayload
