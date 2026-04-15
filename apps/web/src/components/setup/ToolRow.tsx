@@ -7,7 +7,6 @@ import {
   Loader2,
   Download,
   ExternalLink,
-  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -29,7 +28,6 @@ export function ToolRow({ tool }: ToolRowProps) {
   const installStates = useSetupStore((s) => s.installStates);
   const installLogs = useSetupStore((s) => s.installLogs);
   const startInstall = useSetupStore((s) => s.startInstall);
-  const checkUpdate = useSetupStore((s) => s.checkUpdate);
 
   const state = installStates[tool.name] ?? 'idle';
   const logs = installLogs[tool.name] ?? [];
@@ -114,17 +112,7 @@ export function ToolRow({ tool }: ToolRowProps) {
           {badgeLabel()}
         </span>
 
-        {tool.installed && isAutoDownload && !tool.updateAvailable && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs bg-[#1e1e2e] border-[#2a2a3a] text-[#8888a8]"
-            onClick={() => checkUpdate(goUrl, tool.name)}
-          >
-            <RefreshCw className="h-3 w-3 mr-1" />
-            Check
-          </Button>
-        )}
+        {/* Check button removed — updates are checked automatically on gate mount */}
 
         {tool.updateAvailable && (
           <Button

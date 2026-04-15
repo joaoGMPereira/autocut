@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ToolStatus, ToolInstallState, InstallEvent, WhisperModelInfo } from '@/types/setup';
+import type { ToolStatus, ToolInstallState, InstallEvent, WhisperModelInfo, HardwareProfile, ModelRecommendation } from '@/types/setup';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('setupStore');
@@ -13,8 +13,12 @@ interface SetupState {
   whisperModels: WhisperModelInfo[];
   whisperDownloadStates: Record<string, ToolInstallState>;
   whisperDownloadLogs: Record<string, string[]>;
+  hardware: HardwareProfile | null;
+  recommendation: ModelRecommendation | null;
+  hardwareLoading: boolean;
 
   fetchStatus: (goUrl: string) => Promise<void>;
+  syncTools: (goUrl: string) => Promise<void>;
   startInstall: (goUrl: string, toolName: string) => void;
   clearInstallState: (toolName: string) => void;
   allRequiredInstalled: () => boolean;
@@ -22,6 +26,7 @@ interface SetupState {
   checkUpdate: (goUrl: string, toolName: string) => Promise<void>;
   fetchWhisperModels: (goUrl: string) => Promise<void>;
   downloadWhisperModel: (goUrl: string, model: string) => void;
+  fetchHardware: (goUrl: string) => Promise<void>;
 }
 
 export const useSetupStore = create<SetupState>((set, get) => ({
@@ -33,6 +38,9 @@ export const useSetupStore = create<SetupState>((set, get) => ({
   whisperModels: [],
   whisperDownloadStates: {},
   whisperDownloadLogs: {},
+  hardware: null,
+  recommendation: null,
+  hardwareLoading: false,
 
   fetchStatus: async (goUrl: string) => {
     set({ loading: true, error: null });
@@ -45,6 +53,21 @@ export const useSetupStore = create<SetupState>((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       log.error('status fetch failed', { err: message });
+      set({ loading: false, error: message });
+    }
+  },
+
+  syncTools: async (goUrl: string) => {
+    set({ loading: true, error: null });
+    try {
+      const res = await fetch(`${goUrl}/api/setup/sync`, { method: 'POST' });
+      if (!res.ok) throw new Error(`Sync failed: ${res.status}`);
+      const data = await res.json();
+      log.info('tools synced', { count: data.tools?.length });
+      set({ tools: data.tools ?? [], loading: false });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      log.error('sync failed', { err: message });
       set({ loading: false, error: message });
     }
   },
@@ -242,5 +265,20 @@ export const useSetupStore = create<SetupState>((set, get) => ({
         log.error('whisper model POST failed', { model, err });
       },
     );
+  },
+
+  fetchHardware: async (goUrl: string) => {
+    set({ hardwareLoading: true });
+    try {
+      const res = await fetch(`${goUrl}/api/setup/hardware`);
+      if (!res.ok) throw new Error(`Hardware fetch failed: ${res.status}`);
+      const data = await res.json();
+      log.info('hardware fetched', { ram_mb: data.hardware?.total_ram_mb });
+      set({ hardware: data.hardware ?? null, recommendation: data.recommendation ?? null, hardwareLoading: false });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      log.error('hardware fetch failed', { err: message });
+      set({ hardwareLoading: false });
+    }
   },
 }));

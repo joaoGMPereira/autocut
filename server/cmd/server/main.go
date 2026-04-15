@@ -77,7 +77,7 @@ func main() {
 	if err := autocutDir.Ensure(); err != nil {
 		slog.Warn("failed to ensure autocut dirs", "err", err)
 	}
-	cfg := configurator.New(autocutDir)
+	cfg := configurator.New(autocutDir, settingRepo)
 	setupHandler := handlers.NewSetupHandler(sseHub, cfg)
 	settingsHandler := handlers.NewSettingsHandler(settingRepo)
 

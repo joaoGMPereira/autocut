@@ -45,6 +45,7 @@ func NewRouter(
 
 	// Setup endpoints — tool status + install + whisper models
 	mux.HandleFunc("GET /api/setup/status", sh.GetStatus)
+	mux.HandleFunc("POST /api/setup/sync", sh.PostSync)
 	mux.HandleFunc("GET /api/setup/dir", sh.GetDir)
 	mux.HandleFunc("POST /api/setup/install/{tool}", sh.PostInstall)
 	mux.HandleFunc("GET /api/setup/install/{tool}/stream", sh.GetInstallStream)
@@ -52,6 +53,9 @@ func NewRouter(
 	mux.HandleFunc("GET /api/setup/whisper/models", sh.GetWhisperModels)
 	mux.HandleFunc("POST /api/setup/whisper/models/{model}", sh.PostWhisperModel)
 	mux.HandleFunc("GET /api/setup/whisper/models/{model}/stream", sh.GetWhisperModelStream)
+	mux.HandleFunc("GET /api/setup/hardware", sh.GetHardware)
+	mux.HandleFunc("POST /api/setup/tools/{tool}/path", sh.PostCustomPath)
+	mux.HandleFunc("DELETE /api/setup/tools/{tool}/path", sh.DeleteCustomPath)
 
 	// App settings endpoints
 	mux.HandleFunc("GET /api/settings", seth.GetSettings)

@@ -61,7 +61,7 @@ func allMocksNotInstalled() []ToolValidator {
 // ---------------------------------------------------------------------------
 
 func TestStatus(t *testing.T) {
-	c := New(testConfiguratorDir(t))
+	c := New(testConfiguratorDir(t), nil)
 	statuses := c.Status()
 	if len(statuses) < 6 {
 		t.Errorf("Status() len = %d, want >= 6", len(statuses))

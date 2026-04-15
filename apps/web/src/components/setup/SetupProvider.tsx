@@ -47,26 +47,29 @@ export function SetupProvider({ children }: SetupProviderProps) {
     );
   }
 
-  // Backend offline after timeout — let the app load with a warning
+  // Backend offline after timeout — block the app until status is confirmed
   if (timedOut && isLoading) {
     return (
-      <div className="relative h-full">
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-xs text-amber-400">
-          Backend is starting up. Some features may be unavailable.
+      <div className="flex h-full items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <p className="text-xs text-muted-foreground">Backend is starting up…</p>
         </div>
-        {children}
       </div>
     );
   }
 
-  // Error (backend returned an error) — non-blocking warning
+  // Error (backend returned an error) — block the app, show recovery message
   if (error && tools.length === 0) {
     return (
-      <div className="relative h-full">
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-xs text-amber-400">
-          Could not check tool status: {error}
+      <div className="flex h-full items-center justify-center">
+        <div className="flex flex-col items-center gap-3 max-w-sm text-center">
+          <p className="text-sm font-medium text-foreground">Backend offline</p>
+          <p className="text-xs text-muted-foreground">
+            Could not reach the AutoCut backend. Restart the app to try again.
+          </p>
+          <p className="text-xs text-muted-foreground/60">{error}</p>
         </div>
-        {children}
       </div>
     );
   }

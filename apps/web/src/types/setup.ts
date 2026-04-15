@@ -6,6 +6,25 @@ export interface ToolStatus {
   version?: string;
   latestVersion?: string;
   updateAvailable?: boolean;
+  versionOk?: boolean;   // undefined = no min version configured
+  source?: 'path' | 'custom' | 'autocut_bin' | 'no_model';
+}
+
+export interface HardwareProfile {
+  total_ram_mb: number;
+  cpu_cores: number;
+  arch: 'arm64' | 'amd64' | string;
+  gpu_vendor: 'apple_metal' | 'nvidia' | 'amd' | 'none' | 'unknown';
+  gpu_vram_mb: number;
+}
+
+export interface ModelRecommendation {
+  whisper_tier: 'tiny' | 'base' | 'small' | 'medium' | 'large';
+  whisper_reason: string;
+  whisper_size_mb: number;
+  ollama_model: string;
+  ollama_reason: string;
+  upgrade_available: boolean;
 }
 
 export interface WhisperModelInfo {

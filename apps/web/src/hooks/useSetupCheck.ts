@@ -20,6 +20,7 @@ export function useSetupCheck(): UseSetupCheckResult {
   const loading = useSetupStore((s) => s.loading);
   const error = useSetupStore((s) => s.error);
   const fetchStatus = useSetupStore((s) => s.fetchStatus);
+  const fetchHardware = useSetupStore((s) => s.fetchHardware);
   const allRequiredInstalled = useSetupStore((s) => s.allRequiredInstalled);
   const missingRequired = useSetupStore((s) => s.missingRequired);
   const checkUpdate = useSetupStore((s) => s.checkUpdate);
@@ -30,7 +31,8 @@ export function useSetupCheck(): UseSetupCheckResult {
   // Initial fetch on mount
   useEffect(() => {
     fetchStatus(goUrl);
-  }, [goUrl, fetchStatus]);
+    fetchHardware(goUrl);
+  }, [goUrl, fetchStatus, fetchHardware]);
 
   // Once tools are confirmed installed, fire update checks (one-time per session)
   useEffect(() => {

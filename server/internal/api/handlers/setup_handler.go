@@ -13,12 +13,19 @@ import (
 // It is satisfied by *configurator.Configurator.
 type ConfiguratorFace interface {
 	Status() []configurator.ToolStatus
+	Refresh() []configurator.ToolStatus
+	Sync() []configurator.ToolStatus
 	Get(name string) (configurator.ToolValidator, bool)
 	Install(ctx context.Context, name string, logCh chan<- string) error
 	Dir() *configurator.AutoCutDir
 	CheckUpdate(ctx context.Context, name string) (configurator.UpdateInfo, error)
 	WhisperModelStatus() []configurator.WhisperModelInfo
 	DownloadWhisperModel(ctx context.Context, name string, logCh chan<- string) error
+	Hardware() (configurator.HardwareProfile, configurator.ModelRecommendation)
+	SetCustomPath(ctx context.Context, toolName, path string) error
+	ClearCustomPath(ctx context.Context, toolName string) error
+	ApplyCustomPath(ctx context.Context, toolName, customPath string) (configurator.ToolStatus, string, error)
+	DetectAndClearCustomPath(ctx context.Context, toolName string) (configurator.ToolStatus, error)
 }
 
 // SetupHandler handles tool setup and status requests.
@@ -150,9 +157,85 @@ func (h *SetupHandler) PostWhisperModel(w http.ResponseWriter, r *http.Request) 
 	_ = json.NewEncoder(w).Encode(map[string]string{"job_id": jobID})
 }
 
+// GetHardware returns hardware profile and model recommendations.
+func (h *SetupHandler) GetHardware(w http.ResponseWriter, _ *http.Request) {
+	hw, rec := h.cfg.Hardware()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"hardware":       hw,
+		"recommendation": rec,
+	})
+}
+
 // GetWhisperModelStream streams SSE events for a Whisper model download job.
 func (h *SetupHandler) GetWhisperModelStream(w http.ResponseWriter, r *http.Request) {
 	model := r.PathValue("model")
 	jobID := "whisper-" + model
 	h.hub.ServeSSE(w, r, jobID)
+}
+
+// PostCustomPath sets a custom binary path for the named tool.
+// POST /api/setup/tools/{tool}/path
+// Body: {"path": "/absolute/path/to/binary"}
+// 200: {"tool": ToolStatus}
+// 422: {"code": "...", "message": "..."}
+func (h *SetupHandler) PostCustomPath(w http.ResponseWriter, r *http.Request) {
+	tool := r.PathValue("tool")
+	w.Header().Set("Content-Type", "application/json")
+
+	var body struct {
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Path == "" {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"code":    "invalid_path",
+			"message": "request body must be {\"path\": \"/absolute/path\"}",
+		})
+		return
+	}
+
+	status, errCode, err := h.cfg.ApplyCustomPath(r.Context(), tool, body.Path)
+	if err != nil {
+		if errCode == "tool_not_found" {
+			w.WriteHeader(http.StatusNotFound)
+		} else {
+			w.WriteHeader(http.StatusUnprocessableEntity)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"code":    errCode,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"tool": status})
+}
+
+// PostSync copies binaries from ~/.autocut/bin into the current dir (useful in dev),
+// re-discovers all tools, and returns fresh statuses.
+func (h *SetupHandler) PostSync(w http.ResponseWriter, _ *http.Request) {
+	tools := h.cfg.Sync()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"tools": tools})
+}
+
+// DeleteCustomPath clears the custom binary path for the named tool.
+// DELETE /api/setup/tools/{tool}/path
+// 200: {"tool": ToolStatus}
+func (h *SetupHandler) DeleteCustomPath(w http.ResponseWriter, r *http.Request) {
+	tool := r.PathValue("tool")
+	w.Header().Set("Content-Type", "application/json")
+
+	status, err := h.cfg.DetectAndClearCustomPath(r.Context(), tool)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"code":    "tool_not_found",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"tool": status})
 }
