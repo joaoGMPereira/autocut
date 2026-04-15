@@ -15,7 +15,7 @@ export function ColorInputField({ label, value, onValueChange }: ColorInputField
 
   return (
     <div className="flex flex-col gap-1.5">
-      <Label className="text-xs text-zinc-400">{label}</Label>
+      <Label htmlFor={`color-hex-${label}`} className="text-xs text-zinc-400">{label}</Label>
       <div className="flex items-center gap-2">
         {/* Swatch — clicking opens native color picker */}
         <button
@@ -37,6 +37,8 @@ export function ColorInputField({ label, value, onValueChange }: ColorInputField
         />
         {/* Hex text input */}
         <Input
+          id={`color-hex-${label}`}
+          data-testid="hex-input"
           value={value}
           onChange={(e) => onValueChange(e.target.value.toUpperCase())}
           className="font-mono text-sm h-8"
