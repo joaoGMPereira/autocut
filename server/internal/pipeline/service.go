@@ -203,6 +203,16 @@ func (s *Service) Advance(ctx context.Context, id int64, req AdvanceRequest) (Ad
 					}
 
 					s.log.Info("pipeline run reused video", "run_id", id, "url", normalized, "source", existingPath)
+					// Emit video_info so the frontend can compute Segment Duration suggestions
+					// from the actual video duration instead of showing hardcoded fallback values.
+					s.hub.Publish(jobKey, hub.SSEEvent{
+						Type: "video_info",
+						Data: videoInfoPayload{
+							RunID:       id,
+							Title:       existingTitle,
+							DurationSec: int(existingDuration),
+						},
+					})
 					s.hub.Publish(jobKey, hub.SSEEvent{
 						Type: "state_changed",
 						Data: stateChangedPayload{RunID: id, State: StateWaitingMode},
@@ -261,7 +271,7 @@ func (s *Service) Advance(ctx context.Context, id int64, req AdvanceRequest) (Ad
 			Type: "state_changed",
 			Data: stateChangedPayload{RunID: id, State: StateExecuting},
 		})
-		go s.runProcessingStub(id)
+		go s.runExecution(id)
 		return AdvanceResult{State: StateExecuting}, nil
 
 	case StateWaitingReviewHighlights:
@@ -565,19 +575,66 @@ func (s *Service) runDownload(ctx context.Context, id int64, videoURL string) {
 	s.log.Info("pipeline download complete", "run_id", id, "duration", metaInfo.Duration.Round(time.Second))
 }
 
-// runProcessingStub advances EXECUTING → WAITING_REVIEW_HIGHLIGHTS after a 100ms delay.
-func (s *Service) runProcessingStub(id int64) {
-	time.Sleep(100 * time.Millisecond)
+// runExecution is the background goroutine that runs the full transcription + highlight detection pipeline.
+func (s *Service) runExecution(id int64) {
 	jobKey := fmt.Sprintf("%d", id)
 	ctx := context.Background()
-	if err := s.repo.AdvanceState(ctx, id, StateExecuting, StateWaitingReviewHighlights); err != nil {
-		s.log.Error("processing stub advance failed", "run_id", id, "err", err)
+
+	// Load run for video_path, url, duration_sec.
+	run, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		s.log.Error("runExecution: failed to load run", "run_id", id, "err", err)
+		_ = s.repo.Finish(ctx, id, StateError, fmt.Sprintf("load run: %s", err))
+		s.hub.Publish(jobKey, hub.SSEEvent{
+			Type: "error",
+			Data: map[string]interface{}{"run_id": id, "state": StateError, "message": fmt.Sprintf("load run: %s", err)},
+		})
 		return
 	}
-	s.hub.Publish(jobKey, hub.SSEEvent{
-		Type: "state_changed",
-		Data: stateChangedPayload{RunID: id, State: StateWaitingReviewHighlights},
-	})
+
+	req := processor.ExecRequest{
+		RunID:       id,
+		VideoPath:   run.VideoPath,
+		VideoURL:    run.URL,
+		DurationSec: run.DurationSec,
+		DataDir:     s.dataDir,
+		Mode:        run.Mode,
+
+		PublishPhaseProgress: func(phase string, pct float64) {
+			s.hub.Publish(jobKey, hub.SSEEvent{
+				Type: "phase_progress",
+				Data: phaseProgressPayload{RunID: id, Phase: phase, PercentDone: pct},
+			})
+		},
+		PublishStateChange: func(state string) {
+			s.hub.Publish(jobKey, hub.SSEEvent{
+				Type: "state_changed",
+				Data: stateChangedPayload{RunID: id, State: state},
+			})
+		},
+		PublishError: func(msg string) {
+			s.hub.Publish(jobKey, hub.SSEEvent{
+				Type: "error",
+				Data: map[string]interface{}{"run_id": id, "state": StateError, "message": msg},
+			})
+		},
+
+		FindTranscriptByURL: s.repo.FindTranscriptByURL,
+		SetTranscriptPath:   s.repo.SetTranscriptPath,
+		AdvanceState:        s.repo.AdvanceState,
+		Finish:              s.repo.Finish,
+		ReplaceHighlights:   s.highlightRepo.ReplaceForRun,
+	}
+
+	if execErr := processor.RunExecution(ctx, req); execErr != nil {
+		s.log.Error("runExecution failed", "run_id", id, "err", execErr)
+		return
+	}
+
+	// For longform mode, automatically trigger clip generation (no highlight review gate).
+	if run.Mode == "longform" {
+		go s.runClipGeneration(id)
+	}
 }
 
 // runClipGeneration generates clips for all selected highlights with the full effect pipeline.
@@ -619,6 +676,17 @@ func (s *Service) runClipGeneration(id int64) {
 
 	// Apply mode overrides so clip generation uses the same effect config as preview
 	processor.ApplyModeOverrides(&channelCfg, json.RawMessage(run.ModeConfigJSON))
+
+	// Longform mode: skip highlight-based clip generation; segment the video directly.
+	if run.Mode == "longform" {
+		var modeCfg struct {
+			Mode       string  `json:"mode"`
+			SegmentSec float64 `json:"segment_secs"`
+		}
+		_ = json.Unmarshal([]byte(run.ModeConfigJSON), &modeCfg)
+		s.generateLongformClips(id, run, modeCfg.SegmentSec, publishError)
+		return
+	}
 
 	// Fetch selected highlights
 	highlights, err := s.highlightRepo.ListSelectedByRun(ctx, id)
@@ -705,6 +773,52 @@ func (s *Service) runClipGeneration(id int64) {
 		Type: "phase_progress",
 		Data: phaseProgressPayload{RunID: id, Phase: "cut", PercentDone: 100},
 	})
+
+	s.advanceClipGenDone(id)
+}
+
+// generateLongformClips creates evenly-spaced clip rows for a longform run and advances state.
+// segmentSec is the desired clip duration; defaults to 600s (10 min) when 0.
+func (s *Service) generateLongformClips(id int64, run *database.PipelineRun, segmentSec float64, publishError func(string)) {
+	ctx := context.Background()
+	log := s.log.With("run_id", id, "phase", "longform_clips")
+
+	if segmentSec <= 0 {
+		segmentSec = 600
+	}
+
+	totalSec := float64(run.DurationSec)
+	if totalSec <= 0 {
+		log.Warn("duration_sec is 0, cannot segment — advancing without clips")
+		s.advanceClipGenDone(id)
+		return
+	}
+
+	numSegments := int(totalSec / segmentSec)
+	if numSegments == 0 {
+		numSegments = 1
+	}
+
+	log.Info("generating longform clip rows", "segments", numSegments, "segment_sec", segmentSec)
+
+	for i := 0; i < numSegments; i++ {
+		startSec := float64(i) * segmentSec
+		endSec := startSec + segmentSec
+		if endSec > totalSec {
+			endSec = totalSec
+		}
+		clip := &database.PipelineClip{
+			RunID:       id,
+			StartSec:    startSec,
+			EndSec:      endSec,
+			DurationSec: endSec - startSec,
+			Title:       fmt.Sprintf("Part %d", i+1),
+			IsSelected:  true,
+		}
+		if _, err := s.clipRepo.Create(ctx, clip); err != nil {
+			log.Error("create longform clip row failed", "part", i+1, "err", err)
+		}
+	}
 
 	s.advanceClipGenDone(id)
 }
