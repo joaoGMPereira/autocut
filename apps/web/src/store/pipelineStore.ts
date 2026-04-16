@@ -56,7 +56,7 @@ interface PipelineState {
   highlights: Highlight[];
   clips: Clip[];
   phaseProgress: PhaseProgress | null;
-  clipProgress: Record<number, number> | null;  // clipID → percentDone (0-100)
+  clipProgress: Record<string, number> | null;  // clipID → percentDone (0-100)
   videoInfo: VideoInfo | null;
   isLoading: boolean;
   error: string | null;
@@ -805,6 +805,7 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
               run: s.run?.id === payload.run_id ? { ...s.run, state: 'DONE' } : s.run,
               sseCleanup: null,
               phaseProgress: null,
+              clipProgress: null,
               navHistory: newNavHistory,
               navIndex: newNavHistory.length - 1,
             };
@@ -818,6 +819,7 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
             run: s.run?.id === payload.run_id ? { ...s.run, state: 'ERROR', error: payload.message ?? '' } : s.run,
             sseCleanup: null,
             phaseProgress: null,
+            clipProgress: null,
           }));
         }
 
