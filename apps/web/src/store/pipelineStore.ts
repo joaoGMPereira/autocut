@@ -187,7 +187,34 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
       const res = await fetch(`${goUrl}/api/pipeline/runs/${id}`);
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
       const data = (await res.json()) as { run: Run };
+      log.info('[pipelineStore] loadRun response', {
+        id: data.run.id,
+        duration_sec: data.run.duration_sec,
+        video_title: data.run.video_title,
+        existing_videoInfo: get().videoInfo,
+      });
       set({ run: data.run, activeRunId: data.run.id, isLoading: false });
+      // Populate videoInfo from run fields if not already set via SSE — ensures
+      // Segment Duration suggestions are based on actual video duration, not hardcoded fallback.
+      if (data.run.duration_sec && data.run.duration_sec > 0 && !get().videoInfo) {
+        log.info('[pipelineStore] loadRun: setting videoInfo from run', {
+          durationSec: data.run.duration_sec,
+          title: data.run.video_title,
+        });
+        set({
+          videoInfo: {
+            title: data.run.video_title ?? '',
+            thumbnailUrl: '',
+            durationSec: data.run.duration_sec,
+          },
+        });
+      } else {
+        log.info('[pipelineStore] loadRun: videoInfo NOT set', {
+          reason: !data.run.duration_sec ? 'duration_sec missing/zero' : 'videoInfo already set via SSE',
+          duration_sec: data.run.duration_sec,
+          has_videoInfo: !!get().videoInfo,
+        });
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to load run';
       log.error('[pipelineStore] loadRun failed', { error: msg });
@@ -325,9 +352,29 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
         .then((r) => r.json())
         .then((rdata: unknown) => {
           const { run: freshRun } = rdata as { run: Run };
+          log.info('[pipelineStore] advance re-fetch', {
+            duration_sec: freshRun.duration_sec,
+            video_title: freshRun.video_title,
+            has_videoInfo: !!get().videoInfo,
+          });
           set((s) => ({
             run: s.run?.id === freshRun.id ? { ...freshRun, state: s.run!.state } : s.run,
           }));
+          // Populate videoInfo here — the SSE video_info event is published during advance
+          // (before EventSource connects) so it's lost. The re-fetched run has the data.
+          if (freshRun.duration_sec && freshRun.duration_sec > 0 && !get().videoInfo) {
+            log.info('[pipelineStore] advance re-fetch: setting videoInfo', {
+              durationSec: freshRun.duration_sec,
+              title: freshRun.video_title,
+            });
+            set({
+              videoInfo: {
+                title: freshRun.video_title ?? '',
+                thumbnailUrl: '',
+                durationSec: freshRun.duration_sec,
+              },
+            });
+          }
         })
         .catch(() => { /* best-effort refresh */ });
     } catch (err) {
@@ -640,6 +687,8 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
                 run: s.run?.id === payload.run_id ? { ...s.run, state: payload.state } : s.run,
                 navHistory: newNavHistory,
                 navIndex: newNavHistory.length - 1,
+                // Clear stale EXECUTING-phase progress when GENERATING_CLIPS starts
+                ...(payload.state === 'GENERATING_CLIPS' ? { phaseProgress: null } : {}),
               };
             });
           }
@@ -650,6 +699,16 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
               set((s) => ({
                 run: s.run?.id === data.run.id ? { ...data.run, state: s.run.state } : s.run,
               }));
+              // Also populate videoInfo if not yet set (e.g. state_changed arrives before video_info SSE)
+              if (data.run.duration_sec && data.run.duration_sec > 0 && !get().videoInfo) {
+                set({
+                  videoInfo: {
+                    title: data.run.video_title ?? '',
+                    thumbnailUrl: '',
+                    durationSec: data.run.duration_sec,
+                  },
+                });
+              }
             })
             .catch(() => { /* best-effort refresh */ });
         }

@@ -19,8 +19,6 @@ export function ActiveStepArea() {
   const run = usePipelineStore((s) => s.run);
   const mode = run?.mode ?? 'ai';
 
-  console.log('[ActiveStepArea] displayedState', displayedState, 'isNavigatedBack', isNavigatedBack);
-
   const historical = isNavigatedBack ? gateHistory[displayedState] : undefined;
 
   switch (displayedState) {
