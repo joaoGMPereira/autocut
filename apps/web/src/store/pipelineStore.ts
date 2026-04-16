@@ -56,6 +56,7 @@ interface PipelineState {
   highlights: Highlight[];
   clips: Clip[];
   phaseProgress: PhaseProgress | null;
+  clipProgress: Record<number, number> | null;  // clipID → percentDone (0-100)
   videoInfo: VideoInfo | null;
   isLoading: boolean;
   error: string | null;
@@ -131,6 +132,7 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
   highlights: [],
   clips: [],
   phaseProgress: null,
+  clipProgress: null,
   videoInfo: null,
   isLoading: false,
   error: null,
@@ -280,6 +282,7 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
       highlights: [],
       clips: [],
       phaseProgress: null,
+      clipProgress: null,
       videoInfo: null,
       error: null,
       previewStatus: 'idle',
@@ -704,7 +707,7 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
                 navHistory: newNavHistory,
                 navIndex: newNavHistory.length - 1,
                 // Clear stale EXECUTING-phase progress when GENERATING_CLIPS starts
-                ...(payload.state === 'GENERATING_CLIPS' ? { phaseProgress: null } : {}),
+                ...(payload.state === 'GENERATING_CLIPS' ? { phaseProgress: null, clipProgress: null } : {}),
               };
             });
           }
@@ -754,14 +757,22 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
 
         if (evt.type === 'phase_progress') {
           const payload = evt.data as SSEPhaseProgressPayload;
-          set({
-            phaseProgress: {
-              phase: payload.phase,
-              percentDone: payload.percent_done,
-              speedKbs: payload.speed_kbs,
-              etaSec: payload.eta_sec,
-            },
-          });
+          if (payload.clip_id != null) {
+            // per-clip progress — update clipProgress map
+            set((s) => ({
+              clipProgress: { ...(s.clipProgress ?? {}), [payload.clip_id!]: payload.percent_done },
+            }));
+          } else {
+            // overall phase progress — existing behavior
+            set({
+              phaseProgress: {
+                phase: payload.phase,
+                percentDone: payload.percent_done,
+                speedKbs: payload.speed_kbs,
+                etaSec: payload.eta_sec,
+              },
+            });
+          }
           if (payload.warning) {
             useDispatcherStore.getState().markError(
               `tool_error:logo_watermark:${payload.run_id}`,
