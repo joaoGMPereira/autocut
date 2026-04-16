@@ -10,7 +10,6 @@ import { StepReviewMetadata } from './steps/StepReviewMetadata';
 import { StepReviewClips } from './steps/StepReviewClips';
 import { StepUpload } from './steps/StepUpload';
 import { StepGeneratingClips } from './steps/StepGeneratingClips';
-import { StepGeneratingClipsLongform } from './steps/StepGeneratingClipsLongform';
 
 export function ActiveStepArea() {
   const displayedState = usePipelineStore((s) => s.displayedState());
@@ -25,7 +24,7 @@ export function ActiveStepArea() {
     case 'WAITING_URL':          return <StepUrl historical={historical} />;
     case 'WAITING_MODE':         return <StepMode historical={historical} />;
     case 'EXECUTING':            return <StepExecute />;
-    case 'GENERATING_CLIPS':     return mode === 'longform' ? <StepGeneratingClipsLongform /> : <StepGeneratingClips />;
+    case 'GENERATING_CLIPS':     return <StepGeneratingClips />;
     case 'WAITING_REVIEW_HIGHLIGHTS': return <StepReviewHighlights historical={historical} />;
     case 'WAITING_THUMBNAIL_CONFIG':  return <StepThumbnailConfig historical={historical} />;
     case 'WAITING_REVIEW_METADATA':   return <StepReviewMetadata historical={historical} />;

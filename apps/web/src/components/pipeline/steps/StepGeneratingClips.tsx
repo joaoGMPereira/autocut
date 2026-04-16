@@ -8,14 +8,25 @@ export function StepGeneratingClips() {
   const clipProgress = usePipelineStore((s) => s.clipProgress);
   const entries = clipProgress ? Object.entries(clipProgress) : [];
 
+  const overallPct = phaseProgress?.phase === 'cut' ? phaseProgress.percentDone : 0;
+  const isEffectsPhase = overallPct >= 50 || entries.length > 0;
+
   return (
     <div className="space-y-4 max-w-xl">
+      <div>
+        <h2 className="text-xl font-semibold">Cutting Clips</h2>
+        <p className="text-sm text-zinc-500 mt-1">
+          {isEffectsPhase ? 'Applying effects to each clip…' : 'Cutting video into segments…'}
+        </p>
+      </div>
+
       <SubStepProgress
         phase="cut"
-        label="Generating clips"
-        percentDone={phaseProgress?.phase === 'cut' ? phaseProgress.percentDone : 0}
+        label={isEffectsPhase ? 'Applying effects' : 'Splitting video'}
+        percentDone={overallPct}
         isActive={true}
       />
+
       {entries.length > 0 && (
         <div className="space-y-2 pl-2">
           {entries.map(([clipId, pct], i) => (
