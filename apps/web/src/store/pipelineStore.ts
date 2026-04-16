@@ -342,8 +342,17 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
             pendingReuse: true,
           };
         }
-        // Normal case — navigate to the new state directly from HTTP response
-        // (SSE state_changed may not arrive if EventSource connects after Advance returns)
+        // Normal case — navigate to the new state directly from HTTP response.
+        // Guard: if SSE events arrived first and already pushed data.state (or moved past it),
+        // don't re-push — that would roll navIndex backwards to an already-passed state.
+        if (s.navHistory.includes(data.state)) {
+          return {
+            run: s.run?.id === id ? { ...s.run, state: data.state } : s.run,
+            videoReused: false,
+            downloadComplete: false,
+            pendingReuse: false,
+          };
+        }
         const newNavHistory = [...s.navHistory, data.state];
         return {
           run: s.run?.id === id ? { ...s.run, state: data.state } : s.run,
