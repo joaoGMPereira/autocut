@@ -114,12 +114,17 @@ Dialogue: 0,0:01:55.00,0:02:00.00,Default,,0,0,0,,With your chosen settings
 		style.MarginV,
 	)
 
-	tmpDir := os.TempDir()
-	tmpFile := filepath.Join(tmpDir, fmt.Sprintf("preview_captions_%d.ass", os.Getpid()))
-
-	if err := os.WriteFile(tmpFile, []byte(ass), 0o644); err != nil {
+	f, err := os.CreateTemp("", "captions_*.ass")
+	if err != nil {
+		return "", nil, fmt.Errorf("create ASS temp file: %w", err)
+	}
+	tmpFile := f.Name()
+	if _, err := f.WriteString(ass); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmpFile)
 		return "", nil, fmt.Errorf("write ASS file: %w", err)
 	}
+	_ = f.Close()
 
 	cleanup := func() {
 		_ = os.Remove(tmpFile)
@@ -290,12 +295,17 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 			secToASS(adjStart), secToASS(adjEnd), text))
 	}
 
-	tmpDir := os.TempDir()
-	tmpFile := filepath.Join(tmpDir, fmt.Sprintf("preview_captions_%d.ass", os.Getpid()))
-
-	if err := os.WriteFile(tmpFile, []byte(dialogues.String()), 0o644); err != nil {
+	f, err := os.CreateTemp("", "captions_*.ass")
+	if err != nil {
+		return "", nil, fmt.Errorf("create ASS temp file: %w", err)
+	}
+	tmpFile := f.Name()
+	if _, err := f.WriteString(dialogues.String()); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmpFile)
 		return "", nil, fmt.Errorf("write ASS file: %w", err)
 	}
+	_ = f.Close()
 
 	cleanup := func() {
 		_ = os.Remove(tmpFile)
