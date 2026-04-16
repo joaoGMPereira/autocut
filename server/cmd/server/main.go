@@ -79,7 +79,7 @@ func main() {
 
 	highlightRepo := database.NewPipelineHighlightRepo(db, slog.Default())
 	clipRepo := database.NewPipelineClipRepo(db, slog.Default())
-	pipelineSvc := pipeline.NewService(repo, historyRepo, highlightRepo, clipRepo, channelCfgRepo, sseHub, ytDl, twDl, *dir)
+	pipelineSvc := pipeline.NewService(repo, historyRepo, highlightRepo, clipRepo, channelCfgRepo, sseHub, ytDl, twDl, *dir, settingRepo)
 	pipelineHandler := handlers.NewPipelineHandler(pipelineSvc, sseHub)
 	downloadHandler := handlers.NewDownloadHandler(sseHub, ytDl, twDl, nil)
 	urlHistoryHandler := handlers.NewURLHistoryHandler(historyRepo)

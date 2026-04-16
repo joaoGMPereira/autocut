@@ -263,7 +263,7 @@ Status values: `TODO` | `IN PROGRESS` | `NEEDS VALIDATION` | `DONE`
 
 | # | Feature | Kotlin Reference | Target | BE Status | FE |
 |---|---|---|---|---|---|
-| 23 | Clip Cutting | `ClipProcessorService.kt` | Go | IN PROGRESS — VideoSplitDelegate ported as `ComputeSegments`+`CutSegment` in `processor/segment.go`; longform pipeline cuts real files with stream copy + smart chunk redistribution (111-longform-clip-cutting); AI highlight-based cutting still TODO | N/A |
+| 23 | Clip Cutting | `ClipProcessorService.kt` | Go | DONE — Unified Phase A/B/C pipeline for both AI + longform: `ComputeSegments`+`CutSegment` (stream-copy) → `GenerateClip` (parallel effects via `BuildEffectChain`); per-clip whisper captions; `EnrichChannelConfig` ensures overlay+logo parity with preview; `clipInput` struct unifies segment descriptions (111-longform-clip-cutting) | N/A |
 | 24 | Clip Review | `ClipReviewService.kt` | Go | TODO | N/A |
 | 25 | Text Overlay | `TextOverlayProcessor.kt` | Go | DONE — drawtext filter in BuildEffectChain (109-full-preview-pipeline); used in preview + clip gen | DONE — text_overlays config in ModeConfig, rendered in preview |
 | 26 | Video Overlay | `VideoOverlayProcessor.kt` | Go | DONE — chroma-key + scale + position in BuildEffectChain (109-full-preview-pipeline) | DONE — video_overlay config in ModeConfig, rendered in preview |

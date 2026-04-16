@@ -28,6 +28,7 @@ type Service struct {
 	highlightRepo *database.PipelineHighlightRepo
 	clipRepo      *database.PipelineClipRepo
 	channelCfgRepo *database.ChannelConfigRepo
+	settingRepo    *database.AppSettingRepo
 	hub           *hub.SSEHub
 	ytDl          *downloader.YouTubeDownloader
 	twDl          *downloader.TwitchDownloader
@@ -87,6 +88,7 @@ func NewService(
 	ytDl *downloader.YouTubeDownloader,
 	twDl *downloader.TwitchDownloader,
 	dataDir string,
+	settingRepo *database.AppSettingRepo,
 ) *Service {
 	return &Service{
 		repo:           repo,
@@ -94,6 +96,7 @@ func NewService(
 		highlightRepo:  highlightRepo,
 		clipRepo:       clipRepo,
 		channelCfgRepo: channelCfgRepo,
+		settingRepo:    settingRepo,
 		hub:            h,
 		ytDl:           ytDl,
 		twDl:           twDl,
@@ -683,8 +686,18 @@ func (s *Service) runClipGeneration(id int64) {
 
 	// Apply mode overrides so clip generation uses the same effect config as preview
 	processor.ApplyModeOverrides(&channelCfg, json.RawMessage(run.ModeConfigJSON))
-
 	blurEdgePct, noiseStrength := processor.ParseAntiDupExtras(json.RawMessage(run.ModeConfigJSON))
+
+	// Resolve relative asset paths + logo avatar fallback (same as preview)
+	overlayLibraryPath := ""
+	if s.settingRepo != nil {
+		overlayLibraryPath, _ = s.settingRepo.Get(ctx, "overlay_library_path")
+	}
+	channelID := int64(0)
+	if run.ChannelID.Valid {
+		channelID = run.ChannelID.Int64
+	}
+	processor.EnrichChannelConfig(&channelCfg, overlayLibraryPath, s.dataDir, channelID)
 
 	// Longform mode: segment the video by time windows.
 	if run.Mode == "longform" {

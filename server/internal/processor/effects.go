@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/joaoGMPereira/autocut/server/internal/database"
@@ -734,5 +735,61 @@ func drawtextPosition(position string) (x, y string) {
 		return "w-tw-20", "h-th-20"
 	default:
 		return "(w-tw)/2", "(h-th)/2"
+	}
+}
+
+// EnrichChannelConfig resolves relative asset paths and applies fallbacks
+// so that BuildEffectChain receives fully-resolved config.
+// Must be called AFTER ApplyModeOverrides.
+func EnrichChannelConfig(cc *database.ChannelConfig, overlayLibraryPath, dataDir string, channelID int64) {
+	resolveVideoOverlayPath(cc, overlayLibraryPath, dataDir)
+	resolveLogoFallback(cc, dataDir, channelID)
+}
+
+// resolveVideoOverlayPath patches cc.PreviewVideoOverlayConfigJSON so that relative
+// video paths are resolved against dataDir. This handles the case where the frontend
+// stores just a filename (e.g. "seguir-1.mp4") without a full path.
+// Search order: overlayLibraryPath, then dataDir.
+func resolveVideoOverlayPath(cc *database.ChannelConfig, overlayLibraryPath, dataDir string) {
+	if cc.PreviewVideoOverlayConfigJSON == "" || cc.PreviewVideoOverlayConfigJSON == "{}" {
+		return
+	}
+	var cfg VideoOverlayConfig
+	if err := json.Unmarshal([]byte(cc.PreviewVideoOverlayConfigJSON), &cfg); err != nil {
+		return
+	}
+	if !cfg.Enabled || cfg.Path == "" {
+		return
+	}
+	if filepath.IsAbs(cfg.Path) {
+		return
+	}
+	searchDirs := []string{overlayLibraryPath, dataDir}
+	for _, dir := range searchDirs {
+		if dir == "" {
+			continue
+		}
+		candidate := filepath.Join(dir, cfg.Path)
+		if _, err := os.Stat(candidate); err == nil {
+			cfg.Path = candidate
+			if b, err := json.Marshal(cfg); err == nil {
+				cc.PreviewVideoOverlayConfigJSON = string(b)
+			}
+			return
+		}
+	}
+}
+
+// resolveLogoFallback uses the channel avatar as logo when logo is enabled but path is missing.
+func resolveLogoFallback(cc *database.ChannelConfig, dataDir string, channelID int64) {
+	if !cc.BrandingLogoEnabled || (cc.BrandingLogoPath.Valid && cc.BrandingLogoPath.String != "") || channelID <= 0 {
+		return
+	}
+	for _, ext := range []string{".jpg", ".jpeg", ".png"} {
+		p := filepath.Join(dataDir, "avatars", fmt.Sprintf("%d%s", channelID, ext))
+		if _, err := os.Stat(p); err == nil {
+			cc.BrandingLogoPath = sql.NullString{String: p, Valid: true}
+			return
+		}
 	}
 }
