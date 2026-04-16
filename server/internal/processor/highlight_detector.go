@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -42,6 +43,7 @@ func DetectHighlights(segments []HighlightSegment, onProgress func(pct float64))
 	slog.Info("DetectHighlights: scoring segments", "total", total)
 	now := time.Now().UnixMilli()
 	var results []database.PipelineHighlight
+	var allScored []database.PipelineHighlight // kept for fallback ranking
 
 	for i, seg := range segments {
 		// --- Pause gap score (weight 0.5) ---
@@ -74,17 +76,6 @@ func DetectHighlights(segments []HighlightSegment, onProgress func(pct float64))
 			score = 1.0
 		}
 
-		// --- Threshold filter ---
-		if score < 0.2 {
-			// Emit progress every 10 segments regardless.
-			if (i+1)%10 == 0 || i == total-1 {
-				if onProgress != nil {
-					onProgress(float64(i+1) / float64(total) * 100)
-				}
-			}
-			continue
-		}
-
 		// --- Padding ---
 		adjStart := math.Max(0, seg.StartSec-1.5)
 		adjEnd := seg.EndSec + 1.5
@@ -92,7 +83,7 @@ func DetectHighlights(segments []HighlightSegment, onProgress func(pct float64))
 		// --- Human-readable reason ---
 		reason := buildReason(pauseScore, keywordScore, lengthScore, gapSec)
 
-		results = append(results, database.PipelineHighlight{
+		h := database.PipelineHighlight{
 			StartSec:    seg.StartSec,
 			EndSec:      seg.EndSec,
 			AdjStartSec: adjStart,
@@ -102,7 +93,12 @@ func DetectHighlights(segments []HighlightSegment, onProgress func(pct float64))
 			Reason:      reason,
 			IsSelected:  false,
 			CreatedAt:   now,
-		})
+		}
+		allScored = append(allScored, h)
+
+		if score >= 0.2 {
+			results = append(results, h)
+		}
 
 		// Emit progress every 10 segments and at the final segment.
 		if (i+1)%10 == 0 || i == total-1 {
@@ -110,6 +106,22 @@ func DetectHighlights(segments []HighlightSegment, onProgress func(pct float64))
 				onProgress(float64(i+1) / float64(total) * 100)
 			}
 		}
+	}
+
+	// Fallback: if no segment passed the threshold (e.g. continuous speech with no
+	// pauses or matching keywords), take the top-10 by relative score so the review
+	// screen always has candidates to display.
+	if len(results) == 0 && len(allScored) > 0 {
+		sort.Slice(allScored, func(i, j int) bool { return allScored[i].Score > allScored[j].Score })
+		topN := 10
+		if topN > len(allScored) {
+			topN = len(allScored)
+		}
+		for _, h := range allScored[:topN] {
+			h.Reason = "top relative score"
+			results = append(results, h)
+		}
+		slog.Info("DetectHighlights: fallback — top relative scores", "picked", len(results))
 	}
 
 	slog.Info("DetectHighlights: done", "total_segments", total, "highlights_found", len(results))

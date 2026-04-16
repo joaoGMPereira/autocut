@@ -114,12 +114,12 @@ func RunExecution(ctx context.Context, req ExecRequest) error {
 			publishError(msg)
 			return fmt.Errorf("%s", msg)
 		}
+	}
 
-		// Persist transcript path.
-		if setErr := req.SetTranscriptPath(ctx, req.RunID, transcriptPath); setErr != nil {
-			log.Warn("failed to persist transcript_path", "err", setErr)
-			// Non-fatal — continue with highlight detection.
-		}
+	// Persist transcript path (both fresh transcription and cache hit).
+	if setErr := req.SetTranscriptPath(ctx, req.RunID, transcriptPath); setErr != nil {
+		log.Warn("failed to persist transcript_path", "err", setErr)
+		// Non-fatal — continue with highlight detection.
 	}
 
 	// Step 4: Parse whisper JSON output.
