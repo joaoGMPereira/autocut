@@ -1,9 +1,9 @@
 'use client';
 
-import type { RunState, StepStatus, StepRailEntry } from '@/types/pipeline';
+import type { RunState, StepStatus, StepRailEntry, WorkflowMode } from '@/types/pipeline';
 import { StepRailItem } from './StepRailItem';
 
-const STEPS: Array<{ label: string; state: RunState }> = [
+const STEPS_AI: Array<{ label: string; state: RunState }> = [
   { label: 'URL', state: 'WAITING_URL' },
   { label: 'Mode', state: 'WAITING_MODE' },
   { label: 'Processing', state: 'EXECUTING' },
@@ -17,20 +17,20 @@ const STEPS: Array<{ label: string; state: RunState }> = [
   { label: 'Done', state: 'DONE' },
 ];
 
-const STATE_ORDER: RunState[] = STEPS.map((s) => s.state);
+const STEPS_LONGFORM = STEPS_AI.filter(s => s.state !== 'WAITING_REVIEW_HIGHLIGHTS');
 
-function resolveStatus(stepState: RunState, currentState: RunState): StepStatus {
+function resolveStatus(stepState: RunState, currentState: RunState, stateOrder: RunState[]): StepStatus {
   if (currentState === 'ERROR') {
-    const stepIdx = STATE_ORDER.indexOf(stepState);
-    const curIdx = STATE_ORDER.indexOf(currentState);
+    const stepIdx = stateOrder.indexOf(stepState);
+    const curIdx = stateOrder.indexOf(currentState);
     if (stepIdx < curIdx) return 'done';
     if (stepIdx === curIdx) return 'error';
     return 'idle';
   }
   if (currentState === 'CANCELLED') return 'idle';
 
-  const stepIdx = STATE_ORDER.indexOf(stepState);
-  const curIdx = STATE_ORDER.indexOf(currentState);
+  const stepIdx = stateOrder.indexOf(stepState);
+  const curIdx = stateOrder.indexOf(currentState);
 
   if (curIdx < 0) return 'idle';
   if (stepIdx < curIdx) return 'done';
@@ -48,13 +48,17 @@ function resolveStatus(stepState: RunState, currentState: RunState): StepStatus 
 
 interface StepRailProps {
   state: RunState;
+  mode: WorkflowMode;
 }
 
-export function StepRail({ state }: StepRailProps) {
-  const entries: StepRailEntry[] = STEPS.map((s) => ({
+export function StepRail({ state, mode }: StepRailProps) {
+  const steps = mode === 'longform' ? STEPS_LONGFORM : STEPS_AI;
+  const stateOrder = steps.map(s => s.state);
+
+  const entries: StepRailEntry[] = steps.map((s) => ({
     label: s.label,
     state: s.state,
-    status: resolveStatus(s.state, state),
+    status: resolveStatus(s.state, state, stateOrder),
   }));
 
   return (

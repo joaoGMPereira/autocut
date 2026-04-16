@@ -86,7 +86,7 @@ export function PipelineShell({ children }: PipelineShellProps) {
     <div className="flex h-full w-full overflow-hidden">
       {/* Left: step rail — 220px */}
       <div className="w-[220px] shrink-0 border-r border-border bg-background/60 overflow-y-auto">
-        <StepRail state={currentState} />
+        <StepRail state={currentState} mode={run?.mode ?? 'ai'} />
       </div>
 
       {/* Center: active step content + sticky action bar */}
