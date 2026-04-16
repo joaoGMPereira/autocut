@@ -52,6 +52,7 @@ type phaseProgressPayload struct {
 	PercentDone float64 `json:"percent_done"`
 	SpeedKbs    *int    `json:"speed_kbs,omitempty"`
 	EtaSec      *int    `json:"eta_sec,omitempty"`
+	ClipID      *int64  `json:"clip_id,omitempty"`
 }
 
 // stateChangedPayload is the SSE payload for state_changed events.
@@ -685,7 +686,7 @@ func (s *Service) runClipGeneration(id int64) {
 		if err := json.Unmarshal([]byte(run.ModeConfigJSON), &modeCfg); err != nil {
 			log.Warn("failed to parse mode_config_json, using default segment_secs", "err", err)
 		}
-		s.generateLongformClips(id, run, modeCfg.SegmentSec, publishError)
+		s.generateLongformClips(id, run, modeCfg.SegmentSec, channelCfg, publishError)
 		return
 	}
 
@@ -778,50 +779,161 @@ func (s *Service) runClipGeneration(id int64) {
 	s.advanceClipGenDone(id)
 }
 
-// generateLongformClips creates evenly-spaced clip rows for a longform run and advances state.
-// segmentSec is the desired clip duration; defaults to 600s (10 min) when 0.
-func (s *Service) generateLongformClips(id int64, run *database.PipelineRun, segmentSec float64, publishError func(string)) {
+// segInfo holds the clip ID and duration for a longform segment.
+type segInfo struct {
+	clipID int64
+	dur    float64
+}
+
+// generateLongformClips segments the video into two passes:
+// Phase A: batch-insert all clip rows; Phase B: sequential stream copy to raw files;
+// Phase C: parallel effects via GenerateClip.
+func (s *Service) generateLongformClips(id int64, run *database.PipelineRun, segmentSec float64, channelCfg database.ChannelConfig, publishError func(string)) {
 	ctx := context.Background()
 	log := s.log.With("run_id", id, "phase", "longform_clips")
+	jobKey := fmt.Sprintf("%d", id)
 
-	if segmentSec <= 0 {
-		segmentSec = 600
+	if segmentSec == 0 {
+		log.Info("segment_secs not set in mode_config, using default", "default_sec", 600)
 	}
 
-	totalSec := float64(run.DurationSec)
-	if totalSec <= 0 {
+	if run.DurationSec <= 0 {
 		log.Warn("duration_sec is 0, cannot segment — advancing without clips")
 		s.advanceClipGenDone(id)
 		return
 	}
 
-	numSegments := int(totalSec / segmentSec)
-	if numSegments == 0 {
-		numSegments = 1
-	}
+	segments := processor.ComputeSegments(float64(run.DurationSec), segmentSec)
+	log.Info("computed segments", "count", len(segments), "segment_sec", segmentSec)
 
-	log.Info("generating longform clip rows", "segments", numSegments, "segment_sec", segmentSec)
-
-	for i := 0; i < numSegments; i++ {
-		startSec := float64(i) * segmentSec
-		endSec := startSec + segmentSec
-		if endSec > totalSec {
-			endSec = totalSec
-		}
+	// Phase A: batch-insert all clip rows as pending, collect {clipID, dur}.
+	infos := make([]segInfo, 0, len(segments))
+	for i, seg := range segments {
 		clip := &database.PipelineClip{
 			RunID:       id,
-			StartSec:    startSec,
-			EndSec:      endSec,
-			DurationSec: endSec - startSec,
+			StartSec:    seg.StartSec,
+			EndSec:      seg.EndSec,
+			DurationSec: seg.EndSec - seg.StartSec,
 			Title:       fmt.Sprintf("Part %d", i+1),
 			IsSelected:  true,
 		}
-		if _, err := s.clipRepo.Create(ctx, clip); err != nil {
+		clipID, err := s.clipRepo.Create(ctx, clip)
+		if err != nil {
 			publishError(fmt.Sprintf("create longform clip row failed (part %d): %s", i+1, err))
 			return
 		}
+		infos = append(infos, segInfo{clipID: clipID, dur: seg.EndSec - seg.StartSec})
 	}
 
+	// Ensure output directory exists before Phase B.
+	clipsDir := filepath.Join(s.dataDir, "clips")
+	if err := os.MkdirAll(clipsDir, 0o755); err != nil {
+		publishError(fmt.Sprintf("create clips dir: %s", err))
+		return
+	}
+
+	// Phase B: sequential stream copy → rawPath = {clipsDir}/{runID}_{clipID}_raw.mp4
+	rawPaths := make([]string, len(segments))
+	for i, seg := range segments {
+		info := infos[i]
+		rawPath := filepath.Join(clipsDir, fmt.Sprintf("%d_%d_raw.mp4", id, info.clipID))
+
+		err := processor.CutSegment(ctx, run.VideoPath, seg.StartSec, seg.EndSec-seg.StartSec, rawPath)
+		if err != nil {
+			log.Error("cut segment failed", "clip_id", info.clipID, "err", err)
+			_ = s.clipRepo.UpdateStatus(ctx, info.clipID, "error")
+			// leave rawPaths[i] empty
+		} else {
+			rawPaths[i] = rawPath
+		}
+
+		// emit cut phase 0–50%, per-segment, after each cut
+		pct := float64(i+1) / float64(len(segments)) * 50
+		s.hub.Publish(jobKey, hub.SSEEvent{
+			Type: "phase_progress",
+			Data: phaseProgressPayload{RunID: id, Phase: "cut", PercentDone: pct},
+		})
+	}
+
+	// Count valid raw paths.
+	totalValid := 0
+	for _, p := range rawPaths {
+		if p != "" {
+			totalValid++
+		}
+	}
+
+	if totalValid == 0 {
+		log.Warn("all stream copies failed, skipping effects phase")
+		s.advanceClipGenDone(id)
+		return
+	}
+
+	// Phase C: parallel effects via GenerateClip.
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	completedEffects := 0
+
+	for i, info := range infos {
+		rawPath := rawPaths[i]
+		if rawPath == "" {
+			continue
+		}
+		wg.Add(1)
+		go func(idx int, clipInfo segInfo, rawPath string) {
+			defer wg.Done()
+
+			clipID := clipInfo.clipID
+			dur := clipInfo.dur
+
+			clipReq := processor.ClipRequest{
+				RunID:      id,
+				ClipID:     clipID,
+				VideoPath:  rawPath,
+				StartSec:   0,
+				EndSec:     dur,
+				ChannelCfg: channelCfg,
+				ModeCfg:    json.RawMessage(run.ModeConfigJSON),
+				DataDir:    s.dataDir,
+				OnProgress: func(pct float64) {
+					cid := clipID
+					s.hub.Publish(jobKey, hub.SSEEvent{
+						Type: "phase_progress",
+						Data: phaseProgressPayload{RunID: id, Phase: "cut", PercentDone: pct, ClipID: &cid},
+					})
+				},
+			}
+
+			finalPath, err := processor.GenerateClip(ctx, clipReq)
+			if err != nil {
+				log.Error("effects generation failed", "clip_id", clipID, "err", err)
+				_ = s.clipRepo.UpdateStatus(ctx, clipID, "error")
+			} else {
+				_ = s.clipRepo.UpdateFilePath(ctx, clipID, finalPath)
+				_ = s.clipRepo.UpdateStatus(ctx, clipID, "ready")
+				_ = os.Remove(rawPath)
+			}
+
+			mu.Lock()
+			completedEffects++
+			overall := 50 + float64(completedEffects)/float64(totalValid)*50
+			mu.Unlock()
+
+			// emit overall progress (no clip_id) for the main bar
+			s.hub.Publish(jobKey, hub.SSEEvent{
+				Type: "phase_progress",
+				Data: phaseProgressPayload{RunID: id, Phase: "cut", PercentDone: overall},
+			})
+		}(i, info, rawPath)
+	}
+
+	wg.Wait()
+
+	// Publish 100% and advance state.
+	s.hub.Publish(jobKey, hub.SSEEvent{
+		Type: "phase_progress",
+		Data: phaseProgressPayload{RunID: id, Phase: "cut", PercentDone: 100},
+	})
 	s.advanceClipGenDone(id)
 }
 
