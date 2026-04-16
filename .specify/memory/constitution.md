@@ -263,7 +263,7 @@ Status values: `TODO` | `IN PROGRESS` | `NEEDS VALIDATION` | `DONE`
 
 | # | Feature | Kotlin Reference | Target | BE Status | FE |
 |---|---|---|---|---|---|
-| 23 | Clip Cutting | `ClipProcessorService.kt` | Go | TODO | N/A |
+| 23 | Clip Cutting | `ClipProcessorService.kt` | Go | IN PROGRESS — VideoSplitDelegate ported as `ComputeSegments`+`CutSegment` in `processor/segment.go`; longform pipeline cuts real files with stream copy + smart chunk redistribution (111-longform-clip-cutting); AI highlight-based cutting still TODO | N/A |
 | 24 | Clip Review | `ClipReviewService.kt` | Go | TODO | N/A |
 | 25 | Text Overlay | `TextOverlayProcessor.kt` | Go | DONE — drawtext filter in BuildEffectChain (109-full-preview-pipeline); used in preview + clip gen | DONE — text_overlays config in ModeConfig, rendered in preview |
 | 26 | Video Overlay | `VideoOverlayProcessor.kt` | Go | DONE — chroma-key + scale + position in BuildEffectChain (109-full-preview-pipeline) | DONE — video_overlay config in ModeConfig, rendered in preview |
@@ -380,7 +380,7 @@ Status values: `TODO` | `IN PROGRESS` | `NEEDS VALIDATION` | `DONE`
 | 92 | Update Checker | `UpdateCheckerService.kt` | Electron | TODO | N/A |
 | 93 | Background Service / Queue Worker | `BackgroundService.kt` | Go | TODO | N/A |
 | 94 | Queue View + Reorder + Cancel + Retry | `QueueViewModel.kt` | TS | TODO | N/A |
-| 95 | Pipeline Workflow | All `*WorkflowDelegate.kt` steps | Go | IN PROGRESS — WAITING_URL→WAITING_MODE→EXECUTING→WAITING_REVIEW_HIGHLIGHTS→GENERATING_CLIPS→…→DONE wired; EXECUTING is stub (runProcessingStub: 100ms delay, no real transcription yet); clip gen wired but stub highlights; upload stub (109-full-preview-pipeline) | IN PROGRESS — StepUrl DONE; StepMode DONE (full preview pipeline); StepExecute stub; StepReviewHighlights/Clips/Metadata/Upload exist but unvalidated |
+| 95 | Pipeline Workflow | All `*WorkflowDelegate.kt` steps | Go | IN PROGRESS — WAITING_URL→WAITING_MODE→EXECUTING→WAITING_REVIEW_HIGHLIGHTS→GENERATING_CLIPS→…→DONE wired; longform EXECUTING now correctly skips transcription (111-longform-clip-cutting); longform GENERATING_CLIPS cuts real .mp4 files via stream copy; AI mode EXECUTING still stub; upload stub | IN PROGRESS — StepUrl DONE; StepMode DONE (full preview pipeline); StepExecute stub; StepReviewHighlights/Clips/Metadata/Upload exist but unvalidated |
 | 96 | SSE Progress Reporting | *(new in v2 — no Kotlin equivalent)* | Go | DONE — hub.SSEHub + SSEReporter + phase_progress + video_info events wired | DONE — pipelineStore handles all event types |
 
 ## End-to-End Verification (mandatory before DONE)
@@ -427,4 +427,4 @@ Every feature must pass before status → DONE:
 4. Amendments require human approval + version bump
 5. Agents consult this file before starting any feature work
 
-**Version**: 1.3.0 | **Ratified**: 2026-04-10 | **Last Amended**: 2026-04-15
+**Version**: 1.4.0 | **Ratified**: 2026-04-10 | **Last Amended**: 2026-04-15
