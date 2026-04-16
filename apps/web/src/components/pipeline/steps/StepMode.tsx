@@ -52,6 +52,8 @@ export function StepMode({ historical }: StepModeProps) {
   // ── Long Form config state ─────────────────────────────────────────────────
   const [segmentSecs, setSegmentSecs] = useState<number>(LONGFORM_DEFAULTS.segment_secs ?? 600);
   const [minPartSecs, setMinPartSecs] = useState<number>(0);
+  // true once a saved preference or historical value has set segmentSecs explicitly
+  const [segmentSecsFromPref, setSegmentSecsFromPref] = useState<boolean>(false);
 
   // ── Anti-duplicate config (new) ────────────────────────────────────────────
   const [antiDupEnabled, setAntiDupEnabled] = useState<boolean>(false);
@@ -142,7 +144,7 @@ export function StepMode({ historical }: StepModeProps) {
     if (cfg.skip_music_mins !== undefined) setSkipMusicMins(cfg.skip_music_mins);
     if (cfg.force_regenerate != null) setForceRegenerate(cfg.force_regenerate);
     if (cfg.skip_transcription != null) setSkipTranscription(cfg.skip_transcription);
-    if (cfg.segment_secs != null) setSegmentSecs(cfg.segment_secs);
+    if (cfg.segment_secs != null) { setSegmentSecs(cfg.segment_secs); setSegmentSecsFromPref(true); }
     setMinPartSecs(cfg.min_part_secs ?? 0);
     if (cfg.max_duration_secs != null && cfg.max_duration_secs > 0) setClipDurationSecs(cfg.max_duration_secs);
     if (cfg.min_duration_secs != null) setMinDurationSecs(cfg.min_duration_secs);
@@ -292,7 +294,12 @@ export function StepMode({ historical }: StepModeProps) {
         setSkipMusicMins(skipMusicVal && skipMusicVal !== '' ? parseFloat(skipMusicVal) : null);
         setForceRegenerate(parseBoolKey('ai_force_regenerate', true));
         setSkipTranscription(parseBoolKey('ai_skip_transcription', false));
-        setSegmentSecs(parseIntKey('longform_segment_secs', 600));
+        const segPref = data.find((s) => s.key === 'longform_segment_secs');
+        if (segPref) {
+          setSegmentSecs(parseInt(segPref.value, 10) || 600);
+          setSegmentSecsFromPref(true);
+        }
+        // else: leave default; video-duration useEffect will compute it when videoInfo arrives
         setMinPartSecs(parseIntKey('longform_min_part_secs', 0));
         setAntiDupEnabled(parseBoolKey('anti_dup_enabled', false));
         const adModeVal = data.find((s) => s.key === 'anti_dup_mode')?.value;
@@ -389,6 +396,17 @@ export function StepMode({ historical }: StepModeProps) {
     void fetchPreference();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-compute segmentSecs from video duration when no saved preference exists.
+  // Runs when videoInfo arrives (may be after prefs load) or when prefs finish loading.
+  useEffect(() => {
+    if (segmentSecsFromPref) return;          // user has a saved or historical preference
+    if (isLoadingPreference) return;          // wait until prefs are loaded before touching state
+    if (!videoInfo?.durationSec) return;      // no duration yet
+    const MIN_PART = 480;
+    const partSec = Math.round(videoInfo.durationSec / 3 / 60) * 60;
+    setSegmentSecs(partSec >= MIN_PART ? partSec : Math.round(videoInfo.durationSec / 2 / 60) * 60);
+  }, [videoInfo, isLoadingPreference, segmentSecsFromPref]);
 
   useEffect(() => {
     if (!musicEnabled || musicMode !== 'library') return;
