@@ -20,6 +20,12 @@ const (
 
 // validTransitions maps each non-terminal state to its successor gate state.
 // Used by Advance() to determine the next state for each dispatch branch.
+//
+// Note: EXECUTING has two valid successors depending on mode:
+//   - AI mode:       EXECUTING → WAITING_REVIEW_HIGHLIGHTS (default)
+//   - Longform mode: EXECUTING → GENERATING_CLIPS (skips highlight gate)
+//
+// The map below shows the AI (default) path only.
 var validTransitions = map[string]string{
 	StateWaitingURL:              StateWaitingMode,
 	StateWaitingMode:             StateExecuting,

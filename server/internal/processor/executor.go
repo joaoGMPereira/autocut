@@ -10,6 +10,14 @@ import (
 	"github.com/joaoGMPereira/autocut/server/internal/database"
 )
 
+// Pipeline state constants — duplicated here to avoid circular import with pipeline package.
+// Must stay in sync with pipeline/types.go.
+const (
+	stateExecuting               = "EXECUTING"
+	stateGeneratingClips         = "GENERATING_CLIPS"
+	stateWaitingReviewHighlights = "WAITING_REVIEW_HIGHLIGHTS"
+)
+
 // ExecRequest is the input to RunExecution.
 // All dependencies are passed as function values to avoid circular imports.
 type ExecRequest struct {
@@ -145,10 +153,10 @@ func RunExecution(ctx context.Context, req ExecRequest) error {
 
 	// Longform mode: skip highlight detection and advance directly to GENERATING_CLIPS.
 	if req.Mode == "longform" {
-		if advErr := req.AdvanceState(ctx, req.RunID, "EXECUTING", "GENERATING_CLIPS"); advErr != nil {
+		if advErr := req.AdvanceState(ctx, req.RunID, stateExecuting, stateGeneratingClips); advErr != nil {
 			log.Warn("advance state failed (may already have advanced)", "err", advErr)
 		}
-		req.PublishStateChange("GENERATING_CLIPS")
+		req.PublishStateChange(stateGeneratingClips)
 		log.Info("execution complete (longform) — advancing to clip generation")
 		return nil
 	}
@@ -173,11 +181,11 @@ func RunExecution(ctx context.Context, req ExecRequest) error {
 	}
 
 	// Step 6: Advance state to WAITING_REVIEW_HIGHLIGHTS.
-	if advErr := req.AdvanceState(ctx, req.RunID, "EXECUTING", "WAITING_REVIEW_HIGHLIGHTS"); advErr != nil {
+	if advErr := req.AdvanceState(ctx, req.RunID, stateExecuting, stateWaitingReviewHighlights); advErr != nil {
 		log.Warn("advance state failed (may already have advanced)", "err", advErr)
 		// Non-fatal if run has already advanced (idempotent).
 	}
-	req.PublishStateChange("WAITING_REVIEW_HIGHLIGHTS")
+	req.PublishStateChange(stateWaitingReviewHighlights)
 
 	log.Info("execution complete — awaiting highlight review", "highlights", len(highlights))
 	return nil

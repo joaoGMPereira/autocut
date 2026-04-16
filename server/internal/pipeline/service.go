@@ -680,10 +680,11 @@ func (s *Service) runClipGeneration(id int64) {
 	// Longform mode: skip highlight-based clip generation; segment the video directly.
 	if run.Mode == "longform" {
 		var modeCfg struct {
-			Mode       string  `json:"mode"`
 			SegmentSec float64 `json:"segment_secs"`
 		}
-		_ = json.Unmarshal([]byte(run.ModeConfigJSON), &modeCfg)
+		if err := json.Unmarshal([]byte(run.ModeConfigJSON), &modeCfg); err != nil {
+			log.Warn("failed to parse mode_config_json, using default segment_secs", "err", err)
+		}
 		s.generateLongformClips(id, run, modeCfg.SegmentSec, publishError)
 		return
 	}
@@ -816,7 +817,8 @@ func (s *Service) generateLongformClips(id int64, run *database.PipelineRun, seg
 			IsSelected:  true,
 		}
 		if _, err := s.clipRepo.Create(ctx, clip); err != nil {
-			log.Error("create longform clip row failed", "part", i+1, "err", err)
+			publishError(fmt.Sprintf("create longform clip row failed (part %d): %s", i+1, err))
+			return
 		}
 	}
 
