@@ -54,6 +54,16 @@ func RunExecution(ctx context.Context, req ExecRequest) error {
 		req.PublishError(msg)
 	}
 
+	// Longform mode: skip transcription entirely.
+	if req.Mode == "longform" {
+		if advErr := req.AdvanceState(ctx, req.RunID, stateExecuting, stateGeneratingClips); advErr != nil {
+			log.Warn("advance state failed (may already have advanced)", "err", advErr)
+		}
+		req.PublishStateChange(stateGeneratingClips)
+		log.Info("execution complete (longform) — skipping transcription")
+		return nil
+	}
+
 	// Step 1: Verify video file exists on disk.
 	if _, statErr := os.Stat(req.VideoPath); statErr != nil {
 		msg := fmt.Sprintf("video file not found: %s", req.VideoPath)
@@ -150,16 +160,6 @@ func RunExecution(ctx context.Context, req ExecRequest) error {
 		}
 	}
 	log.Info("transcript parsed", "segments", len(hlSegments))
-
-	// Longform mode: skip highlight detection and advance directly to GENERATING_CLIPS.
-	if req.Mode == "longform" {
-		if advErr := req.AdvanceState(ctx, req.RunID, stateExecuting, stateGeneratingClips); advErr != nil {
-			log.Warn("advance state failed (may already have advanced)", "err", advErr)
-		}
-		req.PublishStateChange(stateGeneratingClips)
-		log.Info("execution complete (longform) — advancing to clip generation")
-		return nil
-	}
 
 	// Step 5: Detect highlights (AI mode only).
 	onAnalyzeProgress := func(pct float64) {

@@ -142,7 +142,9 @@ export function StepMode({ historical }: StepModeProps) {
     if (cfg.skip_music_mins !== undefined) setSkipMusicMins(cfg.skip_music_mins);
     if (cfg.force_regenerate != null) setForceRegenerate(cfg.force_regenerate);
     if (cfg.skip_transcription != null) setSkipTranscription(cfg.skip_transcription);
-    if (cfg.segment_secs != null) setSegmentSecs(cfg.segment_secs);
+    // segment_secs is intentionally excluded here — it is always auto-computed from
+    // video duration (see auto-compute effect below). Historical back-nav restores it
+    // explicitly before calling this function.
     setMinPartSecs(cfg.min_part_secs ?? 0);
     if (cfg.max_duration_secs != null && cfg.max_duration_secs > 0) setClipDurationSecs(cfg.max_duration_secs);
     if (cfg.min_duration_secs != null) setMinDurationSecs(cfg.min_duration_secs);
@@ -223,6 +225,9 @@ export function StepMode({ historical }: StepModeProps) {
     // Priority 1: historical back-navigation pre-fill
     if (historical?.kind === 'mode' && historical.mode_config) {
       console.log('[StepMode] pre-filling from historical mode_config');
+      // Restore segment_secs from history before applyModeConfig — auto-compute is
+      // skipped for historical, so we must set it explicitly here.
+      if (historical.mode_config.segment_secs != null) setSegmentSecs(historical.mode_config.segment_secs);
       applyModeConfig(historical.mode_config);
       setIsLoadingPreference(false);
       return;
