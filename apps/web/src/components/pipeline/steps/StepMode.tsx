@@ -829,12 +829,12 @@ export function StepMode({ historical }: StepModeProps) {
         <div className="space-y-4 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
           <p className="text-xs font-medium text-zinc-300 uppercase tracking-wider">AI Configuration</p>
 
-          {/* Target Clip Duration — dynamic based on video length, same logic as Long Form */}
+          {/* Target Clip Duration — dynamic based on video length (min 1 min for AI, vs 8 min for Long Form) */}
           <div className="space-y-1.5">
             <label className="text-xs text-zinc-400">Target Clip Duration</label>
             <div className="flex gap-2 flex-wrap">
               {(() => {
-                const MIN_PART = 480; // 8 min
+                const MIN_PART = 60; // 1 min (AI mode allows shorter clips than Long Form's 8 min)
                 const totalSec = videoInfo?.durationSec ?? 0;
                 const suggestions: [number, string][] = [];
                 for (const parts of [3, 2, 1]) {

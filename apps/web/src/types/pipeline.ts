@@ -44,6 +44,8 @@ export interface Run {
   active_phase: string;
   error: string;
   video_path: string;
+  video_title?: string;
+  duration_sec?: number;
   transcript_path: string;
   started_at: number;
   finished_at: number | null;

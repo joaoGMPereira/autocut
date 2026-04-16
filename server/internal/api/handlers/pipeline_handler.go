@@ -41,6 +41,7 @@ type runResponse struct {
 	ActivePhase string  `json:"active_phase"`
 	Error       string  `json:"error"`
 	VideoPath   string  `json:"video_path"`
+	VideoTitle  string  `json:"video_title"`
 	DurationSec int64   `json:"duration_sec"`
 	StartedAt   int64   `json:"started_at"`
 	FinishedAt  *int64  `json:"finished_at"`
@@ -88,6 +89,7 @@ func (h *PipelineHandler) GetRun(w http.ResponseWriter, r *http.Request) {
 		ActivePhase: run.ActivePhase,
 		Error:       run.Error,
 		VideoPath:   run.VideoPath,
+		VideoTitle:  run.VideoTitle,
 		DurationSec: run.DurationSec,
 		StartedAt:   run.StartedAt,
 	}

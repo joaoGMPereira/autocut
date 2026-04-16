@@ -162,6 +162,16 @@ func (r *PipelineRunRepo) SetChannelID(ctx context.Context, id, channelID int64)
 	return err
 }
 
+// SetTranscriptPath persists the transcript file path after Whisper completes.
+func (r *PipelineRunRepo) SetTranscriptPath(ctx context.Context, id int64, path string) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE pipeline_runs SET transcript_path = ? WHERE id = ?", path, id)
+	if err != nil {
+		return fmt.Errorf("set transcript_path pipeline_run %d: %w", id, err)
+	}
+	return nil
+}
+
 // SetDownloadResult atomically persists video_path, video_title, and duration_sec
 // after a successful download. All three fields must be non-empty/non-zero — callers
 // must verify this before transitioning to WAITING_MODE.
