@@ -641,7 +641,13 @@ func (s *Service) runExecution(id int64) {
 // runClipGeneration generates clips for all selected highlights with the full effect pipeline.
 func (s *Service) runClipGeneration(id int64) {
 	jobKey := fmt.Sprintf("%d", id)
-	ctx := context.Background()
+	runCtx, cancel := context.WithCancel(context.Background())
+	s.cancelMap.Store(id, cancel)
+	defer func() {
+		cancel()
+		s.cancelMap.Delete(id)
+	}()
+	ctx := runCtx
 	log := s.log.With("run_id", id, "phase", "clip_gen")
 
 	publishError := func(msg string) {
@@ -686,7 +692,7 @@ func (s *Service) runClipGeneration(id int64) {
 		if err := json.Unmarshal([]byte(run.ModeConfigJSON), &modeCfg); err != nil {
 			log.Warn("failed to parse mode_config_json, using default segment_secs", "err", err)
 		}
-		s.generateLongformClips(id, run, modeCfg.SegmentSec, channelCfg, publishError)
+		s.generateLongformClips(ctx, id, run, modeCfg.SegmentSec, channelCfg, publishError)
 		return
 	}
 
@@ -788,13 +794,13 @@ type segInfo struct {
 // generateLongformClips segments the video into two passes:
 // Phase A: batch-insert all clip rows; Phase B: sequential stream copy to raw files;
 // Phase C: parallel effects via GenerateClip.
-func (s *Service) generateLongformClips(id int64, run *database.PipelineRun, segmentSec float64, channelCfg database.ChannelConfig, publishError func(string)) {
-	ctx := context.Background()
+func (s *Service) generateLongformClips(ctx context.Context, id int64, run *database.PipelineRun, segmentSec float64, channelCfg database.ChannelConfig, publishError func(string)) {
 	log := s.log.With("run_id", id, "phase", "longform_clips")
 	jobKey := fmt.Sprintf("%d", id)
 
-	if segmentSec == 0 {
-		log.Info("segment_secs not set in mode_config, using default", "default_sec", 600)
+	if segmentSec <= 0 {
+		log.Warn("segment_secs not set in mode_config, using default", "default_sec", 600)
+		segmentSec = 600
 	}
 
 	if run.DurationSec <= 0 {
@@ -880,7 +886,7 @@ func (s *Service) generateLongformClips(id int64, run *database.PipelineRun, seg
 			continue
 		}
 		wg.Add(1)
-		go func(idx int, clipInfo segInfo, rawPath string) {
+		go func(clipInfo segInfo, rawPath string) {
 			defer wg.Done()
 
 			clipID := clipInfo.clipID
@@ -924,7 +930,7 @@ func (s *Service) generateLongformClips(id int64, run *database.PipelineRun, seg
 				Type: "phase_progress",
 				Data: phaseProgressPayload{RunID: id, Phase: "cut", PercentDone: overall},
 			})
-		}(i, info, rawPath)
+		}(info, rawPath)
 	}
 
 	wg.Wait()
