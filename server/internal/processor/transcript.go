@@ -64,6 +64,14 @@ func TranscribeFullVideo(
 		"-m", modelPath,
 		"-oj", "-of", whisperOutBase,
 		"-l", "auto",
+		"--beam-size", "8",
+		"--best-of", "5",
+		"--entropy-thold", "2.4",
+		"--max-context", "0",
+		"--max-len", "80",
+		"--split-on-word",
+		"--suppress-nst",
+		"--print-progress",
 		audioPath,
 	}
 	cmd := exec.CommandContext(ctx, "whisper-cli", whisperArgs...)

@@ -439,11 +439,18 @@ func TranscribeSegment(videoPath string, startSec int, durationSec int64, modelP
 		return "", cleanupFn, fmt.Errorf("extract audio for whisper: %w: %s", cmdErr, out)
 	}
 
-	// Run whisper-cli; -l auto lets it detect the language
+	// Run whisper-cli with tuned params (ported from Kotlin project).
 	whisperArgs := []string{
 		"-m", modelPath,
 		"-oj", "-of", whisperOutBase,
 		"-l", "auto",
+		"--beam-size", "8",
+		"--best-of", "5",
+		"--entropy-thold", "2.4",
+		"--max-context", "0",
+		"--max-len", "80",
+		"--split-on-word",
+		"--suppress-nst",
 		audioPath,
 	}
 	if out, cmdErr := exec.Command("whisper-cli", whisperArgs...).CombinedOutput(); cmdErr != nil {
