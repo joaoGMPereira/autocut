@@ -27,6 +27,7 @@ export function StepMode({ historical }: StepModeProps) {
   const previewError = usePipelineStore((s) => s.previewError);
   const downloadComplete = usePipelineStore((s) => s.downloadComplete);
   const phaseProgress = usePipelineStore((s) => s.phaseProgress);
+  const setPendingMode = usePipelineStore((s) => s.setPendingMode);
   const channels = useChannelStore((s) => s.channels);
   const fetchChannels = useChannelStore((s) => s.fetchChannels);
 
@@ -136,6 +137,7 @@ export function StepMode({ historical }: StepModeProps) {
   // ── Apply a ModeConfig to all state (used by presets + historical) ─────────
   const applyModeConfig = (cfg: ModeConfig) => {
     setSelectedMode(cfg.mode);
+    setPendingMode(cfg.mode);
     if (cfg.sensitivity_pct != null) setSensitivityPct(cfg.sensitivity_pct);
     if (cfg.skip_music_mins !== undefined) setSkipMusicMins(cfg.skip_music_mins);
     if (cfg.force_regenerate != null) setForceRegenerate(cfg.force_regenerate);
@@ -281,6 +283,7 @@ export function StepMode({ historical }: StepModeProps) {
         const mode: WorkflowMode = entry?.value === 'ai' ? 'ai' : 'longform';
         console.log('[StepMode] preference loaded:', mode);
         setSelectedMode(mode);
+        setPendingMode(mode);
 
         setClipDurationSecs(parseIntKey('ai_clip_duration_secs', 1200));
         setMinDurationSecs(parseIntKey('ai_min_duration_secs', 480));
@@ -776,6 +779,7 @@ export function StepMode({ historical }: StepModeProps) {
           onClick={() => {
             console.log('[StepMode] mode selected: ai');
             setSelectedMode('ai');
+            setPendingMode('ai');
           }}
           className={[
             'relative flex flex-col gap-2 rounded-lg border p-4 text-left transition-all',
@@ -802,6 +806,7 @@ export function StepMode({ historical }: StepModeProps) {
           onClick={() => {
             console.log('[StepMode] mode selected: longform');
             setSelectedMode('longform');
+            setPendingMode('longform');
           }}
           className={[
             'relative flex flex-col gap-2 rounded-lg border p-4 text-left transition-all',

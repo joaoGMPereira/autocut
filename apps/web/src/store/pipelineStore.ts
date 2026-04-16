@@ -61,6 +61,10 @@ interface PipelineState {
   error: string | null;
   sseCleanup: (() => void) | null;
 
+  // Mode selection preview (live while user is on WAITING_MODE screen, before submit)
+  pendingMode: WorkflowMode | null;
+  setPendingMode: (mode: WorkflowMode) => void;
+
   // Download state (parallel download while on Mode screen)
   downloadComplete: boolean;
   videoReused: boolean;
@@ -131,6 +135,8 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
   isLoading: false,
   error: null,
   sseCleanup: null,
+  pendingMode: null,
+  setPendingMode: (mode) => set({ pendingMode: mode }),
   downloadComplete: false,
   videoReused: false,
   pendingReuse: false,
@@ -286,6 +292,7 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
       downloadComplete: false,
       videoReused: false,
       pendingReuse: false,
+      pendingMode: null,
     });
   },
 
