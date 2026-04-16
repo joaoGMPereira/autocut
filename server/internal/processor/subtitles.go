@@ -167,6 +167,17 @@ type transcriptV2 struct {
 	Duration float64               `json:"duration"`
 }
 
+// transcriptWhisperRaw is the raw whisper-cli -oj output format.
+type transcriptWhisperRaw struct {
+	Transcription []struct {
+		Offsets struct {
+			From int64 `json:"from"` // milliseconds
+			To   int64 `json:"to"`
+		} `json:"offsets"`
+		Text string `json:"text"`
+	} `json:"transcription"`
+}
+
 // GenerateASSFromTranscript creates an ASS subtitle file using real transcript data.
 // It reads the transcript at transcriptPath, filters to the [startSec, startSec+durationSec]
 // window, shifts times to be relative to startSec, and emits real dialogue lines.
@@ -188,19 +199,35 @@ func GenerateASSFromTranscript(transcriptPath string, startSec int, durationSec 
 	var segments []transcriptSegmentV1
 
 	if err := json.Unmarshal(data, &segments); err != nil || len(segments) == 0 {
-		// Not a flat array — try object format (v2)
+		// Not a flat array — try object format (v2: {segments})
 		var v2 transcriptV2
-		if err2 := json.Unmarshal(data, &v2); err2 != nil || len(v2.Segments) == 0 {
-			return GenerateASS(style)
-		}
-		// Convert v2 segments (nanoseconds) to v1 (seconds)
-		segments = make([]transcriptSegmentV1, 0, len(v2.Segments))
-		for _, s := range v2.Segments {
-			segments = append(segments, transcriptSegmentV1{
-				Start: s.Start / 1e9,
-				End:   s.End / 1e9,
-				Text:  s.Text,
-			})
+		if err2 := json.Unmarshal(data, &v2); err2 == nil && len(v2.Segments) > 0 {
+			segments = make([]transcriptSegmentV1, 0, len(v2.Segments))
+			for _, s := range v2.Segments {
+				segments = append(segments, transcriptSegmentV1{
+					Start: s.Start / 1e9,
+					End:   s.End / 1e9,
+					Text:  s.Text,
+				})
+			}
+		} else {
+			// Try whisper raw format (v3: {transcription: [{offsets: {from, to}, text}]})
+			var raw transcriptWhisperRaw
+			if err3 := json.Unmarshal(data, &raw); err3 != nil || len(raw.Transcription) == 0 {
+				return GenerateASS(style)
+			}
+			segments = make([]transcriptSegmentV1, 0, len(raw.Transcription))
+			for _, t := range raw.Transcription {
+				text := strings.TrimSpace(t.Text)
+				if text == "" {
+					continue
+				}
+				segments = append(segments, transcriptSegmentV1{
+					Start: float64(t.Offsets.From) / 1000.0,
+					End:   float64(t.Offsets.To) / 1000.0,
+					Text:  text,
+				})
+			}
 		}
 	}
 
@@ -360,6 +387,27 @@ type whisperSegment struct {
 
 type whisperOutput struct {
 	Transcription []whisperSegment `json:"transcription"`
+}
+
+// ResolveTranscript returns a usable transcript path for caption burn-in.
+// If captionsEnabled is false, returns ("", nil, nil).
+// If transcriptPath is already set and the file exists, returns it as-is (no cleanup).
+// If no transcript exists but a Whisper model is available, transcribes the segment on-demand.
+// Otherwise returns ("", nil, nil) — captions will fall back to placeholder via GenerateASS.
+func ResolveTranscript(videoPath string, startSec int, durationSec int64, dataDir, transcriptPath string, captionsEnabled bool) (string, func(), error) {
+	if !captionsEnabled {
+		return "", nil, nil
+	}
+	if transcriptPath != "" {
+		if _, err := os.Stat(transcriptPath); err == nil {
+			return transcriptPath, nil, nil
+		}
+	}
+	modelPath := FindWhisperModel(dataDir)
+	if modelPath == "" {
+		return "", nil, nil
+	}
+	return TranscribeSegment(videoPath, startSec, durationSec, modelPath)
 }
 
 // TranscribeSegment extracts audio from videoPath at [startSec, startSec+durationSec],

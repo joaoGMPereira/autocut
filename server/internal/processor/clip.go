@@ -20,8 +20,11 @@ type ClipRequest struct {
 	EndSec      float64         // from highlight adj_end_sec
 	ChannelCfg  database.ChannelConfig
 	ModeCfg     json.RawMessage // raw ModeConfig JSON
-	DataDir     string          // root dir for output files ({dataDir}/clips/)
-	OnProgress  func(float64)   // callback: percent 0–100
+	DataDir        string          // root dir for output files ({dataDir}/clips/)
+	BlurEdgePct    float64         // 0=disabled, 1-100=edge blur percentage
+	NoiseStrength  float64         // 0=disabled, 1-10=noise strength
+	TranscriptPath string          // optional: path to transcript JSON for real captions
+	OnProgress     func(float64)   // callback: percent 0–100
 }
 
 // GenerateClip cuts a single clip segment and applies all configured effect layers.
@@ -43,13 +46,28 @@ func GenerateClip(ctx context.Context, req ClipRequest) (string, error) {
 		return "", fmt.Errorf("invalid clip duration: start=%.1f end=%.1f", req.StartSec, req.EndSec)
 	}
 
+	// Resolve transcript for caption burn-in (on-demand whisper if needed)
+	transcriptPath, transcriptCleanup, tErr := ResolveTranscript(
+		req.VideoPath, startSec, durationSec,
+		req.DataDir, req.TranscriptPath, req.ChannelCfg.PreviewCaptionsEnabled,
+	)
+	if tErr != nil {
+		log.Warn("transcript resolution failed, captions will use placeholder", "err", tErr)
+	}
+	if transcriptCleanup != nil {
+		defer transcriptCleanup()
+	}
+
 	// Build ffmpeg args using the shared effect chain
 	effectReq := EffectRequest{
-		VideoPath:   req.VideoPath,
-		StartSec:    startSec,
-		DurationSec: durationSec,
-		ChannelCfg:  req.ChannelCfg,
-		OutputPath:  outPath,
+		VideoPath:      req.VideoPath,
+		StartSec:       startSec,
+		DurationSec:    durationSec,
+		ChannelCfg:     req.ChannelCfg,
+		OutputPath:     outPath,
+		BlurEdgePct:    req.BlurEdgePct,
+		NoiseStrength:  req.NoiseStrength,
+		TranscriptPath: transcriptPath,
 	}
 	args, cleanups := BuildEffectChain(log, effectReq)
 	for _, fn := range cleanups {

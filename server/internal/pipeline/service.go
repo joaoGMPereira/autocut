@@ -684,7 +684,9 @@ func (s *Service) runClipGeneration(id int64) {
 	// Apply mode overrides so clip generation uses the same effect config as preview
 	processor.ApplyModeOverrides(&channelCfg, json.RawMessage(run.ModeConfigJSON))
 
-	// Longform mode: skip highlight-based clip generation; segment the video directly.
+	blurEdgePct, noiseStrength := processor.ParseAntiDupExtras(json.RawMessage(run.ModeConfigJSON))
+
+	// Longform mode: segment the video by time windows.
 	if run.Mode == "longform" {
 		var modeCfg struct {
 			SegmentSec float64 `json:"segment_secs"`
@@ -692,11 +694,30 @@ func (s *Service) runClipGeneration(id int64) {
 		if err := json.Unmarshal([]byte(run.ModeConfigJSON), &modeCfg); err != nil {
 			log.Warn("failed to parse mode_config_json, using default segment_secs", "err", err)
 		}
-		s.generateLongformClips(ctx, id, run, modeCfg.SegmentSec, channelCfg, publishError)
+		segmentSec := modeCfg.SegmentSec
+		if segmentSec <= 0 {
+			log.Warn("segment_secs not set in mode_config, using default", "default_sec", 600)
+			segmentSec = 600
+		}
+		if run.DurationSec <= 0 {
+			log.Warn("duration_sec is 0, cannot segment — advancing without clips")
+			s.advanceClipGenDone(id)
+			return
+		}
+		segments := processor.ComputeSegments(float64(run.DurationSec), segmentSec)
+		inputs := make([]clipInput, len(segments))
+		for i, seg := range segments {
+			inputs[i] = clipInput{
+				startSec: seg.StartSec,
+				endSec:   seg.EndSec,
+				title:    fmt.Sprintf("Part %d", i+1),
+			}
+		}
+		s.generateClipsFromInputs(ctx, id, run, inputs, channelCfg, blurEdgePct, noiseStrength, publishError)
 		return
 	}
 
-	// Fetch selected highlights
+	// AI mode: one clip per selected highlight.
 	highlights, err := s.highlightRepo.ListSelectedByRun(ctx, id)
 	if err != nil {
 		publishError(fmt.Sprintf("load highlights: %s", err))
@@ -708,127 +729,74 @@ func (s *Service) runClipGeneration(id int64) {
 		return
 	}
 
-	totalClips := len(highlights)
-	log.Info("starting clip generation", "total_clips", totalClips)
-
-	for i, hl := range highlights {
-		// Use adjusted boundaries if set, otherwise original
+	inputs := make([]clipInput, 0, len(highlights))
+	for _, hl := range highlights {
 		startSec := hl.AdjStartSec
 		endSec := hl.AdjEndSec
 		if startSec == 0 && endSec == 0 {
 			startSec = hl.StartSec
 			endSec = hl.EndSec
 		}
-
-		// Create clip row
-		clip := &database.PipelineClip{
-			RunID:       id,
-			HighlightID: sql.NullInt64{Int64: hl.ID, Valid: true},
-			StartSec:    startSec,
-			EndSec:      endSec,
-			DurationSec: endSec - startSec,
-			IsSelected:  true,
-			Title:       hl.Text,
-		}
-		clipID, err := s.clipRepo.Create(ctx, clip)
-		if err != nil {
-			log.Error("create clip row failed", "highlight_id", hl.ID, "err", err)
-			continue
-		}
-
-		// Publish per-clip progress
-		clipPct := float64(i) / float64(totalClips) * 100
-		s.hub.Publish(jobKey, hub.SSEEvent{
-			Type: "phase_progress",
-			Data: phaseProgressPayload{RunID: id, Phase: "cut", PercentDone: clipPct},
+		inputs = append(inputs, clipInput{
+			startSec:    startSec,
+			endSec:      endSec,
+			title:       hl.Text,
+			highlightID: sql.NullInt64{Int64: hl.ID, Valid: true},
 		})
-
-		// Generate clip with all effect layers
-		clipReq := processor.ClipRequest{
-			RunID:      id,
-			ClipID:     clipID,
-			VideoPath:  run.VideoPath,
-			StartSec:   startSec,
-			EndSec:     endSec,
-			ChannelCfg: channelCfg,
-			ModeCfg:    json.RawMessage(run.ModeConfigJSON),
-			DataDir:    s.dataDir,
-			OnProgress: func(pct float64) {
-				// Scale per-clip progress within the overall range
-				overallPct := (float64(i) + pct/100) / float64(totalClips) * 100
-				s.hub.Publish(jobKey, hub.SSEEvent{
-					Type: "phase_progress",
-					Data: phaseProgressPayload{RunID: id, Phase: "cut", PercentDone: overallPct},
-				})
-			},
-		}
-
-		outPath, err := processor.GenerateClip(ctx, clipReq)
-		if err != nil {
-			log.Error("clip generation failed", "clip_id", clipID, "highlight_id", hl.ID, "err", err)
-			_ = s.clipRepo.UpdateStatus(ctx, clipID, "error")
-			continue // continue with next clip
-		}
-
-		// Update clip with file path
-		_ = s.clipRepo.UpdateFilePath(ctx, clipID, outPath)
-		_ = s.clipRepo.UpdateStatus(ctx, clipID, "ready")
-		log.Info("clip generated", "clip_id", clipID, "path", outPath, "progress", fmt.Sprintf("%d/%d", i+1, totalClips))
 	}
-
-	// Publish 100% progress
-	s.hub.Publish(jobKey, hub.SSEEvent{
-		Type: "phase_progress",
-		Data: phaseProgressPayload{RunID: id, Phase: "cut", PercentDone: 100},
-	})
-
-	s.advanceClipGenDone(id)
+	s.generateClipsFromInputs(ctx, id, run, inputs, channelCfg, blurEdgePct, noiseStrength, publishError)
 }
 
-// segInfo holds the clip ID and duration for a longform segment.
+// clipInput describes a single clip to generate, used by both AI and longform modes.
+type clipInput struct {
+	startSec    float64
+	endSec      float64
+	title       string
+	highlightID sql.NullInt64 // set for AI highlights, zero-value for longform
+}
+
+// segInfo holds the clip ID and duration for a segment during generation.
 type segInfo struct {
 	clipID int64
 	dur    float64
 }
 
-// generateLongformClips segments the video into two passes:
-// Phase A: batch-insert all clip rows; Phase B: sequential stream copy to raw files;
-// Phase C: parallel effects via GenerateClip.
-func (s *Service) generateLongformClips(ctx context.Context, id int64, run *database.PipelineRun, segmentSec float64, channelCfg database.ChannelConfig, publishError func(string)) {
-	log := s.log.With("run_id", id, "phase", "longform_clips")
+// generateClipsFromInputs generates clips using a shared Phase A/B/C pipeline:
+// Phase A: batch-insert all clip rows as pending
+// Phase B: sequential stream-copy CutSegment → raw files
+// Phase C: parallel effects via GenerateClip (including per-clip whisper for captions)
+func (s *Service) generateClipsFromInputs(ctx context.Context, id int64, run *database.PipelineRun,
+	inputs []clipInput, channelCfg database.ChannelConfig, blurEdgePct, noiseStrength float64, publishError func(string)) {
+
+	log := s.log.With("run_id", id, "phase", "clip_gen")
 	jobKey := fmt.Sprintf("%d", id)
 
-	if segmentSec <= 0 {
-		log.Warn("segment_secs not set in mode_config, using default", "default_sec", 600)
-		segmentSec = 600
-	}
-
-	if run.DurationSec <= 0 {
-		log.Warn("duration_sec is 0, cannot segment — advancing without clips")
+	if len(inputs) == 0 {
+		log.Warn("no clip inputs — advancing without clips")
 		s.advanceClipGenDone(id)
 		return
 	}
 
-	segments := processor.ComputeSegments(float64(run.DurationSec), segmentSec)
-	log.Info("computed segments", "count", len(segments), "segment_sec", segmentSec)
+	log.Info("starting clip generation", "total_clips", len(inputs))
 
 	// Phase A: batch-insert all clip rows as pending, collect {clipID, dur}.
-	infos := make([]segInfo, 0, len(segments))
-	for i, seg := range segments {
+	infos := make([]segInfo, 0, len(inputs))
+	for _, inp := range inputs {
 		clip := &database.PipelineClip{
 			RunID:       id,
-			StartSec:    seg.StartSec,
-			EndSec:      seg.EndSec,
-			DurationSec: seg.EndSec - seg.StartSec,
-			Title:       fmt.Sprintf("Part %d", i+1),
+			HighlightID: inp.highlightID,
+			StartSec:    inp.startSec,
+			EndSec:      inp.endSec,
+			DurationSec: inp.endSec - inp.startSec,
+			Title:       inp.title,
 			IsSelected:  true,
 		}
 		clipID, err := s.clipRepo.Create(ctx, clip)
 		if err != nil {
-			publishError(fmt.Sprintf("create longform clip row failed (part %d): %s", i+1, err))
+			publishError(fmt.Sprintf("create clip row failed: %s", err))
 			return
 		}
-		infos = append(infos, segInfo{clipID: clipID, dur: seg.EndSec - seg.StartSec})
+		infos = append(infos, segInfo{clipID: clipID, dur: inp.endSec - inp.startSec})
 	}
 
 	// Ensure output directory exists before Phase B.
@@ -839,22 +807,21 @@ func (s *Service) generateLongformClips(ctx context.Context, id int64, run *data
 	}
 
 	// Phase B: sequential stream copy → rawPath = {clipsDir}/{runID}_{clipID}_raw.mp4
-	rawPaths := make([]string, len(segments))
-	for i, seg := range segments {
+	rawPaths := make([]string, len(inputs))
+	for i, inp := range inputs {
 		info := infos[i]
 		rawPath := filepath.Join(clipsDir, fmt.Sprintf("%d_%d_raw.mp4", id, info.clipID))
 
-		err := processor.CutSegment(ctx, run.VideoPath, seg.StartSec, seg.EndSec-seg.StartSec, rawPath)
+		err := processor.CutSegment(ctx, run.VideoPath, inp.startSec, inp.endSec-inp.startSec, rawPath, nil)
 		if err != nil {
 			log.Error("cut segment failed", "clip_id", info.clipID, "err", err)
 			_ = s.clipRepo.UpdateStatus(ctx, info.clipID, "error")
-			// leave rawPaths[i] empty
 		} else {
 			rawPaths[i] = rawPath
 		}
 
-		// emit cut phase 0–50%, per-segment, after each cut
-		pct := float64(i+1) / float64(len(segments)) * 50
+		// emit cumulative cut-phase 0–50% for the main progress bar
+		pct := float64(i+1) / float64(len(inputs)) * 50
 		s.hub.Publish(jobKey, hub.SSEEvent{
 			Type: "phase_progress",
 			Data: phaseProgressPayload{RunID: id, Phase: "cut", PercentDone: pct},
@@ -875,10 +842,36 @@ func (s *Service) generateLongformClips(ctx context.Context, id int64, run *data
 		return
 	}
 
+	// Initialize per-clip progress at 0% so all bars appear before effects start.
+	for i, info := range infos {
+		if rawPaths[i] == "" {
+			continue
+		}
+		cid := info.clipID
+		s.hub.Publish(jobKey, hub.SSEEvent{
+			Type: "phase_progress",
+			Data: phaseProgressPayload{RunID: id, Phase: "cut", PercentDone: 0, ClipID: &cid},
+		})
+	}
+
 	// Phase C: parallel effects via GenerateClip.
+	// Track per-clip progress so the overall bar reflects the average.
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	completedEffects := 0
+	clipPcts := make(map[int64]float64, totalValid)
+
+	emitOverall := func() {
+		// must be called with mu held
+		var sum float64
+		for _, p := range clipPcts {
+			sum += p
+		}
+		overall := 50 + (sum/float64(totalValid))/100*50
+		s.hub.Publish(jobKey, hub.SSEEvent{
+			Type: "phase_progress",
+			Data: phaseProgressPayload{RunID: id, Phase: "cut", PercentDone: overall},
+		})
+	}
 
 	for i, info := range infos {
 		rawPath := rawPaths[i]
@@ -893,20 +886,27 @@ func (s *Service) generateLongformClips(ctx context.Context, id int64, run *data
 			dur := clipInfo.dur
 
 			clipReq := processor.ClipRequest{
-				RunID:      id,
-				ClipID:     clipID,
-				VideoPath:  rawPath,
-				StartSec:   0,
-				EndSec:     dur,
-				ChannelCfg: channelCfg,
-				ModeCfg:    json.RawMessage(run.ModeConfigJSON),
-				DataDir:    s.dataDir,
+				RunID:          id,
+				ClipID:         clipID,
+				VideoPath:      rawPath,
+				StartSec:       0,
+				EndSec:         dur,
+				ChannelCfg:     channelCfg,
+				ModeCfg:        json.RawMessage(run.ModeConfigJSON),
+				DataDir:        s.dataDir,
+				BlurEdgePct:    blurEdgePct,
+				NoiseStrength:  noiseStrength,
+				TranscriptPath: "",
 				OnProgress: func(pct float64) {
 					cid := clipID
 					s.hub.Publish(jobKey, hub.SSEEvent{
 						Type: "phase_progress",
 						Data: phaseProgressPayload{RunID: id, Phase: "cut", PercentDone: pct, ClipID: &cid},
 					})
+					mu.Lock()
+					clipPcts[clipID] = pct
+					emitOverall()
+					mu.Unlock()
 				},
 			}
 
@@ -921,15 +921,9 @@ func (s *Service) generateLongformClips(ctx context.Context, id int64, run *data
 			}
 
 			mu.Lock()
-			completedEffects++
-			overall := 50 + float64(completedEffects)/float64(totalValid)*50
+			clipPcts[clipID] = 100
+			emitOverall()
 			mu.Unlock()
-
-			// emit overall progress (no clip_id) for the main bar
-			s.hub.Publish(jobKey, hub.SSEEvent{
-				Type: "phase_progress",
-				Data: phaseProgressPayload{RunID: id, Phase: "cut", PercentDone: overall},
-			})
 		}(info, rawPath)
 	}
 

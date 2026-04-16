@@ -59,7 +59,8 @@ func ComputeSegments(totalSec, segmentSec float64) []Segment {
 
 // CutSegment cuts videoPath from startSec for durationSec seconds using FFmpeg stream copy.
 // The output directory must already exist. Returns error if FFmpeg exits non-zero.
-func CutSegment(ctx context.Context, videoPath string, startSec, durationSec float64, outPath string) error {
+// onProgress is called with 0–100 as ffmpeg processes the segment; pass nil to discard.
+func CutSegment(ctx context.Context, videoPath string, startSec, durationSec float64, outPath string, onProgress func(float64)) error {
 	args := []string{
 		"-y",
 		"-ss", fmt.Sprintf("%.3f", startSec),
@@ -68,5 +69,5 @@ func CutSegment(ctx context.Context, videoPath string, startSec, durationSec flo
 		"-c", "copy",
 		outPath,
 	}
-	return RunFFmpeg(ctx, args, durationSec, nil)
+	return RunFFmpeg(ctx, args, durationSec, onProgress)
 }

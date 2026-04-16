@@ -33,7 +33,7 @@ type PreviewRequest struct {
 func GeneratePreview(ctx context.Context, req PreviewRequest) (string, error) {
 	log := slog.With("component", "preview", "run_id", req.RunID)
 
-	hash, err := computeCacheHash(req.ChannelCfg, req.ModeCfg)
+	hash, err := computeCacheHash(req.ChannelCfg, req.ModeCfg, req.TranscriptPath)
 	if err != nil {
 		return "", fmt.Errorf("compute cache hash: %w", err)
 	}
@@ -62,20 +62,16 @@ func GeneratePreview(ctx context.Context, req PreviewRequest) (string, error) {
 		startSec = 0
 	}
 
-	// On-demand whisper transcription: if captions are enabled but no transcript exists,
-	// transcribe just the 15-second segment using whisper-cli.
-	transcriptPath := req.TranscriptPath
-	if transcriptPath == "" && req.ChannelCfg.PreviewCaptionsEnabled {
-		if modelPath := FindWhisperModel(req.DataDir); modelPath != "" {
-			log.Info("transcribing preview segment with whisper", "model", modelPath, "start_sec", startSec)
-			if tp, cleanupTranscript, tErr := TranscribeSegment(req.VideoPath, startSec, segmentDuration, modelPath); tErr == nil {
-				transcriptPath = tp
-				defer cleanupTranscript()
-				log.Info("whisper transcription complete", "path", tp)
-			} else {
-				log.Warn("whisper transcription failed, using placeholder captions", "err", tErr)
-			}
-		}
+	// Resolve transcript for caption burn-in (on-demand whisper if needed)
+	transcriptPath, transcriptCleanup, tErr := ResolveTranscript(
+		req.VideoPath, startSec, segmentDuration,
+		req.DataDir, req.TranscriptPath, req.ChannelCfg.PreviewCaptionsEnabled,
+	)
+	if tErr != nil {
+		log.Warn("transcript resolution failed, captions will use placeholder", "err", tErr)
+	}
+	if transcriptCleanup != nil {
+		defer transcriptCleanup()
 	}
 
 	// Build ffmpeg args using the shared effect chain
@@ -106,12 +102,14 @@ func GeneratePreview(ctx context.Context, req PreviewRequest) (string, error) {
 	return outPath, nil
 }
 
-// computeCacheHash returns MD5 hex of ChannelConfig + ModeConfig JSON.
-func computeCacheHash(cc database.ChannelConfig, modeCfg json.RawMessage) (string, error) {
+// computeCacheHash returns MD5 hex of ChannelConfig + ModeConfig + transcript path.
+// Including transcript path ensures the cache busts when a transcript becomes available.
+func computeCacheHash(cc database.ChannelConfig, modeCfg json.RawMessage, transcriptPath string) (string, error) {
 	ccJSON, err := json.Marshal(cc)
 	if err != nil {
 		return "", err
 	}
 	combined := append(ccJSON, modeCfg...)
+	combined = append(combined, []byte(transcriptPath)...)
 	return fmt.Sprintf("%x", md5.Sum(combined)), nil
 }

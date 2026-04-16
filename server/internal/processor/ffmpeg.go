@@ -39,12 +39,15 @@ func RunFFmpeg(ctx context.Context, args []string, totalDurationSec float64, onP
 	var mu sync.Mutex
 	stderrLines := make([]string, 0, 20)
 
-	// Parse stderr in a goroutine
+	// Parse stderr in a goroutine.
+	// FFmpeg uses \r (carriage return) between progress updates, not \n,
+	// so we need a custom split function to see each update as it arrives.
 	scanDone := make(chan struct{})
 	go func() {
 		defer close(scanDone)
 		scanner := bufio.NewScanner(stderrPipe)
 		scanner.Buffer(make([]byte, 64*1024), 64*1024)
+		scanner.Split(scanCRorLF)
 		for scanner.Scan() {
 			line := scanner.Text()
 
@@ -101,6 +104,43 @@ func RunFFmpeg(ctx context.Context, args []string, totalDurationSec float64, onP
 func FFmpegAvailable() bool {
 	_, err := exec.LookPath("ffmpeg")
 	return err == nil
+}
+
+// scanCRorLF is a bufio.SplitFunc that splits on \r or \n (or \r\n).
+// FFmpeg writes progress updates separated by \r; the default ScanLines
+// only splits on \n, causing all progress to buffer until EOF.
+func scanCRorLF(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+	for i, b := range data {
+		if b == '\n' {
+			// consume optional \r before \n
+			end := i
+			if end > 0 && data[end-1] == '\r' {
+				end--
+			}
+			return i + 1, data[:end], nil
+		}
+		if b == '\r' {
+			// \r not followed by \n (or last byte) → treat as line separator
+			if i+1 < len(data) {
+				if data[i+1] == '\n' {
+					return i + 2, data[:i], nil
+				}
+				return i + 1, data[:i], nil
+			}
+			// \r is last byte — need more data to decide if \r\n
+			if atEOF {
+				return i + 1, data[:i], nil
+			}
+			return 0, nil, nil // request more data
+		}
+	}
+	if atEOF {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
 }
 
 // CancelableContext returns a context that sends SIGTERM on cancel, waits gracePeriod,
