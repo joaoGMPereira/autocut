@@ -57,26 +57,28 @@ export function LandscapeConfigPanel({
       {/* Base Image Section */}
       <div className="space-y-2">
         <Label className="text-xs text-zinc-400">Base Image</Label>
-        {(baseImagePath || videoThumbnailUrl) && (
-          <div className="relative rounded overflow-hidden aspect-[16/9] bg-zinc-800">
-            {baseImagePath ? (
-              <div className="flex items-center justify-center h-full">
-                <span className="text-xs text-zinc-300">Custom image uploaded</span>
-              </div>
-            ) : (
-              <img
-                src={videoThumbnailUrl}
-                alt="YouTube thumbnail"
-                className="w-full h-full object-cover"
-              />
-            )}
-            {baseImagePath && (
-              <span className="absolute top-1 left-1 text-[10px] bg-black/60 px-1 rounded text-zinc-300">
-                Custom
-              </span>
-            )}
-          </div>
-        )}
+        <div className="relative rounded overflow-hidden aspect-[16/9] bg-zinc-800">
+          {baseImagePath ? (
+            <div className="flex items-center justify-center h-full">
+              <span className="text-xs text-zinc-300">Custom image uploaded</span>
+            </div>
+          ) : videoThumbnailUrl ? (
+            <img
+              src={videoThumbnailUrl}
+              alt="YouTube thumbnail"
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <span className="text-xs text-zinc-500">No YouTube thumbnail available</span>
+            </div>
+          )}
+          {baseImagePath && (
+            <span className="absolute top-1 left-1 text-[10px] bg-black/60 px-1 rounded text-zinc-300">
+              Custom
+            </span>
+          )}
+        </div>
         <label className="inline-flex items-center gap-2 cursor-pointer text-xs text-blue-400 hover:text-blue-300">
           <input
             type="file"

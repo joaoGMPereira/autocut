@@ -13,15 +13,35 @@ interface SetupProviderProps {
   children: React.ReactNode;
 }
 
+const TEST_BYPASS = process.env.NEXT_PUBLIC_AUTOCUT_TEST_MODE === 'true';
+
+// Test hook: ?setup=force renders the SetupGate even when NEXT_PUBLIC_AUTOCUT_TEST_MODE
+// is enabled. Read from window.location to avoid wrapping the root layout in Suspense
+// (Next 16 requires a Suspense boundary around `useSearchParams`).
+function readForceGateFlag(): boolean {
+  if (typeof window === 'undefined') return false;
+  return new URLSearchParams(window.location.search).get('setup') === 'force';
+}
+
 export function SetupProvider({ children }: SetupProviderProps) {
   const { isReady, isLoading, tools, missingRequired, error } =
     useSetupCheck();
+  const [forceGate, setForceGate] = useState<boolean>(readForceGateFlag);
   const [timedOut, setTimedOut] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false);
   const goUrl = useAppStore((s) => s.goUrl);
   const refreshConnectedChannels = useChannelStore((s) => s.refreshConnectedChannels);
   const refreshedRef = useRef(false);
+
+  // Keep forceGate in sync when the URL changes (client-side nav)
+  useEffect(() => {
+    const sync = () => setForceGate(readForceGateFlag());
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
+  }, []);
+
+  const bypassGate = TEST_BYPASS && !forceGate;
 
   const updatableTools = tools.filter((t) => t.updateAvailable);
 
@@ -49,6 +69,10 @@ export function SetupProvider({ children }: SetupProviderProps) {
   const handleComplete = useCallback(() => {
     setDismissed(true);
   }, []);
+
+  if (bypassGate) {
+    return <>{children}</>;
+  }
 
   // Loading: show spinner until timeout
   if (isLoading && !timedOut) {

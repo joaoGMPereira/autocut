@@ -84,6 +84,7 @@ type PipelineRun struct {
 	VideoPath      string        `json:"video_path"`
 	VideoTitle     string        `json:"video_title"`
 	DurationSec    int64         `json:"duration_sec"`
+	ThumbnailURL   string        `json:"thumbnail_url"`
 	TranscriptPath string        `json:"transcript_path"`
 	StartedAt      int64         `json:"started_at"`
 	FinishedAt     sql.NullInt64 `json:"finished_at"`

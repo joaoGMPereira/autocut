@@ -165,12 +165,14 @@ export function StepUrl({ historical }: StepUrlProps) {
           onKeyDown={handleKeyDown}
           placeholder="https://www.youtube.com/watch?v=..."
           disabled={isLoading}
+          data-testid="step-url-input"
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500 disabled:opacity-50"
         />
 
         <button
           onClick={() => void (isHistorical ? handleResubmit() : handleStart())}
           disabled={isLoading || !url.trim() || (!isHistorical && !canStart)}
+          data-testid="step-url-submit"
           className="w-full rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {isLoading ? 'Starting…' : isHistorical ? 'Re-submit' : 'Start Pipeline'}

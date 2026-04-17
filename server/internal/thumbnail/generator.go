@@ -203,20 +203,39 @@ func (g *Generator) generateOne(ctx context.Context, runID int64, clip database.
 	}
 
 	// For landscape strategy: resolve source to base image instead of video.
-	if strategy.Type() == StrategyLandscape && req != nil && req.LandscapeConfig != nil {
-		if req.LandscapeConfig.BaseImagePath != "" {
+	// Resolution order: per-clip override → global base image → YouTube thumbnail → FFmpeg frame extraction.
+	if strategy.Type() == StrategyLandscape {
+		// 1. Per-clip base image override
+		if req != nil && req.LandscapeConfig != nil {
+			if clipImg, ok := req.LandscapeConfig.ClipBaseImages[clip.ID]; ok && clipImg != "" {
+				if _, err := os.Stat(clipImg); err == nil {
+					sourcePath = clipImg
+				}
+			}
+		}
+		// 2. Global custom base image
+		if sourcePath == clip.FilePath && req != nil && req.LandscapeConfig != nil && req.LandscapeConfig.BaseImagePath != "" {
 			if _, err := os.Stat(req.LandscapeConfig.BaseImagePath); err == nil {
 				sourcePath = req.LandscapeConfig.BaseImagePath
 			}
 		}
-		// If still pointing at the video, try downloading YouTube thumbnail.
-		if sourcePath == clip.FilePath && req.ThumbnailURL != "" {
+		// 3. YouTube thumbnail download
+		if sourcePath == clip.FilePath && req != nil && req.ThumbnailURL != "" {
 			downloaded, err := downloadThumbnail(req.ThumbnailURL, thumbDir)
 			if err == nil {
 				sourcePath = downloaded
 			} else {
-				g.log.Warn("failed to download YouTube thumbnail, using video frame", "err", err)
+				g.log.Warn("failed to download YouTube thumbnail", "err", err)
 			}
+		}
+		// 4. Last resort: extract a frame from the video so ImageMagick always receives an image.
+		if sourcePath == clip.FilePath {
+			framePath := filepath.Join(thumbDir, "frame_"+base+".jpg")
+			if err := ExtractFrame(ctx, sourcePath, seekSec, framePath); err != nil {
+				return "", fmt.Errorf("extract frame for landscape thumbnail: %w", err)
+			}
+			sourcePath = framePath
+			g.log.Info("using extracted video frame as landscape base image", "run_id", runID, "clip_id", clip.ID)
 		}
 	}
 

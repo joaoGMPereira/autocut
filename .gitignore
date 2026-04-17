@@ -42,3 +42,9 @@ apps/desktop/release/
 server/bin/
 server/autocut
 .gitnexus
+
+# E2E artifacts
+e2e/fixtures/videos/*.mp4
+e2e/test-results/
+e2e/playwright-report/
+e2e/node_modules/

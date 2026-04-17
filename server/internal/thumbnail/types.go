@@ -51,7 +51,8 @@ type LandscapeConfig struct {
 	TextColor     string           `json:"text_color"`
 	OutlineColor  string           `json:"outline_color"`
 	StrokeWidth   int              `json:"stroke_width"`
-	ClipTexts     map[int64]string `json:"clip_texts"`
+	ClipTexts      map[int64]string `json:"clip_texts"`
+	ClipBaseImages map[int64]string `json:"clip_base_images"`
 }
 
 // DefaultLandscapeConfig returns a LandscapeConfig with sensible defaults.

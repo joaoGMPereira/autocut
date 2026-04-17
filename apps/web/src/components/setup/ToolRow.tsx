@@ -71,7 +71,7 @@ export function ToolRow({ tool }: ToolRowProps) {
   const showManualLink = canInstall && !isAutoDownload && manualUrl;
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col" data-testid={`tool-row-${tool.name}`}>
       <div className="flex items-center gap-3.5 px-5 py-3.5">
         <StatusIcon />
 
@@ -104,6 +104,7 @@ export function ToolRow({ tool }: ToolRowProps) {
         )}
 
         <span
+          data-testid={`tool-status-${tool.name}`}
           className={cn(
             'inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold shrink-0',
             badgeClass(),
@@ -127,6 +128,7 @@ export function ToolRow({ tool }: ToolRowProps) {
         {canInstall && (
           <Button
             size="sm"
+            data-testid={`tool-install-btn-${tool.name}`}
             className="h-7 gap-1.5 text-xs"
             onClick={() => startInstall(goUrl, tool.name)}
           >

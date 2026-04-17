@@ -40,7 +40,7 @@ export function SetupGate({ tools, onComplete }: SetupGateProps) {
   }, []);
 
   return (
-    <div className="flex h-full items-center justify-center">
+    <div className="flex h-full items-center justify-center" data-testid="setup-gate">
       <div className="flex flex-col items-center gap-8 w-full max-w-[600px] px-4">
         {/* Header */}
         <div className="flex flex-col items-center gap-4">
@@ -82,6 +82,7 @@ export function SetupGate({ tools, onComplete }: SetupGateProps) {
         {/* Footer */}
         <div className="flex flex-col items-center gap-3 w-full">
           <Button
+            data-testid="setup-continue-btn"
             className="w-full h-11 text-sm font-semibold"
             disabled={!isReady}
             onClick={onComplete}
@@ -90,6 +91,7 @@ export function SetupGate({ tools, onComplete }: SetupGateProps) {
           </Button>
           <div className="flex gap-2">
             <Button
+              data-testid="setup-sync-btn"
               variant="outline"
               size="sm"
               className="gap-1.5 text-xs"

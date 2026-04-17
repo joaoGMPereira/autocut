@@ -46,6 +46,7 @@ export interface Run {
   video_path: string;
   video_title?: string;
   duration_sec?: number;
+  thumbnail_url?: string;
   transcript_path: string;
   started_at: number;
   finished_at: number | null;
@@ -302,6 +303,7 @@ export interface LandscapeThumbnailConfig {
   outline_color: string;
   stroke_width: number;
   clip_texts: Record<string, string>;
+  clip_base_images?: Record<string, string>;
 }
 
 export const DEFAULT_LANDSCAPE_CONFIG: LandscapeThumbnailConfig = {

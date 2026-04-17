@@ -796,6 +796,7 @@ export function StepMode({ historical }: StepModeProps) {
             setSelectedMode('ai');
             setPendingMode('ai');
           }}
+          data-testid="mode-card-ai"
           className={[
             'relative flex flex-col gap-2 rounded-lg border p-4 text-left transition-all',
             selectedMode === 'ai'
@@ -823,6 +824,7 @@ export function StepMode({ historical }: StepModeProps) {
             setSelectedMode('longform');
             setPendingMode('longform');
           }}
+          data-testid="mode-card-longform"
           className={[
             'relative flex flex-col gap-2 rounded-lg border p-4 text-left transition-all',
             selectedMode === 'longform'
@@ -2175,6 +2177,7 @@ export function StepMode({ historical }: StepModeProps) {
       {/* Submit button */}
       {!isLoadingPreference && (
         <button
+          data-testid="mode-submit-btn"
           onClick={() => void handleSubmit()}
           disabled={isSubmitDisabled}
           className="w-full rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"

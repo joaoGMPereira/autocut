@@ -21,7 +21,7 @@ func NewPipelineRunRepo(db *sql.DB, log *slog.Logger) *PipelineRunRepo {
 	return &PipelineRunRepo{db: db, log: log.With("repo", "pipeline_run")}
 }
 
-const pipelineRunCols = `id, channel_id, url, mode, state, active_phase, error, mode_config_json, video_path, video_title, duration_sec, transcript_path, started_at, finished_at`
+const pipelineRunCols = `id, channel_id, url, mode, state, active_phase, error, mode_config_json, video_path, video_title, duration_sec, thumbnail_url, transcript_path, started_at, finished_at`
 
 // Create inserts a new pipeline run and returns its ID.
 func (r *PipelineRunRepo) Create(ctx context.Context, p *PipelineRun) (int64, error) {
@@ -172,13 +172,13 @@ func (r *PipelineRunRepo) SetTranscriptPath(ctx context.Context, id int64, path 
 	return nil
 }
 
-// SetDownloadResult atomically persists video_path, video_title, and duration_sec
-// after a successful download. All three fields must be non-empty/non-zero — callers
+// SetDownloadResult atomically persists video_path, video_title, duration_sec, and thumbnail_url
+// after a successful download. All three primary fields must be non-empty/non-zero — callers
 // must verify this before transitioning to WAITING_MODE.
-func (r *PipelineRunRepo) SetDownloadResult(ctx context.Context, id int64, path, title string, durationSec int64) error {
+func (r *PipelineRunRepo) SetDownloadResult(ctx context.Context, id int64, path, title string, durationSec int64, thumbnailURL string) error {
 	_, err := r.db.ExecContext(ctx,
-		"UPDATE pipeline_runs SET video_path = ?, video_title = ?, duration_sec = ? WHERE id = ?",
-		path, title, durationSec, id,
+		"UPDATE pipeline_runs SET video_path = ?, video_title = ?, duration_sec = ?, thumbnail_url = ? WHERE id = ?",
+		path, title, durationSec, thumbnailURL, id,
 	)
 	if err != nil {
 		return fmt.Errorf("set download result pipeline_run %d: %w", id, err)
@@ -205,18 +205,18 @@ func (r *PipelineRunRepo) FindTranscriptByURL(ctx context.Context, url string) (
 
 // FindExistingVideo finds a prior run with the same URL that has a non-empty video_path.
 // Returns the video_path, video_title, and duration_sec if found.
-func (r *PipelineRunRepo) FindExistingVideo(ctx context.Context, url string) (path, title string, durationSec int64, found bool, err error) {
+func (r *PipelineRunRepo) FindExistingVideo(ctx context.Context, url string) (path, title string, durationSec int64, thumbnailURL string, found bool, err error) {
 	err = r.db.QueryRowContext(ctx,
-		`SELECT video_path, video_title, duration_sec FROM pipeline_runs WHERE url = ? AND video_path != '' ORDER BY id DESC LIMIT 1`,
+		`SELECT video_path, video_title, duration_sec, thumbnail_url FROM pipeline_runs WHERE url = ? AND video_path != '' ORDER BY id DESC LIMIT 1`,
 		url,
-	).Scan(&path, &title, &durationSec)
+	).Scan(&path, &title, &durationSec, &thumbnailURL)
 	if errors.Is(err, sql.ErrNoRows) {
-		return "", "", 0, false, nil
+		return "", "", 0, "", false, nil
 	}
 	if err != nil {
-		return "", "", 0, false, fmt.Errorf("find existing video: %w", err)
+		return "", "", 0, "", false, fmt.Errorf("find existing video: %w", err)
 	}
-	return path, title, durationSec, true, nil
+	return path, title, durationSec, thumbnailURL, true, nil
 }
 
 // StartDownloadAndAdvance atomically sets url, state=WAITING_MODE, active_phase='download'.
@@ -359,7 +359,7 @@ func (r *PipelineRunRepo) Delete(ctx context.Context, id int64) error {
 
 func scanPipelineRun(row *sql.Row) (*PipelineRun, error) {
 	var p PipelineRun
-	err := row.Scan(&p.ID, &p.ChannelID, &p.URL, &p.Mode, &p.State, &p.ActivePhase, &p.Error, &p.ModeConfigJSON, &p.VideoPath, &p.VideoTitle, &p.DurationSec, &p.TranscriptPath, &p.StartedAt, &p.FinishedAt)
+	err := row.Scan(&p.ID, &p.ChannelID, &p.URL, &p.Mode, &p.State, &p.ActivePhase, &p.Error, &p.ModeConfigJSON, &p.VideoPath, &p.VideoTitle, &p.DurationSec, &p.ThumbnailURL, &p.TranscriptPath, &p.StartedAt, &p.FinishedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -368,7 +368,7 @@ func scanPipelineRun(row *sql.Row) (*PipelineRun, error) {
 
 func scanPipelineRunRows(rows *sql.Rows) (*PipelineRun, error) {
 	var p PipelineRun
-	err := rows.Scan(&p.ID, &p.ChannelID, &p.URL, &p.Mode, &p.State, &p.ActivePhase, &p.Error, &p.ModeConfigJSON, &p.VideoPath, &p.VideoTitle, &p.DurationSec, &p.TranscriptPath, &p.StartedAt, &p.FinishedAt)
+	err := rows.Scan(&p.ID, &p.ChannelID, &p.URL, &p.Mode, &p.State, &p.ActivePhase, &p.Error, &p.ModeConfigJSON, &p.VideoPath, &p.VideoTitle, &p.DurationSec, &p.ThumbnailURL, &p.TranscriptPath, &p.StartedAt, &p.FinishedAt)
 	if err != nil {
 		return nil, err
 	}

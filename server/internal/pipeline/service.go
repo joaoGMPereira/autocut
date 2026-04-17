@@ -179,7 +179,7 @@ func (s *Service) Advance(ctx context.Context, id int64, req AdvanceRequest) (Ad
 		}
 
 		// Check if a prior run already downloaded this URL and the file still exists.
-		existingPath, existingTitle, existingDuration, found, findErr := s.repo.FindExistingVideo(ctx, normalized)
+		existingPath, existingTitle, existingDuration, existingThumbURL, found, findErr := s.repo.FindExistingVideo(ctx, normalized)
 		if findErr != nil {
 			s.log.Warn("find existing video failed, proceeding with fresh download", "run_id", id, "err", findErr)
 		}
@@ -207,8 +207,8 @@ func (s *Service) Advance(ctx context.Context, id int64, req AdvanceRequest) (Ad
 							s.log.Warn("failed to save channel_id on run", "run_id", id, "err", err)
 						}
 					}
-					// Set download result (video_path, title, duration).
-					if err := s.repo.SetDownloadResult(ctx, id, destPath, existingTitle, existingDuration); err != nil {
+					// Set download result (video_path, title, duration, thumbnail_url).
+					if err := s.repo.SetDownloadResult(ctx, id, destPath, existingTitle, existingDuration, existingThumbURL); err != nil {
 						s.log.Error("set download result failed after reuse", "run_id", id, "err", err)
 					}
 					// Clear active_phase since download is already done.
@@ -222,9 +222,10 @@ func (s *Service) Advance(ctx context.Context, id int64, req AdvanceRequest) (Ad
 					s.hub.Publish(jobKey, hub.SSEEvent{
 						Type: "video_info",
 						Data: videoInfoPayload{
-							RunID:       id,
-							Title:       existingTitle,
-							DurationSec: int(existingDuration),
+							RunID:        id,
+							Title:        existingTitle,
+							ThumbnailURL: existingThumbURL,
+							DurationSec:  int(existingDuration),
 						},
 					})
 					s.hub.Publish(jobKey, hub.SSEEvent{
@@ -555,7 +556,11 @@ func (s *Service) runDownload(ctx context.Context, id int64, videoURL string) {
 	if title == "" {
 		title = metaInfo.Title
 	}
-	if err := s.repo.SetDownloadResult(ctx, id, dlInfo.FilePath, title, durationSec); err != nil {
+	thumbnailURL := metaInfo.ThumbnailURL
+	if thumbnailURL == "" {
+		thumbnailURL = dlInfo.ThumbnailURL
+	}
+	if err := s.repo.SetDownloadResult(ctx, id, dlInfo.FilePath, title, durationSec, thumbnailURL); err != nil {
 		publishError(fmt.Sprintf("persist download result: %s", err))
 		return
 	}

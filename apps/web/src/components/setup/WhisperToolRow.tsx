@@ -30,6 +30,7 @@ export function WhisperToolRow({ tool }: WhisperToolRowProps) {
   // "no_model" means binary found, model missing. Anything else with installed=false = binary missing.
   const binaryPresent = tool.installed || tool.source === 'no_model';
   const hasModel = tool.installed; // only true when binary + model both present
+  const binaryOnly = binaryPresent && !hasModel;
 
   const activeDownload = Object.entries(whisperDownloadStates).find(
     ([, s]) => s === 'installing',
@@ -38,13 +39,15 @@ export function WhisperToolRow({ tool }: WhisperToolRowProps) {
   const downloadedModels = whisperModels.filter((m) => m.downloaded);
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col" data-testid="tool-row-whisper-cli">
       {/* ── Binary row ── */}
       <div className="flex items-center gap-3.5 px-5 py-3.5">
         {binaryInstalling ? (
           <Loader2 className="h-5 w-5 text-blue-400 animate-spin shrink-0" />
-        ) : binaryPresent ? (
+        ) : hasModel ? (
           <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+        ) : binaryOnly ? (
+          <AlertCircle className="h-5 w-5 text-amber-400 shrink-0" />
         ) : (
           <XCircle className="h-5 w-5 text-red-400 shrink-0" />
         )}
@@ -64,16 +67,25 @@ export function WhisperToolRow({ tool }: WhisperToolRowProps) {
         </div>
 
         <span
+          data-testid="tool-status-whisper-cli"
           className={cn(
             'inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold shrink-0',
             binaryInstalling
               ? 'bg-blue-400/20 text-blue-400'
-              : binaryPresent
+              : hasModel
                 ? 'bg-emerald-400/20 text-emerald-400'
-                : 'bg-red-400/20 text-red-400',
+                : binaryOnly
+                  ? 'bg-amber-400/20 text-amber-400'
+                  : 'bg-red-400/20 text-red-400',
           )}
         >
-          {binaryInstalling ? 'Installing…' : binaryPresent ? 'Installed' : 'Missing'}
+          {binaryInstalling
+            ? 'Installing…'
+            : hasModel
+              ? 'Installed'
+              : binaryOnly
+                ? 'Missing model'
+                : 'Missing'}
         </span>
       </div>
 

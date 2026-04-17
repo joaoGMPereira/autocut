@@ -39,9 +39,11 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
   const [landConfig, setLandConfig] = useState<LandscapeThumbnailConfig>({ ...DEFAULT_LANDSCAPE_CONFIG });
   const [baseImagePath, setBaseImagePath] = useState('');
   const [clipTexts, setClipTexts] = useState<Record<string, string>>({});
+  const [clipBaseImages, setClipBaseImages] = useState<Record<string, string>>({});
 
   // UI state
   const [isGenerating, setIsGenerating] = useState(false);
+  const [uploadingClipId, setUploadingClipId] = useState<number | null>(null);
   const [fonts, setFonts] = useState<FontInfo[]>([]);
   const [templates, setTemplates] = useState<ThumbnailTemplate[]>([]);
   const [templateName, setTemplateName] = useState('');
@@ -91,7 +93,12 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
         config: { ...config, clip_texts: clipTexts },
       };
       if (isLandscapeMode) {
-        body.landscape_config = { ...landConfig, clip_texts: clipTexts, base_image_path: baseImagePath };
+        body.landscape_config = {
+          ...landConfig,
+          clip_texts: clipTexts,
+          base_image_path: baseImagePath,
+          clip_base_images: clipBaseImages,
+        };
         if (videoInfo?.thumbnailUrl) {
           body.thumbnail_url = videoInfo.thumbnailUrl;
         }
@@ -110,7 +117,28 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
       log.error('Batch generation failed', { error: err instanceof Error ? err.message : 'Unknown' });
       setIsGenerating(false);
     }
-  }, [goUrl, activeRunId, config, clipTexts, isLandscapeMode, landConfig, baseImagePath, videoInfo]);
+  }, [goUrl, activeRunId, config, clipTexts, isLandscapeMode, landConfig, baseImagePath, clipBaseImages, videoInfo]);
+
+  // Upload per-clip base image
+  const handleUploadClipBaseImage = useCallback(async (clipId: number, file: File) => {
+    if (!activeRunId) return;
+    setUploadingClipId(clipId);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${goUrl}/api/thumbnail/runs/${activeRunId}/base-image`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+      const data = await res.json();
+      setClipBaseImages((prev) => ({ ...prev, [String(clipId)]: data.path }));
+    } catch (err) {
+      log.error('Clip base image upload failed', { clipId, error: err instanceof Error ? err.message : 'Unknown' });
+    } finally {
+      setUploadingClipId(null);
+    }
+  }, [goUrl, activeRunId]);
 
   // Single clip regenerate
   const handleRegenerateSingle = useCallback(async (clipId: number) => {
@@ -122,10 +150,12 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
         config: { ...config, text },
       };
       if (isLandscapeMode) {
+        const clipImg = clipBaseImages[String(clipId)];
         body.landscape_config = {
           ...landConfig,
           clip_texts: { [String(clipId)]: text },
           base_image_path: baseImagePath,
+          ...(clipImg ? { clip_base_images: { [String(clipId)]: clipImg } } : {}),
         };
         if (videoInfo?.thumbnailUrl) {
           body.thumbnail_url = videoInfo.thumbnailUrl;
@@ -248,7 +278,7 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
     : 'grid grid-cols-1 gap-3 max-w-sm mx-auto';
 
   return (
-    <div className="space-y-4 w-full max-w-3xl">
+    <div data-testid="step-thumbnail-config" className="space-y-4 w-full max-w-3xl">
       <h2 className="text-xl font-semibold text-foreground">Thumbnail Configuration</h2>
 
       {isHistorical && (
@@ -496,6 +526,12 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
                     alt={`Clip ${clip.id} thumbnail`}
                     className={`w-full rounded ${aspectClass} object-cover bg-zinc-800`}
                   />
+                ) : videoInfo?.thumbnailUrl && isLandscapeMode ? (
+                  <img
+                    src={videoInfo.thumbnailUrl}
+                    alt="YouTube thumbnail preview"
+                    className={`w-full rounded ${aspectClass} object-cover bg-zinc-800 opacity-60`}
+                  />
                 ) : (
                   <div className={`w-full rounded ${aspectClass} bg-zinc-800 flex items-center justify-center`}>
                     <span className="text-xs text-zinc-500">No thumbnail</span>
@@ -509,6 +545,44 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
                   placeholder={isLandscapeMode ? `PT${i + 1}` : (config.text || 'Per-clip text...')}
                   className="bg-zinc-800 border-zinc-700 text-xs h-7"
                 />
+
+                {/* Per-clip base image (landscape mode) */}
+                {isLandscapeMode && (
+                  <div className="space-y-1">
+                    <Input
+                      value={clipBaseImages[String(clip.id)] ?? ''}
+                      onChange={(e) => setClipBaseImages((prev) => ({ ...prev, [String(clip.id)]: e.target.value }))}
+                      placeholder="Image URL or path..."
+                      className="bg-zinc-800 border-zinc-700 text-xs h-7"
+                    />
+                    <div className="flex items-center gap-2">
+                      <label className="cursor-pointer text-[10px] text-blue-400 hover:text-blue-300">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleUploadClipBaseImage(clip.id, file);
+                          }}
+                        />
+                        {uploadingClipId === clip.id ? 'Uploading...' : 'Upload image'}
+                      </label>
+                      {clipBaseImages[String(clip.id)] && (
+                        <button
+                          onClick={() => setClipBaseImages((prev) => {
+                            const next = { ...prev };
+                            delete next[String(clip.id)];
+                            return next;
+                          })}
+                          className="text-[10px] text-zinc-500 hover:text-zinc-400"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Regenerate button */}
                 <Button

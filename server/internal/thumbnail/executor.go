@@ -50,6 +50,20 @@ func RunImageMagick(ctx context.Context, args []string) error {
 	return nil
 }
 
+// ExtractFrame extracts a single frame from a video at seekSec and saves it as a JPEG.
+// Used as a fallback when no base image is available for landscape thumbnails.
+func ExtractFrame(ctx context.Context, videoPath string, seekSec float64, outputPath string) error {
+	args := []string{
+		"-y",
+		"-ss", fmt.Sprintf("%.2f", seekSec),
+		"-i", videoPath,
+		"-frames:v", "1",
+		"-q:v", "2",
+		outputPath,
+	}
+	return RunFFmpeg(ctx, args, 0, nil)
+}
+
 // CheckImageMagickAvailable returns an error if neither magick nor convert is on PATH.
 func CheckImageMagickAvailable() error {
 	if _, err := exec.LookPath("magick"); err == nil {

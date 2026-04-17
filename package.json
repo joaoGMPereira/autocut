@@ -4,7 +4,12 @@
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
-    "lint": "turbo lint"
+    "lint": "turbo lint",
+    "test:e2e": "pnpm --filter @autocut/e2e test",
+    "test:e2e:ui": "pnpm --filter @autocut/e2e test:ui",
+    "test:e2e:full": "pnpm --filter @autocut/e2e test:full",
+    "test:e2e:smoke": "pnpm --filter @autocut/e2e test:smoke",
+    "test:e2e:fixtures": "pnpm --filter @autocut/e2e fixtures"
   },
   "devDependencies": {
     "turbo": "^2.5.0",

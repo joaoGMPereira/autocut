@@ -219,9 +219,14 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
         set({
           videoInfo: {
             title: data.run.video_title ?? '',
-            thumbnailUrl: '',
+            thumbnailUrl: data.run.thumbnail_url ?? '',
             durationSec: data.run.duration_sec,
           },
+        });
+      } else if (get().videoInfo && !get().videoInfo!.thumbnailUrl && data.run.thumbnail_url) {
+        // videoInfo exists (from SSE) but missing thumbnailUrl — patch it from DB
+        set({
+          videoInfo: { ...get().videoInfo!, thumbnailUrl: data.run.thumbnail_url },
         });
       } else {
         log.info('[pipelineStore] loadRun: videoInfo NOT set', {
@@ -397,9 +402,13 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
             set({
               videoInfo: {
                 title: freshRun.video_title ?? '',
-                thumbnailUrl: '',
+                thumbnailUrl: freshRun.thumbnail_url ?? '',
                 durationSec: freshRun.duration_sec,
               },
+            });
+          } else if (get().videoInfo && !get().videoInfo!.thumbnailUrl && freshRun.thumbnail_url) {
+            set({
+              videoInfo: { ...get().videoInfo!, thumbnailUrl: freshRun.thumbnail_url },
             });
           }
         })
@@ -738,9 +747,13 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
                 set({
                   videoInfo: {
                     title: data.run.video_title ?? '',
-                    thumbnailUrl: '',
+                    thumbnailUrl: data.run.thumbnail_url ?? '',
                     durationSec: data.run.duration_sec,
                   },
+                });
+              } else if (get().videoInfo && !get().videoInfo!.thumbnailUrl && data.run.thumbnail_url) {
+                set({
+                  videoInfo: { ...get().videoInfo!, thumbnailUrl: data.run.thumbnail_url },
                 });
               }
             })

@@ -9,8 +9,13 @@ import type { UpdateProgress } from '@autocut/shared';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const IS_DEV = !app.isPackaged;
-const GO_PORT = IS_DEV ? 4071 : 4070;
-const WEB_PORT = IS_DEV ? 3201 : 3200;
+const IS_TEST = process.env.AUTOCUT_TEST_MODE === 'true';
+const GO_PORT = process.env.AUTOCUT_API_PORT
+  ? Number(process.env.AUTOCUT_API_PORT)
+  : IS_DEV ? 4071 : 4070;
+const WEB_PORT = process.env.AUTOCUT_WEB_PORT
+  ? Number(process.env.AUTOCUT_WEB_PORT)
+  : IS_DEV ? 3201 : 3200;
 const GO_URL = `http://127.0.0.1:${GO_PORT}`;
 const WEB_URL = `http://127.0.0.1:${WEB_PORT}`;
 const MAX_RESTARTS = 3;
@@ -188,8 +193,17 @@ function createWindow(): void {
 // ─── App lifecycle ────────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
-  startGoServer();
-  startNextProcess();
+  if (IS_TEST) {
+    console.log(`[test-mode] skipping Go spawn; using GO_URL=${GO_URL} WEB_URL=${WEB_URL}`);
+  } else {
+    startGoServer();
+  }
+
+  if (process.env.AUTOCUT_SKIP_NEXT !== 'true') {
+    startNextProcess();
+  } else {
+    console.log(`[test-mode] skipping Next spawn; WEB_URL=${WEB_URL}`);
+  }
 
   try {
     await waitForService(GO_URL, '/health');
