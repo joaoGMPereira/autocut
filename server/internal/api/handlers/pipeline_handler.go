@@ -186,9 +186,9 @@ func (h *PipelineHandler) GetPriorClips(w http.ResponseWriter, r *http.Request) 
 		jsonError(w, "url query parameter is required", http.StatusBadRequest)
 		return
 	}
-	exists, runID, err := h.svc.HasPriorDoneRun(r.Context(), rawURL)
+	exists, runID, err := h.svc.HasPriorRunWithClips(r.Context(), rawURL)
 	if err != nil {
-		h.log.Error("has prior done run failed", "err", err)
+		h.log.Error("has prior run with clips failed", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -198,6 +198,23 @@ func (h *PipelineHandler) GetPriorClips(w http.ResponseWriter, r *http.Request) 
 	} else {
 		_ = json.NewEncoder(w).Encode(map[string]any{"exists": false})
 	}
+}
+
+// GetRunClips returns all clips for a pipeline run.
+// GET /api/pipeline/runs/{id}/clips
+func (h *PipelineHandler) GetRunClips(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseRunID(w, r)
+	if !ok {
+		return
+	}
+	clips, err := h.svc.ListClipsByRun(r.Context(), id)
+	if err != nil {
+		h.log.Error("list clips failed", "run_id", id, "err", err)
+		jsonError(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"clips": clips})
 }
 
 // parseRunID extracts the {id} path value and writes an error response on failure.

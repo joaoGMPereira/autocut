@@ -23,6 +23,7 @@ func NewRouter(
 	olh *handlers.OllamaHandler,
 	mlh *handlers.MediaLibraryHandler,
 	pvh *handlers.PreviewHandler,
+	th *handlers.ThumbnailHandler,
 ) http.Handler {
 	mux := http.NewServeMux()
 
@@ -32,6 +33,7 @@ func NewRouter(
 	mux.HandleFunc("GET /api/pipeline/runs/{id}", ph.GetRun)
 	mux.HandleFunc("GET /api/pipeline/runs/{id}/stream", ph.GetRunStream)
 	mux.HandleFunc("POST /api/pipeline/runs/{id}/advance", ph.PostAdvance)
+	mux.HandleFunc("GET /api/pipeline/runs/{id}/clips", ph.GetRunClips)
 	mux.HandleFunc("POST /api/pipeline/runs/{id}/cancel", ph.PostCancel)
 	mux.HandleFunc("POST /api/pipeline/runs/{id}/redownload", ph.PostRedownload)
 
@@ -88,6 +90,15 @@ func NewRouter(
 	// Preview endpoints
 	mux.HandleFunc("POST /api/pipeline/runs/{id}/preview", pvh.PostPreview)
 	mux.HandleFunc("GET /api/pipeline/runs/{id}/preview/file", pvh.GetPreviewFile)
+
+	// Thumbnail endpoints
+	mux.HandleFunc("POST /api/thumbnail/runs/{id}/generate", th.PostBatchGenerate)
+	mux.HandleFunc("POST /api/thumbnail/runs/{id}/clips/{clipId}/generate", th.PostSingleGenerate)
+	mux.HandleFunc("GET /api/thumbnail/runs/{id}/clips/{clipId}/file", th.GetThumbnailFile)
+	mux.HandleFunc("GET /api/thumbnail/fonts", th.GetFonts)
+	mux.HandleFunc("GET /api/thumbnail/templates", th.GetTemplates)
+	mux.HandleFunc("POST /api/thumbnail/templates", th.PostTemplate)
+	mux.HandleFunc("DELETE /api/thumbnail/templates/{name}", th.DeleteTemplate)
 
 	// Stats endpoint
 	mux.HandleFunc("GET /api/stats", sth.GetStats)

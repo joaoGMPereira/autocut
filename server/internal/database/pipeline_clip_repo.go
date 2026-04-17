@@ -74,6 +74,16 @@ func (r *PipelineClipRepo) UpdateFilePath(ctx context.Context, clipID int64, fil
 	return nil
 }
 
+// UpdateThumbnailPath updates the thumbnail_path and thumbnail_style for a given clip.
+func (r *PipelineClipRepo) UpdateThumbnailPath(ctx context.Context, clipID int64, thumbnailPath, thumbnailStyle string) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE pipeline_clips SET thumbnail_path = ?, thumbnail_style = ? WHERE id = ?", thumbnailPath, thumbnailStyle, clipID)
+	if err != nil {
+		return fmt.Errorf("update thumbnail_path pipeline_clip %d: %w", clipID, err)
+	}
+	return nil
+}
+
 // UpdateStatus updates the upload_status for a given clip.
 func (r *PipelineClipRepo) UpdateStatus(ctx context.Context, clipID int64, status string) error {
 	_, err := r.db.ExecContext(ctx,
@@ -82,6 +92,28 @@ func (r *PipelineClipRepo) UpdateStatus(ctx context.Context, clipID int64, statu
 		return fmt.Errorf("update upload_status pipeline_clip %d: %w", clipID, err)
 	}
 	return nil
+}
+
+// FindReadyClipsByRunID returns clips with valid file_path and status "ready" for a given run.
+func (r *PipelineClipRepo) FindReadyClipsByRunID(ctx context.Context, runID int64) ([]PipelineClip, error) {
+	rows, err := r.db.QueryContext(ctx,
+		"SELECT "+pipelineClipCols+" FROM pipeline_clips WHERE run_id = ? AND file_path != '' AND upload_status = 'ready' ORDER BY start_sec ASC",
+		runID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("find ready clips for run %d: %w", runID, err)
+	}
+	defer rows.Close()
+
+	var result []PipelineClip
+	for rows.Next() {
+		c, err := scanPipelineClipRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, *c)
+	}
+	return result, rows.Err()
 }
 
 func scanPipelineClipRows(rows *sql.Rows) (*PipelineClip, error) {

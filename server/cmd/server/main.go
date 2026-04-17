@@ -105,6 +105,7 @@ func main() {
 	statsHandler := handlers.NewStatsHandler(stats.New())
 	mediaLibraryHandler := handlers.NewMediaLibraryHandler(settingRepo)
 	previewHandler := handlers.NewPreviewHandler(repo, channelCfgRepo, settingRepo, *dir, sseHub)
+	thumbnailHandler := handlers.NewThumbnailHandler(repo, clipRepo, settingRepo, sseHub, *dir)
 
 	router := api.NewRouter(
 		pipelineHandler,
@@ -118,6 +119,7 @@ func main() {
 		ollamaHandler,
 		mediaLibraryHandler,
 		previewHandler,
+		thumbnailHandler,
 	)
 
 	addr := *host + ":" + *port

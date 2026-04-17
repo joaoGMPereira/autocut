@@ -21,6 +21,7 @@ import type {
   SSEPreviewReadyPayload,
   SSEPreviewErrorPayload,
   GatePayload,
+  ThumbnailProgress,
 } from '@/types/pipeline';
 import { GATE_STATE_ORDER } from '@/types/pipeline';
 import { useDispatcherStore } from '@/store/dispatcherStore';
@@ -76,6 +77,9 @@ interface PipelineState {
   previewPercent: number;
   previewUrl: string | null;
   previewError: string | null;
+
+  // Thumbnail generation state
+  thumbnailProgress: ThumbnailProgress | null;
 
   // Navigation history
   navHistory: RunState[];
@@ -148,6 +152,9 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
   previewPercent: 0,
   previewUrl: null,
   previewError: null,
+
+  // Thumbnail generation state
+  thumbnailProgress: null,
 
   navHistory: [],
   navIndex: 0,
@@ -296,6 +303,7 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
       videoReused: false,
       pendingReuse: false,
       pendingMode: null,
+      thumbnailProgress: null,
     });
   },
 
@@ -428,16 +436,23 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
     log.info('[pipelineStore] submitThumbnailConfig', { id });
     const payload: GatePayload = { kind: 'thumbnail', default_style: req.default_style, clip_overrides: req.clip_overrides };
     get().recordGateSubmission('WAITING_THUMBNAIL_CONFIG', payload);
-    console.log('[pipelineStore] recordGateSubmission', 'WAITING_THUMBNAIL_CONFIG', payload);
     try {
-      const res = await fetch(`${goUrl}/api/pipeline/runs/${id}/gates/thumbnail-config`, {
+      const res = await fetch(`${goUrl}/api/pipeline/runs/${id}/advance`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(req),
+        body: JSON.stringify({}),
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
       const data = (await res.json()) as { state: RunState };
-      set((s) => ({ run: s.run?.id === id ? { ...s.run, state: data.state } : s.run }));
+      set((s) => {
+        const newNavHistory = [...s.navHistory, data.state];
+        return {
+          run: s.run?.id === id ? { ...s.run, state: data.state } : s.run,
+          navHistory: newNavHistory,
+          navIndex: newNavHistory.length - 1,
+          thumbnailProgress: null,
+        };
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'submitThumbnailConfig failed';
       log.error('[pipelineStore] submitThumbnailConfig failed', { error: msg });
@@ -794,6 +809,32 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
         if (evt.type === 'preview_error') {
           const payload = evt.data as SSEPreviewErrorPayload;
           set({ previewStatus: 'error', previewError: payload.message, previewPercent: 0 });
+        }
+
+        if (evt.type === 'thumbnail_progress') {
+          const data = evt.data as unknown as {
+            run_id: number; clip_id: number; clip_index: number; total_clips: number;
+            status: string; thumbnail_path?: string; error?: string;
+            success_count?: number; error_count?: number;
+          };
+          set((s) => ({
+            thumbnailProgress: {
+              clipId: data.clip_id,
+              clipIndex: data.clip_index,
+              totalClips: data.total_clips,
+              status: data.status as ThumbnailProgress['status'],
+              thumbnailPath: data.thumbnail_path,
+              error: data.error,
+              successCount: data.success_count,
+              errorCount: data.error_count,
+            },
+            // Update clip's thumbnail_path in local state when done
+            clips: data.status === 'done' && data.thumbnail_path
+              ? s.clips.map((c) =>
+                  c.id === data.clip_id ? { ...c, thumbnail_path: data.thumbnail_path! } : c
+                )
+              : s.clips,
+          }));
         }
 
         if (evt.type === 'done') {

@@ -113,9 +113,9 @@ func (d *YouTubeDownloader) ExtractMetadata(rawURL string) (VideoInfo, error) {
 	})
 }
 
-// extractVideoID parses the YouTube video ID from a URL.
+// ExtractVideoID parses the YouTube video ID from a URL.
 // Supports standard watch URLs (v= param) and short youtu.be URLs.
-func extractVideoID(rawURL string) string {
+func ExtractVideoID(rawURL string) string {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return ""
@@ -241,7 +241,7 @@ func buildDownloadArgs(strategy DownloadStrategy, outputTemplate, videoURL strin
 // The executor is called at least twice: once for the download, once for metadata.
 func (d *YouTubeDownloader) Download(videoURL, outDir string) (VideoInfo, error) {
 	d.reporter.Report(d.jobID, progress.Event{Stage: "metadata", Percent: -1})
-	videoID := extractVideoID(videoURL)
+	videoID := ExtractVideoID(videoURL)
 	outputTemplate := filepath.Join(outDir, videoID+".%(ext)s")
 	strategies := downloadStrategies(1080)
 

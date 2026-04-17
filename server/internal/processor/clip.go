@@ -24,6 +24,7 @@ type ClipRequest struct {
 	BlurEdgePct    float64         // 0=disabled, 1-100=edge blur percentage
 	NoiseStrength  float64         // 0=disabled, 1-10=noise strength
 	TranscriptPath string          // optional: path to transcript JSON for real captions
+	OutputPath     string          // optional: explicit output path (overrides default {dataDir}/clips/{runID}_{clipID}.mp4)
 	OnProgress     func(float64)   // callback: percent 0–100
 }
 
@@ -38,7 +39,10 @@ func GenerateClip(ctx context.Context, req ClipRequest) (string, error) {
 		return "", fmt.Errorf("create clips dir: %w", err)
 	}
 
-	outPath := filepath.Join(clipDir, fmt.Sprintf("%d_%d.mp4", req.RunID, req.ClipID))
+	outPath := req.OutputPath
+	if outPath == "" {
+		outPath = filepath.Join(clipDir, fmt.Sprintf("%d_%d.mp4", req.RunID, req.ClipID))
+	}
 
 	startSec := int(req.StartSec)
 	durationSec := int64(req.EndSec - req.StartSec)

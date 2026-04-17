@@ -123,6 +123,11 @@ func (s *Service) HasPriorDoneRun(ctx context.Context, url string) (bool, int64,
 	return s.repo.HasPriorDoneRun(ctx, url)
 }
 
+// HasPriorRunWithClips checks if any prior run for the given URL has ready clips.
+func (s *Service) HasPriorRunWithClips(ctx context.Context, url string) (bool, int64, error) {
+	return s.repo.HasPriorRunWithClips(ctx, url)
+}
+
 // GetByID returns the pipeline run with the given ID.
 func (s *Service) GetByID(ctx context.Context, id int64) (*database.PipelineRun, error) {
 	run, err := s.repo.GetByID(ctx, id)
@@ -133,6 +138,11 @@ func (s *Service) GetByID(ctx context.Context, id int64) (*database.PipelineRun,
 		return nil, fmt.Errorf("get pipeline run %d: %w", id, err)
 	}
 	return run, nil
+}
+
+// ListClipsByRun returns all clips for a pipeline run.
+func (s *Service) ListClipsByRun(ctx context.Context, runID int64) ([]database.PipelineClip, error) {
+	return s.clipRepo.ListByRun(ctx, runID)
 }
 
 // AdvanceResult holds the outcome of an Advance call.
@@ -673,6 +683,35 @@ func (s *Service) runClipGeneration(id int64) {
 		return
 	}
 
+	// Check for clip reuse (skip_regenerate toggle from mode config)
+	var reuseCfg struct {
+		SkipRegenerate bool `json:"skip_regenerate"`
+	}
+	_ = json.Unmarshal([]byte(run.ModeConfigJSON), &reuseCfg)
+
+	if reuseCfg.SkipRegenerate && run.URL != "" {
+		_, priorRunID, findErr := s.repo.HasPriorRunWithClips(ctx, run.URL)
+		if findErr != nil {
+			log.Warn("prior run lookup failed, proceeding with fresh generation", "err", findErr)
+		} else if priorRunID > 0 && priorRunID != id {
+			priorClips, clipsErr := s.clipRepo.FindReadyClipsByRunID(ctx, priorRunID)
+			if clipsErr != nil {
+				log.Warn("prior clips lookup failed, proceeding with fresh generation", "err", clipsErr)
+			} else if len(priorClips) > 0 && allFilesExist(priorClips) {
+				if s.reuseClips(ctx, id, priorClips, log) {
+					log.Info("reused clips from prior run", "source_run", priorRunID, "count", len(priorClips))
+					s.hub.Publish(jobKey, hub.SSEEvent{
+						Type: "phase_progress",
+						Data: phaseProgressPayload{RunID: id, Phase: "cut", PercentDone: 100},
+					})
+					s.advanceClipGenDone(id)
+					return
+				}
+				log.Warn("clip reuse failed, falling through to fresh generation")
+			}
+		}
+	}
+
 	// Load channel config for effect layers
 	var channelCfg database.ChannelConfig
 	if run.ChannelID.Valid && s.channelCfgRepo != nil {
@@ -813,17 +852,23 @@ func (s *Service) generateClipsFromInputs(ctx context.Context, id int64, run *da
 	}
 
 	// Ensure output directory exists before Phase B.
-	clipsDir := filepath.Join(s.dataDir, "clips")
+	// Path pattern: clips/{videoID}_{totalClips}/{videoID}_clip_{N}.mp4
+	videoID := downloader.ExtractVideoID(run.URL)
+	if videoID == "" {
+		videoID = fmt.Sprintf("run_%d", id)
+	}
+	clipsSubDir := fmt.Sprintf("%s_%d", videoID, len(inputs))
+	clipsDir := filepath.Join(s.dataDir, "clips", clipsSubDir)
 	if err := os.MkdirAll(clipsDir, 0o755); err != nil {
 		publishError(fmt.Sprintf("create clips dir: %s", err))
 		return
 	}
 
-	// Phase B: sequential stream copy → rawPath = {clipsDir}/{runID}_{clipID}_raw.mp4
+	// Phase B: sequential stream copy → rawPath = {clipsDir}/{videoID}_clip_{N}_raw.mp4
 	rawPaths := make([]string, len(inputs))
 	for i, inp := range inputs {
 		info := infos[i]
-		rawPath := filepath.Join(clipsDir, fmt.Sprintf("%d_%d_raw.mp4", id, info.clipID))
+		rawPath := filepath.Join(clipsDir, fmt.Sprintf("%s_clip_%d_raw.mp4", videoID, i+1))
 
 		err := processor.CutSegment(ctx, run.VideoPath, inp.startSec, inp.endSec-inp.startSec, rawPath, nil)
 		if err != nil {
@@ -891,12 +936,14 @@ func (s *Service) generateClipsFromInputs(ctx context.Context, id int64, run *da
 		if rawPath == "" {
 			continue
 		}
+		clipNum := i + 1
 		wg.Add(1)
-		go func(clipInfo segInfo, rawPath string) {
+		go func(clipInfo segInfo, rawPath string, clipNum int) {
 			defer wg.Done()
 
 			clipID := clipInfo.clipID
 			dur := clipInfo.dur
+			outPath := filepath.Join(clipsDir, fmt.Sprintf("%s_clip_%d.mp4", videoID, clipNum))
 
 			clipReq := processor.ClipRequest{
 				RunID:          id,
@@ -910,6 +957,7 @@ func (s *Service) generateClipsFromInputs(ctx context.Context, id int64, run *da
 				BlurEdgePct:    blurEdgePct,
 				NoiseStrength:  noiseStrength,
 				TranscriptPath: "",
+				OutputPath:     outPath,
 				OnProgress: func(pct float64) {
 					cid := clipID
 					s.hub.Publish(jobKey, hub.SSEEvent{
@@ -937,7 +985,7 @@ func (s *Service) generateClipsFromInputs(ctx context.Context, id int64, run *da
 			clipPcts[clipID] = 100
 			emitOverall()
 			mu.Unlock()
-		}(info, rawPath)
+		}(info, rawPath, clipNum)
 	}
 
 	wg.Wait()
@@ -962,6 +1010,60 @@ func (s *Service) advanceClipGenDone(id int64) {
 		Type: "state_changed",
 		Data: stateChangedPayload{RunID: id, State: StateWaitingThumbnailConfig},
 	})
+}
+
+// allFilesExist returns true if every clip's FilePath exists on disk.
+func allFilesExist(clips []database.PipelineClip) bool {
+	for _, c := range clips {
+		if _, err := os.Stat(c.FilePath); err != nil {
+			return false
+		}
+	}
+	return true
+}
+
+// reuseClips reuses clip files from a prior run by pointing new DB rows to existing files.
+// The files already live in clips/{videoID}_{N}/ so no copy is needed — just insert DB rows.
+// Returns true on success, false if any step fails (caller should fall through to fresh generation).
+func (s *Service) reuseClips(ctx context.Context, runID int64, clips []database.PipelineClip, log *slog.Logger) bool {
+	for i, src := range clips {
+		newClip := &database.PipelineClip{
+			RunID:          runID,
+			StartSec:       src.StartSec,
+			EndSec:         src.EndSec,
+			DurationSec:    src.DurationSec,
+			Title:          src.Title,
+			Description:    src.Description,
+			Tags:           src.Tags,
+			ThumbnailStyle: src.ThumbnailStyle,
+			IsSelected:     src.IsSelected,
+		}
+		newClipID, err := s.clipRepo.Create(ctx, newClip)
+		if err != nil {
+			log.Error("insert reused clip row", "src_clip", src.ID, "err", err)
+			return false
+		}
+
+		// Point to existing file — no copy needed since path is video-based, not run-based
+		if err := s.clipRepo.UpdateFilePath(ctx, newClipID, src.FilePath); err != nil {
+			log.Error("update reused clip file_path", "err", err)
+			return false
+		}
+		if err := s.clipRepo.UpdateStatus(ctx, newClipID, "ready"); err != nil {
+			log.Error("update reused clip status", "err", err)
+			return false
+		}
+
+		// Reuse thumbnail path if it exists
+		if src.ThumbnailPath != "" {
+			if _, statErr := os.Stat(src.ThumbnailPath); statErr == nil {
+				_ = s.clipRepo.UpdateThumbnailPath(ctx, newClipID, src.ThumbnailPath, src.ThumbnailStyle)
+			}
+		}
+
+		_ = i // suppress unused warning
+	}
+	return true
 }
 
 // copyFile copies src to dst using io.Copy.

@@ -250,6 +250,83 @@ export interface ThumbnailConfigRequest {
   clip_overrides?: ClipThumbnailOverride[];
 }
 
+// ── Thumbnail Generation Types ───────────────────────────────────────────────
+
+export interface ThumbnailConfig {
+  text: string;
+  font_family: string;
+  font_size: number;
+  text_color: string;
+  outline_color: string;
+  stroke_width: number;
+  blur_enabled: boolean;
+  blur_amount: number;
+  darken_enabled: boolean;
+  darken_amount: number;
+  center_scale: number;
+  corner_radius: number;
+  text_y_offset: number;
+  clip_texts: Record<string, string>;
+}
+
+export const DEFAULT_THUMBNAIL_CONFIG: ThumbnailConfig = {
+  text: '',
+  font_family: 'Impact',
+  font_size: 0,
+  text_color: '#FFFFFF',
+  outline_color: '#000000',
+  stroke_width: 4,
+  blur_enabled: true,
+  blur_amount: 25,
+  darken_enabled: true,
+  darken_amount: 0.30,
+  center_scale: 0.75,
+  corner_radius: 40,
+  text_y_offset: 321,
+  clip_texts: {},
+};
+
+export interface ThumbnailGenerateRequest {
+  config: ThumbnailConfig;
+}
+
+export interface ThumbnailBatchResponse {
+  job_id: string;
+  total_clips: number;
+}
+
+export interface ThumbnailSingleResponse {
+  clip_id: number;
+  thumbnail_path: string;
+}
+
+export interface FontInfo {
+  family: string;
+  path: string;
+}
+
+export interface FontListResponse {
+  fonts: FontInfo[];
+  default_font: string;
+}
+
+export interface ThumbnailTemplate {
+  name: string;
+  config: ThumbnailConfig;
+  created_at: number;
+}
+
+export interface ThumbnailProgress {
+  clipId: number;
+  clipIndex: number;
+  totalClips: number;
+  status: 'generating' | 'done' | 'error' | 'batch_done';
+  thumbnailPath?: string;
+  error?: string;
+  successCount?: number;
+  errorCount?: number;
+}
+
 export interface ClipMetadataUpdate {
   id: number;
   title: string;
@@ -336,6 +413,7 @@ export interface SSEEvent {
     | 'preview_progress'
     | 'preview_ready'
     | 'preview_error'
+    | 'thumbnail_progress'
     | 'done'
     | 'error'
     | 'cancelled'

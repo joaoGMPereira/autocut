@@ -294,6 +294,26 @@ func (r *PipelineRunRepo) HasPriorDoneRun(ctx context.Context, url string) (bool
 	return true, id, nil
 }
 
+// HasPriorRunWithClips checks if any prior run for the given URL has ready clips.
+// Returns (true, runID) if found, (false, 0) otherwise.
+func (r *PipelineRunRepo) HasPriorRunWithClips(ctx context.Context, url string) (bool, int64, error) {
+	var id int64
+	err := r.db.QueryRowContext(ctx,
+		`SELECT c.run_id FROM pipeline_clips c
+		 JOIN pipeline_runs r ON c.run_id = r.id
+		 WHERE r.url = ? AND c.file_path != '' AND c.upload_status = 'ready'
+		 ORDER BY r.id DESC LIMIT 1`,
+		url,
+	).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, 0, nil
+	}
+	if err != nil {
+		return false, 0, fmt.Errorf("has prior run with clips: %w", err)
+	}
+	return true, id, nil
+}
+
 // Finish transitions the run to a terminal state.
 func (r *PipelineRunRepo) Finish(ctx context.Context, id int64, state string, errMsg string) error {
 	now := time.Now().UnixMilli()
