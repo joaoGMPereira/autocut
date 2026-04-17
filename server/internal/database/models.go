@@ -282,6 +282,7 @@ type PipelineClip struct {
 	Description    string        `json:"description"`
 	Tags           string        `json:"tags"`
 	ThumbnailStyle string        `json:"thumbnail_style"`
+	ThumbnailText  string        `json:"thumbnail_text"`
 	IsSelected     bool          `json:"is_selected"`
 	StartSec       float64       `json:"start_sec"`
 	EndSec         float64       `json:"end_sec"`

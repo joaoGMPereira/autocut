@@ -32,6 +32,7 @@ var allMigrations = []migration{
 	{version: 14, name: "seed_channel_configs_and_defaults", fn: migrateV14},
 	{version: 15, name: "seed_overlay_individual_keys", fn: migrateV15},
 	{version: 16, name: "pipeline_run_thumbnail_url", fn: migrateV16},
+	{version: 17, name: "pipeline_clip_thumbnail_text", fn: migrateV17},
 }
 
 // migrateV1 creates all 11 application tables.
@@ -962,6 +963,11 @@ func migrateV15(tx *sql.Tx) error {
 // across sessions. Previously this was only available via the ephemeral SSE video_info event.
 func migrateV16(tx *sql.Tx) error {
 	_, err := tx.Exec(`ALTER TABLE pipeline_runs ADD COLUMN thumbnail_url TEXT NOT NULL DEFAULT '';`)
+	return err
+}
+
+func migrateV17(tx *sql.Tx) error {
+	_, err := tx.Exec(`ALTER TABLE pipeline_clips ADD COLUMN thumbnail_text TEXT NOT NULL DEFAULT '';`)
 	return err
 }
 

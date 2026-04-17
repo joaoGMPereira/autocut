@@ -18,7 +18,7 @@ func NewPipelineClipRepo(db *sql.DB, log *slog.Logger) *PipelineClipRepo {
 	return &PipelineClipRepo{db: db, log: log.With("repo", "pipeline_clip")}
 }
 
-const pipelineClipCols = `id, run_id, highlight_id, file_path, thumbnail_path, title, description, tags, thumbnail_style, is_selected, start_sec, end_sec, duration_sec, upload_status, youtube_id, created_at`
+const pipelineClipCols = `id, run_id, highlight_id, file_path, thumbnail_path, title, description, tags, thumbnail_style, thumbnail_text, is_selected, start_sec, end_sec, duration_sec, upload_status, youtube_id, created_at`
 
 // Create inserts a new pipeline clip and returns its ID.
 func (r *PipelineClipRepo) Create(ctx context.Context, c *PipelineClip) (int64, error) {
@@ -32,9 +32,9 @@ func (r *PipelineClipRepo) Create(ctx context.Context, c *PipelineClip) (int64, 
 		thumbnailStyle = "default"
 	}
 	res, err := r.db.ExecContext(ctx,
-		`INSERT INTO pipeline_clips (run_id, highlight_id, file_path, thumbnail_path, title, description, tags, thumbnail_style, is_selected, start_sec, end_sec, duration_sec, upload_status, youtube_id, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		c.RunID, c.HighlightID, c.FilePath, c.ThumbnailPath, c.Title, c.Description, c.Tags, thumbnailStyle, c.IsSelected, c.StartSec, c.EndSec, c.DurationSec, uploadStatus, c.YouTubeID, now,
+		`INSERT INTO pipeline_clips (run_id, highlight_id, file_path, thumbnail_path, title, description, tags, thumbnail_style, thumbnail_text, is_selected, start_sec, end_sec, duration_sec, upload_status, youtube_id, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		c.RunID, c.HighlightID, c.FilePath, c.ThumbnailPath, c.Title, c.Description, c.Tags, thumbnailStyle, c.ThumbnailText, c.IsSelected, c.StartSec, c.EndSec, c.DurationSec, uploadStatus, c.YouTubeID, now,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("insert pipeline_clip: %w", err)
@@ -84,6 +84,17 @@ func (r *PipelineClipRepo) UpdateThumbnailPath(ctx context.Context, clipID int64
 	return nil
 }
 
+// UpdateMetadata updates the title, description, tags, and thumbnail_text for a given clip.
+func (r *PipelineClipRepo) UpdateMetadata(ctx context.Context, clipID int64, title, description, tags, thumbnailText string) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE pipeline_clips SET title = ?, description = ?, tags = ?, thumbnail_text = ? WHERE id = ?",
+		title, description, tags, thumbnailText, clipID)
+	if err != nil {
+		return fmt.Errorf("update metadata pipeline_clip %d: %w", clipID, err)
+	}
+	return nil
+}
+
 // UpdateStatus updates the upload_status for a given clip.
 func (r *PipelineClipRepo) UpdateStatus(ctx context.Context, clipID int64, status string) error {
 	_, err := r.db.ExecContext(ctx,
@@ -118,7 +129,7 @@ func (r *PipelineClipRepo) FindReadyClipsByRunID(ctx context.Context, runID int6
 
 func scanPipelineClipRows(rows *sql.Rows) (*PipelineClip, error) {
 	var c PipelineClip
-	err := rows.Scan(&c.ID, &c.RunID, &c.HighlightID, &c.FilePath, &c.ThumbnailPath, &c.Title, &c.Description, &c.Tags, &c.ThumbnailStyle, &c.IsSelected, &c.StartSec, &c.EndSec, &c.DurationSec, &c.UploadStatus, &c.YouTubeID, &c.CreatedAt)
+	err := rows.Scan(&c.ID, &c.RunID, &c.HighlightID, &c.FilePath, &c.ThumbnailPath, &c.Title, &c.Description, &c.Tags, &c.ThumbnailStyle, &c.ThumbnailText, &c.IsSelected, &c.StartSec, &c.EndSec, &c.DurationSec, &c.UploadStatus, &c.YouTubeID, &c.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("scan pipeline_clip: %w", err)
 	}
