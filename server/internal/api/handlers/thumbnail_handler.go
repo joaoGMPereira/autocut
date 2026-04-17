@@ -116,6 +116,11 @@ func (h *ThumbnailHandler) PostBatchGenerate(w http.ResponseWriter, r *http.Requ
 
 	jobID := fmt.Sprintf("thumb_%d", runID)
 
+	// Fallback: if frontend didn't send thumbnail_url, use the one persisted in the run.
+	if req.ThumbnailURL == "" && run.ThumbnailURL != "" {
+		req.ThumbnailURL = run.ThumbnailURL
+	}
+
 	// Launch async generation
 	go h.generator.GenerateBatch(context.Background(), runID, clips, req.Config, run.Mode, &req)
 
@@ -204,6 +209,11 @@ func (h *ThumbnailHandler) PostSingleGenerate(w http.ResponseWriter, r *http.Req
 			jsonError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+	}
+
+	// Fallback: if frontend didn't send thumbnail_url, use the one persisted in the run.
+	if req.ThumbnailURL == "" && run.ThumbnailURL != "" {
+		req.ThumbnailURL = run.ThumbnailURL
 	}
 
 	// Generate synchronously
@@ -390,15 +400,14 @@ func (h *ThumbnailHandler) DeleteTemplate(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// PostUploadBaseImage handles uploading a custom base image for landscape thumbnails.
+// PostUploadClipImage handles uploading a per-clip base image for landscape thumbnails.
 // POST /api/thumbnail/runs/{id}/base-image
-func (h *ThumbnailHandler) PostUploadBaseImage(w http.ResponseWriter, r *http.Request) {
+func (h *ThumbnailHandler) PostUploadClipImage(w http.ResponseWriter, r *http.Request) {
 	runID, ok := parseRunID(w, r)
 	if !ok {
 		return
 	}
 
-	// Validate run exists and is in correct state
 	run, err := h.runRepo.GetByID(r.Context(), runID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -413,12 +422,10 @@ func (h *ThumbnailHandler) PostUploadBaseImage(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Parse multipart (max 10MB)
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
 		jsonError(w, "invalid multipart form", http.StatusBadRequest)
 		return
 	}
-
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		jsonError(w, "missing 'file' in form data", http.StatusBadRequest)
@@ -426,14 +433,12 @@ func (h *ThumbnailHandler) PostUploadBaseImage(w http.ResponseWriter, r *http.Re
 	}
 	defer file.Close()
 
-	// Validate content type
 	contentType := header.Header.Get("Content-Type")
 	if !strings.HasPrefix(contentType, "image/") {
 		jsonError(w, "file must be an image (JPEG/PNG)", http.StatusBadRequest)
 		return
 	}
 
-	// Determine output directory -- find a clip for this run to get its directory
 	clips, err := h.clipRepo.ListByRun(r.Context(), runID)
 	if err != nil || len(clips) == 0 {
 		jsonError(w, "no clips found for this run", http.StatusBadRequest)
@@ -445,12 +450,11 @@ func (h *ThumbnailHandler) PostUploadBaseImage(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Determine extension
 	ext := filepath.Ext(header.Filename)
 	if ext == "" {
 		ext = ".jpg"
 	}
-	destPath := filepath.Join(destDir, "base_image"+ext)
+	destPath := filepath.Join(destDir, "clip_base_image"+ext)
 
 	out, err := os.Create(destPath)
 	if err != nil {

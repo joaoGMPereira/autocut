@@ -44,7 +44,6 @@ type LandscapeConfig struct {
 	ApplyGradient bool             `json:"apply_gradient"`
 	ApplyBlur     bool             `json:"apply_blur"`
 	ApplyDarken   bool             `json:"apply_darken"`
-	BaseImagePath string           `json:"base_image_path"`
 	TextPosition  string           `json:"text_position"` // "top_right", "top_left", "center", "bottom_center"
 	FontFamily    string           `json:"font_family"`
 	FontSize      int              `json:"font_size"`

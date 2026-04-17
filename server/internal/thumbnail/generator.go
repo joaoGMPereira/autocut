@@ -213,13 +213,7 @@ func (g *Generator) generateOne(ctx context.Context, runID int64, clip database.
 				}
 			}
 		}
-		// 2. Global custom base image
-		if sourcePath == clip.FilePath && req != nil && req.LandscapeConfig != nil && req.LandscapeConfig.BaseImagePath != "" {
-			if _, err := os.Stat(req.LandscapeConfig.BaseImagePath); err == nil {
-				sourcePath = req.LandscapeConfig.BaseImagePath
-			}
-		}
-		// 3. YouTube thumbnail download
+		// 2. YouTube thumbnail download
 		if sourcePath == clip.FilePath && req != nil && req.ThumbnailURL != "" {
 			downloaded, err := downloadThumbnail(req.ThumbnailURL, thumbDir)
 			if err == nil {
@@ -258,6 +252,18 @@ func (g *Generator) generateOne(ctx context.Context, runID int64, clip database.
 
 // downloadThumbnail downloads a remote image to dir and returns the local path.
 func downloadThumbnail(rawURL, dir string) (string, error) {
+	u, _ := url.Parse(rawURL)
+	filename := path.Base(u.Path)
+	if filename == "" || filename == "." {
+		filename = "base_thumbnail.jpg"
+	}
+	destPath := filepath.Join(dir, "base_"+filename)
+
+	// Reuse cached download if the file already exists and is non-empty.
+	if info, err := os.Stat(destPath); err == nil && info.Size() > 0 {
+		return destPath, nil
+	}
+
 	resp, err := http.Get(rawURL) //nolint:gosec // URL comes from server config, not user input
 	if err != nil {
 		return "", err
@@ -268,13 +274,6 @@ func downloadThumbnail(rawURL, dir string) (string, error) {
 		return "", fmt.Errorf("download failed: HTTP %d", resp.StatusCode)
 	}
 
-	u, _ := url.Parse(rawURL)
-	filename := path.Base(u.Path)
-	if filename == "" || filename == "." {
-		filename = "base_thumbnail.jpg"
-	}
-
-	destPath := filepath.Join(dir, "base_"+filename)
 	f, err := os.Create(destPath)
 	if err != nil {
 		return "", err

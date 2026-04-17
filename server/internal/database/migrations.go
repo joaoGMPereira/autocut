@@ -966,6 +966,7 @@ func migrateV16(tx *sql.Tx) error {
 	return err
 }
 
+// migrateV17 adds thumbnail_text to pipeline_clips for AI-generated thumbnail overlay text.
 func migrateV17(tx *sql.Tx) error {
 	_, err := tx.Exec(`ALTER TABLE pipeline_clips ADD COLUMN thumbnail_text TEXT NOT NULL DEFAULT '';`)
 	return err

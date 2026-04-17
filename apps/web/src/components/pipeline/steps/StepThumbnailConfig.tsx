@@ -37,7 +37,6 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
   // Config state
   const [config, setConfig] = useState<ThumbnailConfig>({ ...DEFAULT_THUMBNAIL_CONFIG });
   const [landConfig, setLandConfig] = useState<LandscapeThumbnailConfig>({ ...DEFAULT_LANDSCAPE_CONFIG });
-  const [baseImagePath, setBaseImagePath] = useState('');
   const [clipTexts, setClipTexts] = useState<Record<string, string>>({});
   const [clipBaseImages, setClipBaseImages] = useState<Record<string, string>>({});
 
@@ -96,7 +95,6 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
         body.landscape_config = {
           ...landConfig,
           clip_texts: clipTexts,
-          base_image_path: baseImagePath,
           clip_base_images: clipBaseImages,
         };
         if (videoInfo?.thumbnailUrl) {
@@ -117,7 +115,7 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
       log.error('Batch generation failed', { error: err instanceof Error ? err.message : 'Unknown' });
       setIsGenerating(false);
     }
-  }, [goUrl, activeRunId, config, clipTexts, isLandscapeMode, landConfig, baseImagePath, clipBaseImages, videoInfo]);
+  }, [goUrl, activeRunId, config, clipTexts, isLandscapeMode, landConfig, clipBaseImages, videoInfo]);
 
   // Upload per-clip base image
   const handleUploadClipBaseImage = useCallback(async (clipId: number, file: File) => {
@@ -154,7 +152,6 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
         body.landscape_config = {
           ...landConfig,
           clip_texts: { [String(clipId)]: text },
-          base_image_path: baseImagePath,
           ...(clipImg ? { clip_base_images: { [String(clipId)]: clipImg } } : {}),
         };
         if (videoInfo?.thumbnailUrl) {
@@ -179,7 +176,7 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
     } finally {
       setRegeneratingClipId(null);
     }
-  }, [goUrl, activeRunId, config, clipTexts, isLandscapeMode, landConfig, baseImagePath, videoInfo]);
+  }, [goUrl, activeRunId, config, clipTexts, isLandscapeMode, landConfig, videoInfo]);
 
   // Continue / Skip (advance pipeline)
   const handleContinue = useCallback(async () => {
@@ -293,11 +290,6 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
           config={landConfig}
           onChange={setLandConfig}
           fonts={fonts}
-          goUrl={goUrl}
-          activeRunId={activeRunId}
-          baseImagePath={baseImagePath}
-          onBaseImagePathChange={setBaseImagePath}
-          videoThumbnailUrl={videoInfo?.thumbnailUrl}
         />
       ) : (
         <div className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">

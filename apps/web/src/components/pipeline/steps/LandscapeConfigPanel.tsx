@@ -1,105 +1,26 @@
 'use client';
 
-import { useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import type { LandscapeThumbnailConfig, FontInfo } from '@/types/pipeline';
-import { createLogger } from '@/lib/logger';
-
-const log = createLogger('LandscapeConfigPanel');
 
 interface LandscapeConfigPanelProps {
   config: LandscapeThumbnailConfig;
   onChange: (config: LandscapeThumbnailConfig) => void;
   fonts: FontInfo[];
-  goUrl: string;
-  activeRunId: number | null;
-  baseImagePath: string;
-  onBaseImagePathChange: (path: string) => void;
-  videoThumbnailUrl?: string;
 }
 
 export function LandscapeConfigPanel({
-  config, onChange, fonts, goUrl, activeRunId,
-  baseImagePath, onBaseImagePathChange, videoThumbnailUrl,
+  config, onChange, fonts,
 }: LandscapeConfigPanelProps) {
-  const [uploading, setUploading] = useState(false);
-
   const set = <K extends keyof LandscapeThumbnailConfig>(
     key: K, value: LandscapeThumbnailConfig[K]
   ) => onChange({ ...config, [key]: value });
 
-  const handleUploadBaseImage = async (file: File) => {
-    if (!activeRunId) return;
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch(`${goUrl}/api/thumbnail/runs/${activeRunId}/base-image`, {
-        method: 'POST',
-        body: formData,
-      });
-      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-      const data = await res.json();
-      onBaseImagePathChange(data.path);
-    } catch (err) {
-      log.error('Base image upload failed', { error: err instanceof Error ? err.message : 'Unknown' });
-    } finally {
-      setUploading(false);
-    }
-  };
-
   return (
     <div className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
       <h3 className="text-sm font-medium text-zinc-300">Landscape Settings</h3>
-
-      {/* Base Image Section */}
-      <div className="space-y-2">
-        <Label className="text-xs text-zinc-400">Base Image</Label>
-        <div className="relative rounded overflow-hidden aspect-[16/9] bg-zinc-800">
-          {baseImagePath ? (
-            <div className="flex items-center justify-center h-full">
-              <span className="text-xs text-zinc-300">Custom image uploaded</span>
-            </div>
-          ) : videoThumbnailUrl ? (
-            <img
-              src={videoThumbnailUrl}
-              alt="YouTube thumbnail"
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <span className="text-xs text-zinc-500">No YouTube thumbnail available</span>
-            </div>
-          )}
-          {baseImagePath && (
-            <span className="absolute top-1 left-1 text-[10px] bg-black/60 px-1 rounded text-zinc-300">
-              Custom
-            </span>
-          )}
-        </div>
-        <label className="inline-flex items-center gap-2 cursor-pointer text-xs text-blue-400 hover:text-blue-300">
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleUploadBaseImage(file);
-            }}
-          />
-          {uploading ? 'Uploading...' : 'Upload Custom Image (16:9)'}
-        </label>
-        {baseImagePath && (
-          <button
-            onClick={() => onBaseImagePathChange('')}
-            className="text-[10px] text-zinc-500 hover:text-zinc-400"
-          >
-            Reset to YouTube thumbnail
-          </button>
-        )}
-      </div>
 
       {/* Gradient Toggle + Colors */}
       <div className="flex items-center gap-3">

@@ -117,7 +117,7 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
         [clipId]: {
           title: data.title || prev[clipId]?.title || '',
           description: data.description || prev[clipId]?.description || '',
-          tags: Array.isArray(data.tags) ? data.tags.join(', ') : (data.tags || prev[clipId]?.tags || ''),
+          tags: Array.isArray(data.tags) ? data.tags.join(',') : (data.tags || prev[clipId]?.tags || ''),
           thumbnail_text: data.thumbnail_text || prev[clipId]?.thumbnail_text || '',
         },
       }));

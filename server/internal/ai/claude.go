@@ -124,9 +124,6 @@ func (c *ClaudeCLI) GenerateStream(ctx context.Context, req GenerateRequest, onC
 				// Result replaces accumulated text (it's the complete response)
 				result.Reset()
 				result.WriteString(resultText)
-				if onChunk != nil {
-					onChunk(resultText)
-				}
 			}
 		}
 		// Skip "system", "ping", etc.
