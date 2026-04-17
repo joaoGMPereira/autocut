@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/joaoGMPereira/autocut/server/internal/ai"
 	"github.com/joaoGMPereira/autocut/server/internal/api"
 	"github.com/joaoGMPereira/autocut/server/internal/api/handlers"
 	"github.com/joaoGMPereira/autocut/server/internal/configurator"
@@ -107,6 +108,14 @@ func main() {
 	previewHandler := handlers.NewPreviewHandler(repo, channelCfgRepo, settingRepo, *dir, sseHub)
 	thumbnailHandler := handlers.NewThumbnailHandler(repo, clipRepo, settingRepo, sseHub, *dir)
 
+	// Claude CLI + metadata generator
+	claudeCLI, claudeErr := ai.NewClaudeCLI()
+	if claudeErr != nil {
+		slog.Warn("claude CLI not available — metadata generation disabled", "err", claudeErr)
+	}
+	metadataGen := ai.NewMetadataGenerator(claudeCLI, repo, clipRepo, highlightRepo, channelCfgRepo, settingRepo, sseHub)
+	metadataHandler := handlers.NewMetadataHandler(repo, clipRepo, metadataGen, sseHub)
+
 	router := api.NewRouter(
 		pipelineHandler,
 		downloadHandler,
@@ -120,6 +129,7 @@ func main() {
 		mediaLibraryHandler,
 		previewHandler,
 		thumbnailHandler,
+		metadataHandler,
 	)
 
 	addr := *host + ":" + *port

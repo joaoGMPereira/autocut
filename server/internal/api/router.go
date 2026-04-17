@@ -24,6 +24,7 @@ func NewRouter(
 	mlh *handlers.MediaLibraryHandler,
 	pvh *handlers.PreviewHandler,
 	th *handlers.ThumbnailHandler,
+	mh *handlers.MetadataHandler,
 ) http.Handler {
 	mux := http.NewServeMux()
 
@@ -99,7 +100,12 @@ func NewRouter(
 	mux.HandleFunc("GET /api/thumbnail/templates", th.GetTemplates)
 	mux.HandleFunc("POST /api/thumbnail/templates", th.PostTemplate)
 	mux.HandleFunc("DELETE /api/thumbnail/templates/{name}", th.DeleteTemplate)
-	mux.HandleFunc("POST /api/thumbnail/runs/{id}/base-image", th.PostUploadBaseImage)
+	mux.HandleFunc("POST /api/thumbnail/runs/{id}/base-image", th.PostUploadClipImage)
+
+	// Metadata endpoints
+	mux.HandleFunc("POST /api/metadata/runs/{id}/generate", mh.PostBatchGenerate)
+	mux.HandleFunc("POST /api/metadata/runs/{id}/clips/{clipId}/generate", mh.PostSingleGenerate)
+	mux.HandleFunc("POST /api/pipeline/runs/{id}/gates/review-metadata", mh.PostReviewMetadata)
 
 	// Stats endpoint
 	mux.HandleFunc("GET /api/stats", sth.GetStats)
