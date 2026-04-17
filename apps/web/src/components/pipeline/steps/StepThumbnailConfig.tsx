@@ -10,8 +10,9 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
-import type { GatePayload, ThumbnailConfig, FontInfo, ThumbnailTemplate } from '@/types/pipeline';
-import { DEFAULT_THUMBNAIL_CONFIG } from '@/types/pipeline';
+import type { GatePayload, ThumbnailConfig, LandscapeThumbnailConfig, FontInfo, ThumbnailTemplate } from '@/types/pipeline';
+import { DEFAULT_THUMBNAIL_CONFIG, DEFAULT_LANDSCAPE_CONFIG } from '@/types/pipeline';
+import { LandscapeConfigPanel } from './LandscapeConfigPanel';
 
 const log = createLogger('StepThumbnailConfig');
 
@@ -27,10 +28,16 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
   const thumbnailProgress = usePipelineStore((s) => s.thumbnailProgress);
   const submitThumbnailConfig = usePipelineStore((s) => s.submitThumbnailConfig);
 
+  const run = usePipelineStore((s) => s.run);
+  const videoInfo = usePipelineStore((s) => s.videoInfo);
+  const isLandscapeMode = run?.mode === 'ai' || run?.mode === 'longform';
+
   const isHistorical = historical !== undefined;
 
   // Config state
   const [config, setConfig] = useState<ThumbnailConfig>({ ...DEFAULT_THUMBNAIL_CONFIG });
+  const [landConfig, setLandConfig] = useState<LandscapeThumbnailConfig>({ ...DEFAULT_LANDSCAPE_CONFIG });
+  const [baseImagePath, setBaseImagePath] = useState('');
   const [clipTexts, setClipTexts] = useState<Record<string, string>>({});
 
   // UI state
@@ -78,12 +85,21 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
   const handleGenerateAll = useCallback(async () => {
     if (!activeRunId) return;
     setIsGenerating(true);
-    log.info('Starting batch generation', { runId: activeRunId });
+    log.info('Starting batch generation', { runId: activeRunId, landscape: isLandscapeMode });
     try {
+      const body: Record<string, unknown> = {
+        config: { ...config, clip_texts: clipTexts },
+      };
+      if (isLandscapeMode) {
+        body.landscape_config = { ...landConfig, clip_texts: clipTexts, base_image_path: baseImagePath };
+        if (videoInfo?.thumbnailUrl) {
+          body.thumbnail_url = videoInfo.thumbnailUrl;
+        }
+      }
       const res = await fetch(`${goUrl}/api/thumbnail/runs/${activeRunId}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config: { ...config, clip_texts: clipTexts } }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const text = await res.text();
@@ -94,7 +110,7 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
       log.error('Batch generation failed', { error: err instanceof Error ? err.message : 'Unknown' });
       setIsGenerating(false);
     }
-  }, [goUrl, activeRunId, config, clipTexts]);
+  }, [goUrl, activeRunId, config, clipTexts, isLandscapeMode, landConfig, baseImagePath, videoInfo]);
 
   // Single clip regenerate
   const handleRegenerateSingle = useCallback(async (clipId: number) => {
@@ -102,10 +118,23 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
     setRegeneratingClipId(clipId);
     const text = clipTexts[String(clipId)] ?? config.text;
     try {
+      const body: Record<string, unknown> = {
+        config: { ...config, text },
+      };
+      if (isLandscapeMode) {
+        body.landscape_config = {
+          ...landConfig,
+          clip_texts: { [String(clipId)]: text },
+          base_image_path: baseImagePath,
+        };
+        if (videoInfo?.thumbnailUrl) {
+          body.thumbnail_url = videoInfo.thumbnailUrl;
+        }
+      }
       const res = await fetch(`${goUrl}/api/thumbnail/runs/${activeRunId}/clips/${clipId}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config: { ...config, text } }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
       const data = await res.json();
@@ -120,20 +149,21 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
     } finally {
       setRegeneratingClipId(null);
     }
-  }, [goUrl, activeRunId, config, clipTexts]);
+  }, [goUrl, activeRunId, config, clipTexts, isLandscapeMode, landConfig, baseImagePath, videoInfo]);
 
   // Continue / Skip (advance pipeline)
   const handleContinue = useCallback(async () => {
     if (!activeRunId) return;
+    const styleValue = isLandscapeMode ? 'landscape' : 'centered';
     if (isHistorical) {
       await usePipelineStore.getState().resubmitFromBacked(goUrl, 'WAITING_THUMBNAIL_CONFIG', {
         kind: 'thumbnail',
-        default_style: 'centered',
+        default_style: styleValue,
       });
     } else {
-      await submitThumbnailConfig(goUrl, activeRunId, { default_style: 'centered' });
+      await submitThumbnailConfig(goUrl, activeRunId, { default_style: styleValue });
     }
-  }, [goUrl, activeRunId, isHistorical, submitThumbnailConfig]);
+  }, [goUrl, activeRunId, isHistorical, isLandscapeMode, submitThumbnailConfig]);
 
   const handleSkip = useCallback(async () => {
     if (!activeRunId) return;
@@ -154,7 +184,12 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
       const res = await fetch(`${goUrl}/api/thumbnail/templates`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: templateName, config }),
+        body: JSON.stringify({
+          name: templateName,
+          config,
+          ...(isLandscapeMode && { landscape_config: landConfig }),
+          strategy_type: isLandscapeMode ? 'landscape' : 'shorts',
+        }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -171,6 +206,9 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
 
   // Load template
   const handleLoadTemplate = (tmpl: ThumbnailTemplate) => {
+    if (tmpl.landscape_config) {
+      setLandConfig({ ...tmpl.landscape_config, clip_texts: {} });
+    }
     setConfig({ ...tmpl.config, clip_texts: {} });
   };
 
@@ -198,6 +236,17 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
   // Check if any clip already has a thumbnail (for re-entry)
   const hasExistingThumbnails = clips.some((c) => c.thumbnail_path !== '');
 
+  // Filter templates by strategy type (T4.4)
+  const filteredTemplates = templates.filter((t) => {
+    if (isLandscapeMode) return t.strategy_type === 'landscape';
+    return !t.strategy_type || t.strategy_type === 'shorts';
+  });
+
+  const aspectClass = isLandscapeMode ? 'aspect-[16/9]' : 'aspect-[9/16]';
+  const gridClass = isLandscapeMode
+    ? 'grid grid-cols-1 gap-3 sm:grid-cols-2'
+    : 'grid grid-cols-1 gap-3 max-w-sm mx-auto';
+
   return (
     <div className="space-y-4 w-full max-w-3xl">
       <h2 className="text-xl font-semibold text-foreground">Thumbnail Configuration</h2>
@@ -208,12 +257,151 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
         </div>
       )}
 
-      {/* Config Panel */}
-      <div className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-        <h3 className="text-sm font-medium text-zinc-300">Visual Settings</h3>
+      {/* Config Panel — branch by mode */}
+      {isLandscapeMode ? (
+        <LandscapeConfigPanel
+          config={landConfig}
+          onChange={setLandConfig}
+          fonts={fonts}
+          goUrl={goUrl}
+          activeRunId={activeRunId}
+          baseImagePath={baseImagePath}
+          onBaseImagePathChange={setBaseImagePath}
+          videoThumbnailUrl={videoInfo?.thumbnailUrl}
+        />
+      ) : (
+        <div className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+          <h3 className="text-sm font-medium text-zinc-300">Visual Settings</h3>
 
-        {/* Global Text */}
-        <div className="space-y-1">
+          {/* Global Text */}
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-400">Overlay Text (global)</Label>
+            <Input
+              value={config.text}
+              onChange={(e) => setConfig((c) => ({ ...c, text: e.target.value }))}
+              placeholder="e.g. BEST MOMENT EVER"
+              maxLength={200}
+              className="bg-zinc-800 border-zinc-700"
+            />
+            <p className="text-[10px] text-zinc-500">Text is auto-uppercased. Max 200 chars.</p>
+          </div>
+
+          {/* Font Picker */}
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-400">Font Family</Label>
+            <select
+              value={config.font_family}
+              onChange={(e) => setConfig((c) => ({ ...c, font_family: e.target.value }))}
+              className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-foreground"
+            >
+              {fonts.map((f) => (
+                <option key={f.family} value={f.family}>{f.family}</option>
+              ))}
+              {fonts.length === 0 && <option value="Impact">Impact (default)</option>}
+            </select>
+          </div>
+
+          {/* Color pickers row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs text-zinc-400">Text Color</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={config.text_color}
+                  onChange={(e) => setConfig((c) => ({ ...c, text_color: e.target.value }))}
+                  className="h-8 w-8 cursor-pointer rounded border border-zinc-700"
+                />
+                <span className="text-xs text-zinc-400">{config.text_color}</span>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-zinc-400">Outline Color</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={config.outline_color}
+                  onChange={(e) => setConfig((c) => ({ ...c, outline_color: e.target.value }))}
+                  className="h-8 w-8 cursor-pointer rounded border border-zinc-700"
+                />
+                <span className="text-xs text-zinc-400">{config.outline_color}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Stroke Width */}
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-400">Stroke Width: {config.stroke_width}px</Label>
+            <Slider
+              value={[config.stroke_width]}
+              onValueChange={([v]) => setConfig((c) => ({ ...c, stroke_width: v }))}
+              min={0} max={20} step={1}
+            />
+          </div>
+
+          {/* Blur toggle + amount */}
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={config.blur_enabled}
+              onCheckedChange={(v) => setConfig((c) => ({ ...c, blur_enabled: v }))}
+            />
+            <Label className="text-xs text-zinc-400">Background Blur</Label>
+            {config.blur_enabled && (
+              <div className="flex-1">
+                <Slider
+                  value={[config.blur_amount]}
+                  onValueChange={([v]) => setConfig((c) => ({ ...c, blur_amount: v }))}
+                  min={1} max={100} step={1}
+                />
+                <span className="text-[10px] text-zinc-500">{config.blur_amount}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Darken toggle + amount */}
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={config.darken_enabled}
+              onCheckedChange={(v) => setConfig((c) => ({ ...c, darken_enabled: v }))}
+            />
+            <Label className="text-xs text-zinc-400">Darken Background</Label>
+            {config.darken_enabled && (
+              <div className="flex-1">
+                <Slider
+                  value={[Math.round(config.darken_amount * 100)]}
+                  onValueChange={([v]) => setConfig((c) => ({ ...c, darken_amount: v / 100 }))}
+                  min={0} max={100} step={1}
+                />
+                <span className="text-[10px] text-zinc-500">{Math.round(config.darken_amount * 100)}%</span>
+              </div>
+            )}
+          </div>
+
+          {/* Center Scale */}
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-400">Center Scale: {Math.round(config.center_scale * 100)}%</Label>
+            <Slider
+              value={[Math.round(config.center_scale * 100)]}
+              onValueChange={([v]) => setConfig((c) => ({ ...c, center_scale: v / 100 }))}
+              min={30} max={100} step={1}
+            />
+          </div>
+
+          {/* Corner Radius */}
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-400">Corner Radius: {config.corner_radius}px</Label>
+            <Slider
+              value={[config.corner_radius]}
+              onValueChange={([v]) => setConfig((c) => ({ ...c, corner_radius: v }))}
+              min={0} max={100} step={1}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Global text input (shown in landscape mode since the panel above doesn't have it) */}
+      {isLandscapeMode && (
+        <div className="space-y-1 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
           <Label className="text-xs text-zinc-400">Overlay Text (global)</Label>
           <Input
             value={config.text}
@@ -224,125 +412,14 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
           />
           <p className="text-[10px] text-zinc-500">Text is auto-uppercased. Max 200 chars.</p>
         </div>
-
-        {/* Font Picker */}
-        <div className="space-y-1">
-          <Label className="text-xs text-zinc-400">Font Family</Label>
-          <select
-            value={config.font_family}
-            onChange={(e) => setConfig((c) => ({ ...c, font_family: e.target.value }))}
-            className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-foreground"
-          >
-            {fonts.map((f) => (
-              <option key={f.family} value={f.family}>{f.family}</option>
-            ))}
-            {fonts.length === 0 && <option value="Impact">Impact (default)</option>}
-          </select>
-        </div>
-
-        {/* Color pickers row */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <Label className="text-xs text-zinc-400">Text Color</Label>
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={config.text_color}
-                onChange={(e) => setConfig((c) => ({ ...c, text_color: e.target.value }))}
-                className="h-8 w-8 cursor-pointer rounded border border-zinc-700"
-              />
-              <span className="text-xs text-zinc-400">{config.text_color}</span>
-            </div>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-zinc-400">Outline Color</Label>
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={config.outline_color}
-                onChange={(e) => setConfig((c) => ({ ...c, outline_color: e.target.value }))}
-                className="h-8 w-8 cursor-pointer rounded border border-zinc-700"
-              />
-              <span className="text-xs text-zinc-400">{config.outline_color}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Stroke Width */}
-        <div className="space-y-1">
-          <Label className="text-xs text-zinc-400">Stroke Width: {config.stroke_width}px</Label>
-          <Slider
-            value={[config.stroke_width]}
-            onValueChange={([v]) => setConfig((c) => ({ ...c, stroke_width: v }))}
-            min={0} max={20} step={1}
-          />
-        </div>
-
-        {/* Blur toggle + amount */}
-        <div className="flex items-center gap-3">
-          <Switch
-            checked={config.blur_enabled}
-            onCheckedChange={(v) => setConfig((c) => ({ ...c, blur_enabled: v }))}
-          />
-          <Label className="text-xs text-zinc-400">Background Blur</Label>
-          {config.blur_enabled && (
-            <div className="flex-1">
-              <Slider
-                value={[config.blur_amount]}
-                onValueChange={([v]) => setConfig((c) => ({ ...c, blur_amount: v }))}
-                min={1} max={100} step={1}
-              />
-              <span className="text-[10px] text-zinc-500">{config.blur_amount}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Darken toggle + amount */}
-        <div className="flex items-center gap-3">
-          <Switch
-            checked={config.darken_enabled}
-            onCheckedChange={(v) => setConfig((c) => ({ ...c, darken_enabled: v }))}
-          />
-          <Label className="text-xs text-zinc-400">Darken Background</Label>
-          {config.darken_enabled && (
-            <div className="flex-1">
-              <Slider
-                value={[Math.round(config.darken_amount * 100)]}
-                onValueChange={([v]) => setConfig((c) => ({ ...c, darken_amount: v / 100 }))}
-                min={0} max={100} step={1}
-              />
-              <span className="text-[10px] text-zinc-500">{Math.round(config.darken_amount * 100)}%</span>
-            </div>
-          )}
-        </div>
-
-        {/* Center Scale */}
-        <div className="space-y-1">
-          <Label className="text-xs text-zinc-400">Center Scale: {Math.round(config.center_scale * 100)}%</Label>
-          <Slider
-            value={[Math.round(config.center_scale * 100)]}
-            onValueChange={([v]) => setConfig((c) => ({ ...c, center_scale: v / 100 }))}
-            min={30} max={100} step={1}
-          />
-        </div>
-
-        {/* Corner Radius */}
-        <div className="space-y-1">
-          <Label className="text-xs text-zinc-400">Corner Radius: {config.corner_radius}px</Label>
-          <Slider
-            value={[config.corner_radius]}
-            onValueChange={([v]) => setConfig((c) => ({ ...c, corner_radius: v }))}
-            min={0} max={100} step={1}
-          />
-        </div>
-      </div>
+      )}
 
       {/* Templates */}
-      {templates.length > 0 && (
+      {filteredTemplates.length > 0 && (
         <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
           <h3 className="text-sm font-medium text-zinc-300">Templates</h3>
           <div className="flex flex-wrap gap-2">
-            {templates.map((t) => (
+            {filteredTemplates.map((t) => (
               <div key={t.name} className="flex items-center gap-1">
                 <Button variant="outline" size="xs" onClick={() => handleLoadTemplate(t)}>
                   {t.name}
@@ -409,18 +486,18 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
       {clips.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-sm font-medium text-zinc-300">Clips ({clips.length})</h3>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {clips.map((clip) => (
+          <div className={gridClass}>
+            {clips.map((clip, i) => (
               <div key={clip.id} className="space-y-1 rounded-lg border border-zinc-800 bg-zinc-900/50 p-2">
                 {/* Thumbnail preview */}
                 {clip.thumbnail_path ? (
                   <img
                     src={`${goUrl}/api/thumbnail/runs/${activeRunId}/clips/${clip.id}/file?t=${Date.now()}`}
                     alt={`Clip ${clip.id} thumbnail`}
-                    className="w-full rounded aspect-[9/16] object-cover bg-zinc-800"
+                    className={`w-full rounded ${aspectClass} object-cover bg-zinc-800`}
                   />
                 ) : (
-                  <div className="w-full rounded aspect-[9/16] bg-zinc-800 flex items-center justify-center">
+                  <div className={`w-full rounded ${aspectClass} bg-zinc-800 flex items-center justify-center`}>
                     <span className="text-xs text-zinc-500">No thumbnail</span>
                   </div>
                 )}
@@ -429,7 +506,7 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
                 <Input
                   value={clipTexts[String(clip.id)] ?? ''}
                   onChange={(e) => setClipTexts((prev) => ({ ...prev, [String(clip.id)]: e.target.value }))}
-                  placeholder={config.text || 'Per-clip text...'}
+                  placeholder={isLandscapeMode ? `PT${i + 1}` : (config.text || 'Per-clip text...')}
                   className="bg-zinc-800 border-zinc-700 text-xs h-7"
                 />
 

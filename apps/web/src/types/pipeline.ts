@@ -286,8 +286,46 @@ export const DEFAULT_THUMBNAIL_CONFIG: ThumbnailConfig = {
   clip_texts: {},
 };
 
+export interface LandscapeThumbnailConfig {
+  gradient_start: string;
+  gradient_end: string;
+  border_size: number;
+  corner_radius: number;
+  apply_gradient: boolean;
+  apply_blur: boolean;
+  apply_darken: boolean;
+  base_image_path: string;
+  text_position: string;
+  font_family: string;
+  font_size: number;
+  text_color: string;
+  outline_color: string;
+  stroke_width: number;
+  clip_texts: Record<string, string>;
+}
+
+export const DEFAULT_LANDSCAPE_CONFIG: LandscapeThumbnailConfig = {
+  gradient_start: '#F27121',
+  gradient_end: '#8A2387',
+  border_size: 30,
+  corner_radius: 40,
+  apply_gradient: true,
+  apply_blur: false,
+  apply_darken: false,
+  base_image_path: '',
+  text_position: 'top_right',
+  font_family: 'Impact',
+  font_size: 0,
+  text_color: '#FFD700',
+  outline_color: '#000000',
+  stroke_width: 8,
+  clip_texts: {},
+};
+
 export interface ThumbnailGenerateRequest {
   config: ThumbnailConfig;
+  landscape_config?: LandscapeThumbnailConfig;
+  thumbnail_url?: string;
 }
 
 export interface ThumbnailBatchResponse {
@@ -313,6 +351,8 @@ export interface FontListResponse {
 export interface ThumbnailTemplate {
   name: string;
   config: ThumbnailConfig;
+  landscape_config?: LandscapeThumbnailConfig;
+  strategy_type: 'shorts' | 'landscape';
   created_at: number;
 }
 
