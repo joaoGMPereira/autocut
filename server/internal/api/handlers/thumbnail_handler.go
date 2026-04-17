@@ -57,12 +57,6 @@ func (h *ThumbnailHandler) PostBatchGenerate(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Check ffmpeg availability
-	if err := thumbnail.CheckFFmpegAvailable(); err != nil {
-		jsonError(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	// Validate run state
 	run, err := h.runRepo.GetByID(r.Context(), runID)
 	if err != nil {
@@ -78,6 +72,20 @@ func (h *ThumbnailHandler) PostBatchGenerate(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Check tool availability based on mode
+	isLandscape := run.Mode == "ai" || run.Mode == "longform"
+	if isLandscape {
+		if err := thumbnail.CheckImageMagickAvailable(); err != nil {
+			jsonError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		if err := thumbnail.CheckFFmpegAvailable(); err != nil {
+			jsonError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
 	// Parse request
 	var req thumbnail.GenerateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -87,6 +95,12 @@ func (h *ThumbnailHandler) PostBatchGenerate(w http.ResponseWriter, r *http.Requ
 	if err := req.Config.Validate(); err != nil {
 		jsonError(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if isLandscape && req.LandscapeConfig != nil {
+		if err := req.LandscapeConfig.Validate(); err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 
 	// Load clips
@@ -128,12 +142,6 @@ func (h *ThumbnailHandler) PostSingleGenerate(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Check ffmpeg
-	if err := thumbnail.CheckFFmpegAvailable(); err != nil {
-		jsonError(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	// Validate run state
 	run, err := h.runRepo.GetByID(r.Context(), runID)
 	if err != nil {
@@ -147,6 +155,20 @@ func (h *ThumbnailHandler) PostSingleGenerate(w http.ResponseWriter, r *http.Req
 	if run.State != "WAITING_THUMBNAIL_CONFIG" {
 		jsonError(w, fmt.Sprintf("run not in WAITING_THUMBNAIL_CONFIG state (current: %s)", run.State), http.StatusConflict)
 		return
+	}
+
+	// Check tool availability based on mode
+	isLandscape := run.Mode == "ai" || run.Mode == "longform"
+	if isLandscape {
+		if err := thumbnail.CheckImageMagickAvailable(); err != nil {
+			jsonError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		if err := thumbnail.CheckFFmpegAvailable(); err != nil {
+			jsonError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	// Find the clip
@@ -176,6 +198,12 @@ func (h *ThumbnailHandler) PostSingleGenerate(w http.ResponseWriter, r *http.Req
 	if err := req.Config.Validate(); err != nil {
 		jsonError(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if isLandscape && req.LandscapeConfig != nil {
+		if err := req.LandscapeConfig.Validate(); err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 
 	// Generate synchronously

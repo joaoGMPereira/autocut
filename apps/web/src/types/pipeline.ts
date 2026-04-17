@@ -361,6 +361,7 @@ export interface ThumbnailProgress {
   clipIndex: number;
   totalClips: number;
   status: 'generating' | 'done' | 'error' | 'batch_done';
+  strategy?: 'shorts' | 'landscape';
   thumbnailPath?: string;
   error?: string;
   successCount?: number;

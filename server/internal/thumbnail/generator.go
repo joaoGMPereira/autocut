@@ -23,6 +23,7 @@ type thumbnailProgressPayload struct {
 	ClipIndex     int    `json:"clip_index"`
 	TotalClips    int    `json:"total_clips"`
 	Status        string `json:"status"`
+	Strategy      string `json:"strategy,omitempty"`
 	ThumbnailPath string `json:"thumbnail_path,omitempty"`
 	Error         string `json:"error,omitempty"`
 	SuccessCount  int    `json:"success_count,omitempty"`
@@ -86,6 +87,7 @@ func (g *Generator) GenerateBatch(ctx context.Context, runID int64, clips []data
 				ClipIndex:  i + 1,
 				TotalClips: total,
 				Status:     "generating",
+				Strategy:   strategy.Name(),
 			},
 		})
 
@@ -101,6 +103,7 @@ func (g *Generator) GenerateBatch(ctx context.Context, runID int64, clips []data
 					ClipIndex:  i + 1,
 					TotalClips: total,
 					Status:     "error",
+					Strategy:   strategy.Name(),
 					Error:      err.Error(),
 				},
 			})
@@ -122,6 +125,7 @@ func (g *Generator) GenerateBatch(ctx context.Context, runID int64, clips []data
 				ClipIndex:     i + 1,
 				TotalClips:    total,
 				Status:        "done",
+				Strategy:      strategy.Name(),
 				ThumbnailPath: thumbPath,
 			},
 		})
@@ -136,6 +140,7 @@ func (g *Generator) GenerateBatch(ctx context.Context, runID int64, clips []data
 			ClipIndex:    total,
 			TotalClips:   total,
 			Status:       "batch_done",
+			Strategy:     strategy.Name(),
 			SuccessCount: successCount,
 			ErrorCount:   errorCount,
 		},
