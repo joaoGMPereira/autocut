@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -358,6 +360,84 @@ func (h *ThumbnailHandler) DeleteTemplate(w http.ResponseWriter, r *http.Request
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// PostUploadBaseImage handles uploading a custom base image for landscape thumbnails.
+// POST /api/thumbnail/runs/{id}/base-image
+func (h *ThumbnailHandler) PostUploadBaseImage(w http.ResponseWriter, r *http.Request) {
+	runID, ok := parseRunID(w, r)
+	if !ok {
+		return
+	}
+
+	// Validate run exists and is in correct state
+	run, err := h.runRepo.GetByID(r.Context(), runID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			jsonError(w, "run not found", http.StatusNotFound)
+			return
+		}
+		jsonError(w, "failed to load run", http.StatusInternalServerError)
+		return
+	}
+	if run.State != "WAITING_THUMBNAIL_CONFIG" {
+		jsonError(w, fmt.Sprintf("run not in WAITING_THUMBNAIL_CONFIG state (current: %s)", run.State), http.StatusConflict)
+		return
+	}
+
+	// Parse multipart (max 10MB)
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		jsonError(w, "invalid multipart form", http.StatusBadRequest)
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		jsonError(w, "missing 'file' in form data", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// Validate content type
+	contentType := header.Header.Get("Content-Type")
+	if !strings.HasPrefix(contentType, "image/") {
+		jsonError(w, "file must be an image (JPEG/PNG)", http.StatusBadRequest)
+		return
+	}
+
+	// Determine output directory -- find a clip for this run to get its directory
+	clips, err := h.clipRepo.ListByRun(r.Context(), runID)
+	if err != nil || len(clips) == 0 {
+		jsonError(w, "no clips found for this run", http.StatusBadRequest)
+		return
+	}
+	destDir := filepath.Dir(clips[0].FilePath)
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		jsonError(w, "failed to create directory", http.StatusInternalServerError)
+		return
+	}
+
+	// Determine extension
+	ext := filepath.Ext(header.Filename)
+	if ext == "" {
+		ext = ".jpg"
+	}
+	destPath := filepath.Join(destDir, "base_image"+ext)
+
+	out, err := os.Create(destPath)
+	if err != nil {
+		jsonError(w, "failed to create file", http.StatusInternalServerError)
+		return
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, file); err != nil {
+		jsonError(w, "failed to save file", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"path": destPath})
 }
 
 // slugify converts a template name to a URL-safe key suffix.

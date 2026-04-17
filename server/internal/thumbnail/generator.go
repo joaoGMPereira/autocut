@@ -3,8 +3,12 @@ package thumbnail
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -49,8 +53,7 @@ func NewGenerator(clipRepo *database.PipelineClipRepo, h *hub.SSEHub, dataDir st
 func resolveStrategy(mode string) Strategy {
 	switch mode {
 	case "ai", "longform":
-		// TODO: return &LandscapeStrategy{} once implemented
-		return &ShortsStrategy{}
+		return &LandscapeStrategy{}
 	default:
 		return &ShortsStrategy{}
 	}
@@ -186,8 +189,31 @@ func (g *Generator) generateOne(ctx context.Context, runID int64, clip database.
 		seekSec = clip.StartSec
 	}
 
-	// Get text for this clip
-	text := cfg.TextForClip(clip.ID)
+	// Get text for this clip — landscape uses LandConfig.TextForClip, shorts uses cfg.TextForClip.
+	var text string
+	if strategy.Type() == StrategyLandscape && req != nil && req.LandscapeConfig != nil {
+		text = req.LandscapeConfig.TextForClip(clip.ID, clipIndex)
+	} else {
+		text = cfg.TextForClip(clip.ID)
+	}
+
+	// For landscape strategy: resolve source to base image instead of video.
+	if strategy.Type() == StrategyLandscape && req != nil && req.LandscapeConfig != nil {
+		if req.LandscapeConfig.BaseImagePath != "" {
+			if _, err := os.Stat(req.LandscapeConfig.BaseImagePath); err == nil {
+				sourcePath = req.LandscapeConfig.BaseImagePath
+			}
+		}
+		// If still pointing at the video, try downloading YouTube thumbnail.
+		if sourcePath == clip.FilePath && req.ThumbnailURL != "" {
+			downloaded, err := downloadThumbnail(req.ThumbnailURL, thumbDir)
+			if err == nil {
+				sourcePath = downloaded
+			} else {
+				g.log.Warn("failed to download YouTube thumbnail, using video frame", "err", err)
+			}
+		}
+	}
 
 	input := StrategyInput{
 		SourcePath: sourcePath,
@@ -204,4 +230,35 @@ func (g *Generator) generateOne(ctx context.Context, runID int64, clip database.
 	}
 
 	return strategy.Generate(ctx, input)
+}
+
+// downloadThumbnail downloads a remote image to dir and returns the local path.
+func downloadThumbnail(rawURL, dir string) (string, error) {
+	resp, err := http.Get(rawURL) //nolint:gosec // URL comes from server config, not user input
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("download failed: HTTP %d", resp.StatusCode)
+	}
+
+	u, _ := url.Parse(rawURL)
+	filename := path.Base(u.Path)
+	if filename == "" || filename == "." {
+		filename = "base_thumbnail.jpg"
+	}
+
+	destPath := filepath.Join(dir, "base_"+filename)
+	f, err := os.Create(destPath)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	if _, err := io.Copy(f, resp.Body); err != nil {
+		return "", err
+	}
+	return destPath, nil
 }

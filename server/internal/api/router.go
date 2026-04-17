@@ -99,6 +99,7 @@ func NewRouter(
 	mux.HandleFunc("GET /api/thumbnail/templates", th.GetTemplates)
 	mux.HandleFunc("POST /api/thumbnail/templates", th.PostTemplate)
 	mux.HandleFunc("DELETE /api/thumbnail/templates/{name}", th.DeleteTemplate)
+	mux.HandleFunc("POST /api/thumbnail/runs/{id}/base-image", th.PostUploadBaseImage)
 
 	// Stats endpoint
 	mux.HandleFunc("GET /api/stats", sth.GetStats)
