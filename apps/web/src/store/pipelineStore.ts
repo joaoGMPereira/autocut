@@ -81,6 +81,9 @@ interface PipelineState {
   // Thumbnail generation state
   thumbnailProgress: ThumbnailProgress | null;
 
+  // Metadata generation state
+  metadataProgress: { status: string; percent: number; message?: string } | null;
+
   // Navigation history
   navHistory: RunState[];
   navIndex: number;
@@ -155,6 +158,9 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
 
   // Thumbnail generation state
   thumbnailProgress: null,
+
+  // Metadata generation state
+  metadataProgress: null,
 
   navHistory: [],
   navIndex: 0,
@@ -309,6 +315,7 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
       pendingReuse: false,
       pendingMode: null,
       thumbnailProgress: null,
+      metadataProgress: null,
     });
   },
 
@@ -848,6 +855,11 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
                 )
               : s.clips,
           }));
+        }
+
+        if (evt.type === 'metadata_progress') {
+          const data = evt.data as { run_id: number; status: string; percent: number; message?: string };
+          set({ metadataProgress: { status: data.status, percent: data.percent, message: data.message } });
         }
 
         if (evt.type === 'done') {

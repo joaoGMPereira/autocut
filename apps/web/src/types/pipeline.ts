@@ -79,6 +79,7 @@ export interface Clip {
   title: string;
   description: string;
   tags: string;
+  thumbnail_text: string;
   thumbnail_style: string;
   is_selected: boolean;
   start_sec: number;
@@ -295,7 +296,6 @@ export interface LandscapeThumbnailConfig {
   apply_gradient: boolean;
   apply_blur: boolean;
   apply_darken: boolean;
-  base_image_path: string;
   text_position: string;
   font_family: string;
   font_size: number;
@@ -314,7 +314,6 @@ export const DEFAULT_LANDSCAPE_CONFIG: LandscapeThumbnailConfig = {
   apply_gradient: true,
   apply_blur: false,
   apply_darken: false,
-  base_image_path: '',
   text_position: 'top_right',
   font_family: 'Impact',
   font_size: 0,
@@ -375,6 +374,7 @@ export interface ClipMetadataUpdate {
   title: string;
   description: string;
   tags: string;
+  thumbnail_text: string;
 }
 
 export interface ReviewMetadataRequest {
@@ -457,6 +457,7 @@ export interface SSEEvent {
     | 'preview_ready'
     | 'preview_error'
     | 'thumbnail_progress'
+    | 'metadata_progress'
     | 'done'
     | 'error'
     | 'cancelled'
