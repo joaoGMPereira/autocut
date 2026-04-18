@@ -210,13 +210,19 @@ func (g *MetadataGenerator) PrefillBatch(ctx context.Context, runID int64) {
 			// Cache miss: fetch from YouTube
 			g.publishProgress(jobKey, runID, "fetching_channel", 10, "Analisando histórico do canal...", 0)
 
-			// Build channel URL from channel base repo if available
-			channelURL := fmt.Sprintf("https://www.youtube.com/channel/%d", channelIDInt)
+			// Build channel URL — requires a real YouTube channel ID string from channelBaseRepo.
+			// Never fall back to the DB integer PK: it produces an invalid URL that yt-dlp will 404.
+			var channelURL string
 			if g.channelBaseRepo != nil {
 				ch, chErr := g.channelBaseRepo.GetByID(ctx, channelIDInt)
 				if chErr == nil && ch != nil && ch.ChannelID != "" {
 					channelURL = "https://www.youtube.com/channel/" + ch.ChannelID
 				}
+			}
+			if channelURL == "" {
+				g.log.Warn("prefill: no channel URL available, skipping analytics fetch")
+				// Skip to generation — analytics cache may still have data from a prior run.
+				goto generate
 			}
 
 			_, fetchErr := g.analyzer.FetchAndCache(ctx, channelIDInt, channelURL)
@@ -227,19 +233,12 @@ func (g *MetadataGenerator) PrefillBatch(ctx context.Context, runID int64) {
 		}
 	}
 
-	// 3. Load clip count for progress message
-	clips, clipsErr := g.clipRepo.ListByRun(ctx, runID)
-	clipCount := 0
-	if clipsErr == nil {
-		clipCount = len(clips)
-	}
-
-	g.publishProgress(jobKey, runID, "generating", 30, fmt.Sprintf("Preparando prompt para %d clips...", clipCount), clipCount)
-
-	// 4. Delegate to GenerateBatch (analytics loaded transparently inside)
+generate:
+	// 3. Delegate to GenerateBatch (analytics loaded transparently inside).
+	// GenerateBatch publishes its own "generating" + "done" events — don't double-emit here.
 	_, genErr := g.GenerateBatch(ctx, runID)
 	if genErr != nil {
-		g.publishProgress(jobKey, runID, "error", 0, fmt.Sprintf("Generation failed: %s", genErr), clipCount)
+		g.publishProgress(jobKey, runID, "error", 0, fmt.Sprintf("Generation failed: %s", genErr), 0)
 		return
 	}
 	// done is already published inside GenerateBatch
