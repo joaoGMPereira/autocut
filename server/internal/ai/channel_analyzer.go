@@ -46,7 +46,9 @@ var ptStopwords = map[string]bool{
 	"this": true, "my": true, "i": true, "you": true,
 }
 
-const analyticsTTLSec = 86400 // 24 hours
+// AnalyticsTTLSec is the cache TTL for channel analytics (24 hours).
+// Exported so metadata.go can reference the same constant.
+const AnalyticsTTLSec = 86400
 
 // ChannelAnalyzer fetches and aggregates a YouTube channel's video history.
 type ChannelAnalyzer struct {
@@ -69,7 +71,7 @@ func NewChannelAnalyzer(ytDlpPath string, repo *database.ChannelAnalyticsRepo) *
 // On cache miss it runs yt-dlp, computes analytics, upserts, and returns the result.
 func (a *ChannelAnalyzer) FetchAndCache(ctx context.Context, channelID int64, channelURL string) (*database.ChannelAnalytics, error) {
 	// Cache-first: return immediately if fresh data exists.
-	cached, err := a.analyticsRepo.Get(ctx, channelID, analyticsTTLSec)
+	cached, err := a.analyticsRepo.Get(ctx, channelID, AnalyticsTTLSec)
 	if err != nil {
 		// Propagate context cancellation immediately — no point spawning yt-dlp.
 		if ctx.Err() != nil {

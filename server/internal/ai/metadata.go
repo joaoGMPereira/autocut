@@ -107,7 +107,7 @@ func (g *MetadataGenerator) GenerateBatch(ctx context.Context, runID int64) ([]C
 	var analytics *database.ChannelAnalytics
 	var channelName string
 	if run.ChannelID.Valid && g.analyticsRepo != nil {
-		a, aErr := g.analyticsRepo.Get(ctx, run.ChannelID.Int64, 86400)
+		a, aErr := g.analyticsRepo.Get(ctx, run.ChannelID.Int64, AnalyticsTTLSec)
 		if aErr != nil {
 			g.log.Warn("failed to load channel analytics", "err", aErr)
 		} else {
@@ -201,15 +201,13 @@ func (g *MetadataGenerator) PrefillBatch(ctx context.Context, runID int64) {
 		channelIDInt := run.ChannelID.Int64
 
 		// Check cache first
-		cached, cacheErr := g.analyticsRepo.Get(ctx, channelIDInt, 86400)
+		cached, cacheErr := g.analyticsRepo.Get(ctx, channelIDInt, AnalyticsTTLSec)
 		if cacheErr != nil {
 			g.log.Warn("prefill: analytics cache lookup failed", "err", cacheErr)
 		}
 
 		if cached == nil {
-			// Cache miss: fetch from YouTube
-			g.publishProgress(jobKey, runID, "fetching_channel", 10, "Analisando histórico do canal...", 0)
-
+			// Cache miss: fetch from YouTube.
 			// Build channel URL — requires a real YouTube channel ID string from channelBaseRepo.
 			// Never fall back to the DB integer PK: it produces an invalid URL that yt-dlp will 404.
 			var channelURL string
@@ -219,21 +217,20 @@ func (g *MetadataGenerator) PrefillBatch(ctx context.Context, runID int64) {
 					channelURL = "https://www.youtube.com/channel/" + ch.ChannelID
 				}
 			}
-			if channelURL == "" {
-				g.log.Warn("prefill: no channel URL available, skipping analytics fetch")
-				// Skip to generation — analytics cache may still have data from a prior run.
-				goto generate
-			}
 
-			_, fetchErr := g.analyzer.FetchAndCache(ctx, channelIDInt, channelURL)
-			if fetchErr != nil {
-				// Graceful degradation: log and continue to generation
-				g.log.Warn("prefill: failed to fetch channel analytics", "err", fetchErr)
+			if channelURL != "" {
+				g.publishProgress(jobKey, runID, "fetching_channel", 10, "Analisando histórico do canal...", 0)
+				_, fetchErr := g.analyzer.FetchAndCache(ctx, channelIDInt, channelURL)
+				if fetchErr != nil {
+					// Graceful degradation: log and continue to generation.
+					g.log.Warn("prefill: failed to fetch channel analytics", "err", fetchErr)
+				}
+			} else {
+				g.log.Warn("prefill: no channel URL available, skipping analytics fetch")
 			}
 		}
 	}
 
-generate:
 	// 3. Delegate to GenerateBatch (analytics loaded transparently inside).
 	// GenerateBatch publishes its own "generating" + "done" events — don't double-emit here.
 	_, genErr := g.GenerateBatch(ctx, runID)
