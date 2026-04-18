@@ -33,18 +33,19 @@ func NewPipelineHandler(svc *pipeline.Service, h *hub.SSEHub) *PipelineHandler {
 // runResponse is the JSON shape returned for a single pipeline run.
 // Maps Go PipelineRun fields to the TypeScript Run interface field names.
 type runResponse struct {
-	ID          int64   `json:"id"`
-	ChannelID   *int64  `json:"channel_id"`
-	URL         string  `json:"url"`
-	Mode        string  `json:"mode"`
-	State       string  `json:"state"`
-	ActivePhase string  `json:"active_phase"`
-	Error       string  `json:"error"`
-	VideoPath   string  `json:"video_path"`
-	VideoTitle  string  `json:"video_title"`
-	DurationSec int64   `json:"duration_sec"`
-	StartedAt   int64   `json:"started_at"`
-	FinishedAt  *int64  `json:"finished_at"`
+	ID             int64   `json:"id"`
+	ChannelID      *int64  `json:"channel_id"`
+	URL            string  `json:"url"`
+	Mode           string  `json:"mode"`
+	State          string  `json:"state"`
+	ActivePhase    string  `json:"active_phase"`
+	Error          string  `json:"error"`
+	VideoPath      string  `json:"video_path"`
+	VideoTitle     string  `json:"video_title"`
+	DurationSec    int64   `json:"duration_sec"`
+	StartedAt      int64   `json:"started_at"`
+	FinishedAt     *int64  `json:"finished_at"`
+	ModeConfigJSON string  `json:"mode_config_json,omitempty"`
 }
 
 // PostRuns creates a new pipeline run in WAITING_URL state.
@@ -82,16 +83,17 @@ func (h *PipelineHandler) GetRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp := runResponse{
-		ID:          run.ID,
-		URL:         run.URL,
-		Mode:        run.Mode,
-		State:       run.State,
-		ActivePhase: run.ActivePhase,
-		Error:       run.Error,
-		VideoPath:   run.VideoPath,
-		VideoTitle:  run.VideoTitle,
-		DurationSec: run.DurationSec,
-		StartedAt:   run.StartedAt,
+		ID:             run.ID,
+		URL:            run.URL,
+		Mode:           run.Mode,
+		State:          run.State,
+		ActivePhase:    run.ActivePhase,
+		Error:          run.Error,
+		VideoPath:      run.VideoPath,
+		VideoTitle:     run.VideoTitle,
+		DurationSec:    run.DurationSec,
+		StartedAt:      run.StartedAt,
+		ModeConfigJSON: run.ModeConfigJSON,
 	}
 	if run.ChannelID.Valid {
 		v := run.ChannelID.Int64
