@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/joaoGMPereira/autocut/server/internal/hub"
 	"github.com/joaoGMPereira/autocut/server/internal/pipeline"
@@ -225,6 +224,23 @@ func (h *PipelineHandler) PostReviewClips(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
+
+	// Validate run existence and state before decoding body.
+	run, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			jsonError(w, "run not found", http.StatusNotFound)
+			return
+		}
+		h.log.Error("get run failed", "run_id", id, "err", err)
+		jsonError(w, "failed to load run", http.StatusInternalServerError)
+		return
+	}
+	if run.State != pipeline.StateWaitingReviewClips {
+		jsonError(w, fmt.Sprintf("run not in %s state (current: %s)", pipeline.StateWaitingReviewClips, run.State), http.StatusConflict)
+		return
+	}
+
 	var req pipeline.ReviewClipsPayload
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, "invalid JSON body", http.StatusBadRequest)
@@ -233,11 +249,7 @@ func (h *PipelineHandler) PostReviewClips(w http.ResponseWriter, r *http.Request
 	newState, err := h.svc.ReviewClips(r.Context(), id, req)
 	if err != nil {
 		h.log.Error("review clips failed", "run_id", id, "err", err)
-		status := http.StatusInternalServerError
-		if strings.Contains(err.Error(), "not in") {
-			status = http.StatusConflict
-		}
-		jsonError(w, err.Error(), status)
+		jsonError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
