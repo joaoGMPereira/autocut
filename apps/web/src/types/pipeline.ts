@@ -50,6 +50,7 @@ export interface Run {
   transcript_path: string;
   started_at: number;
   finished_at: number | null;
+  mode_config_json?: string;  // JSON-encoded ModeConfig; from backend
 }
 
 // ── Highlight ─────────────────────────────────────────────────────────────────
@@ -381,8 +382,15 @@ export interface ReviewMetadataRequest {
   clips: ClipMetadataUpdate[];
 }
 
+export interface ClipTextEdit {
+  id: number;
+  title: string;
+  thumbnail_text: string;
+}
+
 export interface ReviewClipsRequest {
   selected_ids: number[];
+  clip_edits?: ClipTextEdit[];
 }
 
 export interface UploadConfirmRequest {
@@ -517,6 +525,7 @@ export interface MetadataPayload {
 export interface ClipsPayload {
   kind: 'clips';
   selected_ids: number[];
+  clip_edits?: ClipTextEdit[];
 }
 
 export interface UploadPayload {
