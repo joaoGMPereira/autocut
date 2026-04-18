@@ -33,6 +33,7 @@ var allMigrations = []migration{
 	{version: 15, name: "seed_overlay_individual_keys", fn: migrateV15},
 	{version: 16, name: "pipeline_run_thumbnail_url", fn: migrateV16},
 	{version: 17, name: "pipeline_clip_thumbnail_text", fn: migrateV17},
+	{version: 18, name: "channel_analytics", fn: migrateV18},
 }
 
 // migrateV1 creates all 11 application tables.
@@ -974,6 +975,24 @@ func migrateV17(tx *sql.Tx) error {
 
 func nowMillis() int64 {
 	return time.Now().UnixMilli()
+}
+
+// migrateV18 creates the channel_analytics cache table for per-channel YouTube video statistics.
+func migrateV18(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		CREATE TABLE channel_analytics (
+			id              INTEGER PRIMARY KEY,
+			channel_id      INTEGER NOT NULL UNIQUE REFERENCES channels(id) ON DELETE CASCADE,
+			fetched_at      INTEGER NOT NULL,
+			video_count     INTEGER NOT NULL DEFAULT 0,
+			avg_views       INTEGER NOT NULL DEFAULT 0,
+			top_title_words TEXT    NOT NULL DEFAULT '[]',
+			top_tags        TEXT    NOT NULL DEFAULT '[]',
+			success_titles  TEXT    NOT NULL DEFAULT '[]',
+			raw_titles      TEXT    NOT NULL DEFAULT '[]'
+		);
+	`)
+	return err
 }
 
 // migrateV7 creates the video_comments table for FP-016 (Comment Sync).
