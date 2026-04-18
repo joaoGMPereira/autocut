@@ -301,6 +301,19 @@ type URLHistoryEntry struct {
 	UseCount   int     `json:"use_count"`
 }
 
+// ChannelAnalytics holds cached YouTube channel video statistics.
+type ChannelAnalytics struct {
+	ID            int64
+	ChannelID     int64
+	FetchedAt     int64  // Unix seconds
+	VideoCount    int
+	AvgViews      int
+	TopTitleWords string // JSON []WordCount
+	TopTags       string // JSON []TagCount
+	SuccessTitles string // JSON []string
+	RawTitles     string // JSON []string
+}
+
 // Quota constants from Kotlin QuotaUsage companion object
 const (
 	QuotaDailyLimit    = 10_000

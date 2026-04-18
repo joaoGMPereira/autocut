@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/joaoGMPereira/autocut/server/internal/ai"
@@ -75,6 +76,7 @@ func main() {
 	historyRepo := database.NewURLHistoryRepo(db, slog.Default())
 	settingRepo := database.NewAppSettingRepo(db, slog.Default())
 	channelCfgRepo := database.NewChannelConfigRepo(db, slog.Default())
+	channelAnalyticsRepo := database.NewChannelAnalyticsRepo(db)
 	ytDl := downloader.NewYouTubeDownloader("")
 	twDl := downloader.NewTwitchDownloader("")
 
@@ -113,7 +115,14 @@ func main() {
 	if claudeErr != nil {
 		slog.Warn("claude CLI not available — metadata generation disabled", "err", claudeErr)
 	}
-	metadataGen := ai.NewMetadataGenerator(claudeCLI, repo, clipRepo, highlightRepo, channelCfgRepo, settingRepo, sseHub)
+	ytDlpPath := "yt-dlp"
+	if p, err := exec.LookPath("yt-dlp"); err == nil {
+		ytDlpPath = p
+	}
+	channelAnalyzer := ai.NewChannelAnalyzer(ytDlpPath, channelAnalyticsRepo)
+	metadataGen := ai.NewMetadataGenerator(claudeCLI, repo, clipRepo, highlightRepo, channelCfgRepo, settingRepo, sseHub, channelAnalyticsRepo, channelAnalyzer)
+	metadataGen.SetChannelBaseRepo(channelRepo)
+	pipelineSvc.SetMetadataGenerator(metadataGen)
 	metadataHandler := handlers.NewMetadataHandler(repo, clipRepo, metadataGen, sseHub)
 
 	router := api.NewRouter(
