@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/joaoGMPereira/autocut/server/internal/hub"
 	"github.com/joaoGMPereira/autocut/server/internal/pipeline"
@@ -215,6 +216,32 @@ func (h *PipelineHandler) GetRunClips(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"clips": clips})
+}
+
+// PostReviewClips saves clip selection + optional text edits, then advances to WAITING_UPLOAD_CONFIRM.
+// POST /api/pipeline/runs/{id}/gates/review-clips
+func (h *PipelineHandler) PostReviewClips(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseRunID(w, r)
+	if !ok {
+		return
+	}
+	var req pipeline.ReviewClipsPayload
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	newState, err := h.svc.ReviewClips(r.Context(), id, req)
+	if err != nil {
+		h.log.Error("review clips failed", "run_id", id, "err", err)
+		status := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "not in") {
+			status = http.StatusConflict
+		}
+		jsonError(w, err.Error(), status)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"state": newState})
 }
 
 // parseRunID extracts the {id} path value and writes an error response on failure.

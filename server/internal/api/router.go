@@ -106,6 +106,7 @@ func NewRouter(
 	mux.HandleFunc("POST /api/metadata/runs/{id}/generate", mh.PostBatchGenerate)
 	mux.HandleFunc("POST /api/metadata/runs/{id}/clips/{clipId}/generate", mh.PostSingleGenerate)
 	mux.HandleFunc("POST /api/pipeline/runs/{id}/gates/review-metadata", mh.PostReviewMetadata)
+	mux.HandleFunc("POST /api/pipeline/runs/{id}/gates/review-clips", ph.PostReviewClips)
 
 	// Stats endpoint
 	mux.HandleFunc("GET /api/stats", sth.GetStats)
