@@ -72,6 +72,35 @@ func TestUpdateIsSelectedBatch_EmptyDeselectsAll(t *testing.T) {
 	}
 }
 
+func TestUpdateIsSelectedBatch_DoesNotAffectOtherRuns(t *testing.T) {
+	db := openTestDB(t)
+	defer db.Close()
+	repo := NewPipelineClipRepo(db, slog.Default())
+	ctx := context.Background()
+
+	runA := insertTestRun(t, db, "WAITING_REVIEW_CLIPS")
+	runB := insertTestRun(t, db, "WAITING_REVIEW_CLIPS")
+	cA, _ := repo.Create(ctx, &PipelineClip{RunID: runA, IsSelected: true, UploadStatus: "pending"})
+	cB, _ := repo.Create(ctx, &PipelineClip{RunID: runB, IsSelected: true, UploadStatus: "pending"})
+
+	// Deselect all clips in runA
+	if err := repo.UpdateIsSelectedBatch(ctx, runA, []int64{}); err != nil {
+		t.Fatalf("UpdateIsSelectedBatch: %v", err)
+	}
+
+	// runA clip should be deselected
+	clipsA, _ := repo.ListByRun(ctx, runA)
+	if clipsA[0].IsSelected {
+		t.Errorf("clip %d in runA should be deselected", cA)
+	}
+
+	// runB clip must be untouched (still selected)
+	clipsB, _ := repo.ListByRun(ctx, runB)
+	if !clipsB[0].IsSelected {
+		t.Errorf("clip %d in runB should still be selected", cB)
+	}
+}
+
 func TestUpdateTitleAndText(t *testing.T) {
 	db := openTestDB(t)
 	defer db.Close()

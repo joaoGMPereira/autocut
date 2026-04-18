@@ -160,7 +160,7 @@ func (r *PipelineClipRepo) UpdateTitleAndText(ctx context.Context, clipID int64,
 		"UPDATE pipeline_clips SET title = ?, thumbnail_text = ? WHERE id = ?",
 		title, thumbnailText, clipID)
 	if err != nil {
-		return fmt.Errorf("update title/text clip %d: %w", clipID, err)
+		return fmt.Errorf("update title/text pipeline_clip %d: %w", clipID, err)
 	}
 	return nil
 }
