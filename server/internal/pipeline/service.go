@@ -210,7 +210,7 @@ func (s *Service) ReviewClips(ctx context.Context, runID int64, payload ReviewCl
 	// Notify SSE subscribers
 	s.hub.Publish(fmt.Sprintf("%d", runID), hub.SSEEvent{
 		Type: "state_changed",
-		Data: map[string]interface{}{"run_id": runID, "state": StateWaitingUploadConfirm},
+		Data: stateChangedPayload{RunID: runID, State: StateWaitingUploadConfirm},
 	})
 
 	return StateWaitingUploadConfirm, nil
