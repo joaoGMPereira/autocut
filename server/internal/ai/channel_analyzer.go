@@ -34,6 +34,8 @@ type TagCount struct {
 }
 
 // ptStopwords is a minimal Portuguese + common English stopword set for title tokenisation.
+// Only words of length >= 3 are ever tokenised, so single-character entries are inert but
+// kept for documentation completeness.
 var ptStopwords = map[string]bool{
 	"o": true, "a": true, "e": true, "de": true, "da": true, "do": true,
 	"em": true, "um": true, "uma": true, "para": true, "por": true,
@@ -69,6 +71,10 @@ func (a *ChannelAnalyzer) FetchAndCache(ctx context.Context, channelID int64, ch
 	// Cache-first: return immediately if fresh data exists.
 	cached, err := a.analyticsRepo.Get(ctx, channelID, analyticsTTLSec)
 	if err != nil {
+		// Propagate context cancellation immediately — no point spawning yt-dlp.
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		a.log.Warn("channel_analyzer: cache lookup failed, will re-fetch", "err", err)
 	}
 	if cached != nil {
@@ -106,6 +112,7 @@ func (a *ChannelAnalyzer) fetchVideos(ctx context.Context, channelURL string) ([
 		return nil, fmt.Errorf("stdout pipe: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
+		_ = stdout.Close() // C1: plug the pipe leak on Start failure
 		return nil, fmt.Errorf("start yt-dlp: %w", err)
 	}
 
@@ -130,9 +137,22 @@ func (a *ChannelAnalyzer) fetchVideos(ctx context.Context, channelURL string) ([
 		a.log.Warn("channel_analyzer: scanner error", "err", err)
 	}
 	if err := cmd.Wait(); err != nil {
-		return videos, fmt.Errorf("yt-dlp exited: %w", err)
+		// C2: don't return partial results alongside an error.
+		return nil, fmt.Errorf("yt-dlp exited: %w", err)
 	}
 	return videos, nil
+}
+
+// mustMarshal serialises v to JSON. Panics only on types that should never fail
+// (slices of plain structs/strings). Logs a warning and returns "[]" as a safe
+// fallback for any unexpected failure.
+func mustMarshal(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		slog.Warn("channel_analyzer: json.Marshal failed (bug)", "err", err)
+		return "[]"
+	}
+	return string(b)
 }
 
 // computeAnalytics derives channel statistics from a slice of videos.
@@ -149,7 +169,7 @@ func computeAnalytics(channelID int64, videos []ytDlpVideo) *database.ChannelAna
 		}
 	}
 
-	// Word frequency from titles
+	// Word frequency from titles.
 	wordFreq := map[string]int{}
 	var rawTitles []string
 	for _, v := range videos {
@@ -162,7 +182,7 @@ func computeAnalytics(channelID int64, videos []ytDlpVideo) *database.ChannelAna
 		}
 	}
 
-	// Tag frequency
+	// Tag frequency.
 	tagFreq := map[string]int{}
 	for _, v := range videos {
 		for _, tag := range v.Tags {
@@ -172,7 +192,7 @@ func computeAnalytics(channelID int64, videos []ytDlpVideo) *database.ChannelAna
 		}
 	}
 
-	// Success titles (top 10 by view_count)
+	// Success titles (top 10 by view_count).
 	sorted := make([]ytDlpVideo, len(videos))
 	copy(sorted, videos)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ViewCount > sorted[j].ViewCount })
@@ -184,32 +204,22 @@ func computeAnalytics(channelID int64, videos []ytDlpVideo) *database.ChannelAna
 		successTitles = append(successTitles, v.Title)
 	}
 
-	// avg views
-	totalViews := 0
+	// I3: use int64 to avoid overflow when summing view counts across many videos.
+	var totalViews int64
 	for _, v := range videos {
-		totalViews += v.ViewCount
+		totalViews += int64(v.ViewCount)
 	}
-	avgViews := totalViews / len(videos)
-
-	// top 20 words
-	topWords := topNWords(wordFreq, 20)
-	// top 15 tags
-	topTags := topNTags(tagFreq, 15)
-
-	marshal := func(v any) string {
-		b, _ := json.Marshal(v)
-		return string(b)
-	}
+	avgViews := int(totalViews / int64(len(videos)))
 
 	return &database.ChannelAnalytics{
 		ChannelID:     channelID,
 		FetchedAt:     time.Now().Unix(),
 		VideoCount:    len(videos),
 		AvgViews:      avgViews,
-		TopTitleWords: marshal(topWords),
-		TopTags:       marshal(topTags),
-		SuccessTitles: marshal(successTitles),
-		RawTitles:     marshal(rawTitles),
+		TopTitleWords: mustMarshal(topNWords(wordFreq, 20)),
+		TopTags:       mustMarshal(topNTags(tagFreq, 15)),
+		SuccessTitles: mustMarshal(successTitles),
+		RawTitles:     mustMarshal(rawTitles),
 	}
 }
 
