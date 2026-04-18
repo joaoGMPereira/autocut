@@ -61,6 +61,7 @@ func (c *ClaudeCLI) GenerateStream(ctx context.Context, req GenerateRequest, onC
 	args := []string{
 		"-p", req.Prompt,
 		"--output-format", "stream-json",
+		"--verbose",
 		"--model", model,
 	}
 	if req.SystemPrompt != "" {

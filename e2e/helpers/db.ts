@@ -76,6 +76,10 @@ export function getPipelineClips(runId: number):
       thumbnail_style: string;
       thumbnail_path: string;
       file_path: string;
+      title: string;
+      description: string;
+      tags: string;
+      thumbnail_text: string;
     }> {
   const db = openDb();
   try {
@@ -88,9 +92,13 @@ export function getPipelineClips(runId: number):
           thumbnail_style: string;
           thumbnail_path: string;
           file_path: string;
+          title: string;
+          description: string;
+          tags: string;
+          thumbnail_text: string;
         }
       >(
-        'SELECT id, run_id, thumbnail_style, thumbnail_path, file_path FROM pipeline_clips WHERE run_id = ? ORDER BY id',
+        'SELECT id, run_id, thumbnail_style, thumbnail_path, file_path, title, description, tags, thumbnail_text FROM pipeline_clips WHERE run_id = ? ORDER BY id',
       )
       .all(runId);
   } finally {
