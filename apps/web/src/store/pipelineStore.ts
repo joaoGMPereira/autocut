@@ -499,7 +499,7 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
 
   submitReviewClips: async (goUrl, id, req) => {
     log.info('[pipelineStore] submitReviewClips', { id });
-    const payload: GatePayload = { kind: 'clips', selected_ids: req.selected_ids };
+    const payload: GatePayload = { kind: 'clips', selected_ids: req.selected_ids, clip_edits: req.clip_edits };
     get().recordGateSubmission('WAITING_REVIEW_CLIPS', payload);
     console.log('[pipelineStore] recordGateSubmission', 'WAITING_REVIEW_CLIPS', payload);
     try {
@@ -628,7 +628,7 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
       } else if (hist.kind === 'metadata') {
         await submitReviewMetadata(goUrl, newRunId, { clips: hist.clips });
       } else if (hist.kind === 'clips') {
-        await submitReviewClips(goUrl, newRunId, { selected_ids: hist.selected_ids });
+        await submitReviewClips(goUrl, newRunId, { selected_ids: hist.selected_ids, clip_edits: hist.clip_edits });
       } else if (hist.kind === 'upload') {
         await submitUploadConfirm(goUrl, newRunId, { privacy: hist.privacy });
       }
