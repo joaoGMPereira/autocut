@@ -20,12 +20,14 @@ export function StepReviewClips({ historical }: StepReviewClipsProps) {
   const clips = usePipelineStore((s) => s.clips);
   const loadClips = usePipelineStore((s) => s.loadClips);
   const submitReviewClips = usePipelineStore((s) => s.submitReviewClips);
+  const resubmitFromBacked = usePipelineStore((s) => s.resubmitFromBacked);
   const channels = useChannelStore((s) => s.channels);
   const fetchChannels = useChannelStore((s) => s.fetchChannels);
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [titles, setTitles] = useState<Record<number, string>>({});
   const [thumbTexts, setThumbTexts] = useState<Record<number, string>>({});
+  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,7 +51,13 @@ export function StepReviewClips({ historical }: StepReviewClipsProps) {
 
   // Load clips + channels on mount
   useEffect(() => {
-    if (activeRunId != null) void loadClips(goUrl, activeRunId);
+    if (activeRunId == null) return;
+    setLoading(true);
+    loadClips(goUrl, activeRunId)
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : 'Falha ao carregar clips');
+      })
+      .finally(() => setLoading(false));
   }, [goUrl, activeRunId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -117,22 +125,40 @@ export function StepReviewClips({ historical }: StepReviewClipsProps) {
         title: titles[c.id] ?? c.title,
         thumbnail_text: thumbTexts[c.id] ?? c.thumbnail_text,
       }));
-      await submitReviewClips(goUrl, activeRunId, {
-        selected_ids: Array.from(selectedIds),
-        clip_edits: clipEdits,
-      });
+
+      if (isHistorical) {
+        await resubmitFromBacked(goUrl, 'WAITING_REVIEW_CLIPS', {
+          kind: 'clips',
+          selected_ids: Array.from(selectedIds),
+          clip_edits: clipEdits,
+        });
+      } else {
+        await submitReviewClips(goUrl, activeRunId, {
+          selected_ids: Array.from(selectedIds),
+          clip_edits: clipEdits,
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao salvar');
     } finally {
       setSubmitting(false);
     }
-  }, [goUrl, activeRunId, clips, selectedIds, titles, thumbTexts, submitReviewClips]);
+  }, [goUrl, activeRunId, clips, selectedIds, titles, thumbTexts, isHistorical, resubmitFromBacked, submitReviewClips]);
+
+  if (loading) {
+    return (
+      <div className="space-y-2 max-w-lg">
+        <h2 className="text-xl font-semibold text-foreground">Revisar Clips</h2>
+        <p className="text-sm text-zinc-500">Carregando clips...</p>
+      </div>
+    );
+  }
 
   if (clips.length === 0) {
     return (
       <div className="space-y-2 max-w-lg">
         <h2 className="text-xl font-semibold text-foreground">Revisar Clips</h2>
-        <p className="text-sm text-zinc-500">Carregando clips...</p>
+        <p className="text-sm text-zinc-500">Nenhum clip encontrado para este pipeline.</p>
       </div>
     );
   }
