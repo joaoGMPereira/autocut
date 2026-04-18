@@ -110,7 +110,7 @@ func TestUpdateTitleAndText(t *testing.T) {
 	runID := insertTestRun(t, db, "WAITING_REVIEW_CLIPS")
 	clipID, _ := repo.Create(ctx, &PipelineClip{RunID: runID, Title: "old", ThumbnailText: "OLD", UploadStatus: "pending"})
 
-	if err := repo.UpdateTitleAndText(ctx, clipID, "New Title", "NEW TEXT"); err != nil {
+	if err := repo.UpdateTitleAndText(ctx, runID, clipID, "New Title", "NEW TEXT"); err != nil {
 		t.Fatalf("UpdateTitleAndText: %v", err)
 	}
 	clips, _ := repo.ListByRun(ctx, runID)
@@ -119,5 +119,29 @@ func TestUpdateTitleAndText(t *testing.T) {
 	}
 	if clips[0].ThumbnailText != "NEW TEXT" {
 		t.Errorf("thumb_text: got %q", clips[0].ThumbnailText)
+	}
+}
+
+func TestUpdateTitleAndText_WrongRunID(t *testing.T) {
+	db := openTestDB(t)
+	defer db.Close()
+	repo := NewPipelineClipRepo(db, slog.Default())
+	ctx := context.Background()
+
+	runA := insertTestRun(t, db, "WAITING_REVIEW_CLIPS")
+	runB := insertTestRun(t, db, "WAITING_REVIEW_CLIPS")
+	clipB, _ := repo.Create(ctx, &PipelineClip{RunID: runB, Title: "original", ThumbnailText: "ORIG", UploadStatus: "pending"})
+
+	// Try to update clipB using runA's ID — should be a no-op (WHERE id=? AND run_id=? won't match)
+	if err := repo.UpdateTitleAndText(ctx, runA, clipB, "hacked", "HACKED"); err != nil {
+		t.Fatalf("UpdateTitleAndText: %v", err)
+	}
+
+	clips, _ := repo.ListByRun(ctx, runB)
+	if clips[0].Title != "original" {
+		t.Errorf("cross-run update should be a no-op, got title %q", clips[0].Title)
+	}
+	if clips[0].ThumbnailText != "ORIG" {
+		t.Errorf("cross-run update should be a no-op, got thumbnail_text %q", clips[0].ThumbnailText)
 	}
 }

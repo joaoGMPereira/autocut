@@ -155,10 +155,11 @@ func (r *PipelineClipRepo) UpdateIsSelectedBatch(ctx context.Context, runID int6
 }
 
 // UpdateTitleAndText updates only title and thumbnail_text for a single clip.
-func (r *PipelineClipRepo) UpdateTitleAndText(ctx context.Context, clipID int64, title, thumbnailText string) error {
+// The runID parameter ensures the clip belongs to the expected run (cross-run write prevention).
+func (r *PipelineClipRepo) UpdateTitleAndText(ctx context.Context, runID, clipID int64, title, thumbnailText string) error {
 	_, err := r.db.ExecContext(ctx,
-		"UPDATE pipeline_clips SET title = ?, thumbnail_text = ? WHERE id = ?",
-		title, thumbnailText, clipID)
+		"UPDATE pipeline_clips SET title = ?, thumbnail_text = ? WHERE id = ? AND run_id = ?",
+		title, thumbnailText, clipID, runID)
 	if err != nil {
 		return fmt.Errorf("update title/text pipeline_clip %d: %w", clipID, err)
 	}

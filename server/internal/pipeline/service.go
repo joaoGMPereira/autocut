@@ -21,6 +21,9 @@ import (
 	"github.com/joaoGMPereira/autocut/server/internal/processor"
 )
 
+// ErrWrongState is returned when an operation cannot proceed because the run is not in the expected state.
+var ErrWrongState = errors.New("wrong state")
+
 // metaGeneratorIface is the subset of ai.MetadataGenerator used by the pipeline service.
 type metaGeneratorIface interface {
 	Available() bool
@@ -182,12 +185,16 @@ func (s *Service) ReviewClips(ctx context.Context, runID int64, payload ReviewCl
 	run, err := s.repo.GetByID(ctx, runID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", fmt.Errorf("run %d not found", runID)
+			return "", fmt.Errorf("run %d not found: %w", runID, sql.ErrNoRows)
 		}
 		return "", fmt.Errorf("get run %d: %w", runID, err)
 	}
 	if run.State != StateWaitingReviewClips {
-		return "", fmt.Errorf("run not in %s state (current: %s)", StateWaitingReviewClips, run.State)
+		return "", fmt.Errorf("run not in %s state (current: %s): %w", StateWaitingReviewClips, run.State, ErrWrongState)
+	}
+
+	if len(payload.SelectedIDs) == 0 {
+		return "", fmt.Errorf("at least one clip must be selected")
 	}
 
 	// Persist selections
@@ -197,7 +204,7 @@ func (s *Service) ReviewClips(ctx context.Context, runID int64, payload ReviewCl
 
 	// Save any inline text edits (non-fatal per clip)
 	for _, edit := range payload.ClipEdits {
-		if err := s.clipRepo.UpdateTitleAndText(ctx, edit.ID, edit.Title, edit.ThumbnailText); err != nil {
+		if err := s.clipRepo.UpdateTitleAndText(ctx, runID, edit.ID, edit.Title, edit.ThumbnailText); err != nil {
 			s.log.Warn("failed to update clip text", "clip_id", edit.ID, "err", err)
 		}
 	}
@@ -392,7 +399,7 @@ func (s *Service) Advance(ctx context.Context, id int64, req AdvanceRequest) (Ad
 		return s.advanceSimple(ctx, id, StateWaitingReviewMetadata, StateWaitingReviewClips)
 
 	case StateWaitingReviewClips:
-		return s.advanceSimple(ctx, id, StateWaitingReviewClips, StateWaitingUploadConfirm)
+		return AdvanceResult{}, fmt.Errorf("use POST /gates/review-clips to advance from %s", StateWaitingReviewClips)
 
 	case StateWaitingUploadConfirm:
 		if err := s.repo.AdvanceState(ctx, id, StateWaitingUploadConfirm, StateUploading); err != nil {

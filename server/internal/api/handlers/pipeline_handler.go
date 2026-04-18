@@ -251,7 +251,11 @@ func (h *PipelineHandler) PostReviewClips(w http.ResponseWriter, r *http.Request
 	newState, err := h.svc.ReviewClips(r.Context(), id, req)
 	if err != nil {
 		h.log.Error("review clips failed", "run_id", id, "err", err)
-		jsonError(w, err.Error(), http.StatusInternalServerError)
+		status := http.StatusInternalServerError
+		if errors.Is(err, pipeline.ErrWrongState) {
+			status = http.StatusConflict
+		}
+		jsonError(w, err.Error(), status)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
