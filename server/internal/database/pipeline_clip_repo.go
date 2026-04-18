@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 )
 
@@ -125,6 +126,43 @@ func (r *PipelineClipRepo) FindReadyClipsByRunID(ctx context.Context, runID int6
 		result = append(result, *c)
 	}
 	return result, rows.Err()
+}
+
+// UpdateIsSelectedBatch sets is_selected=1 for clips in selectedIDs and 0 for all others in the run.
+// If selectedIDs is empty, all clips in the run become is_selected=0.
+func (r *PipelineClipRepo) UpdateIsSelectedBatch(ctx context.Context, runID int64, selectedIDs []int64) error {
+	if len(selectedIDs) == 0 {
+		_, err := r.db.ExecContext(ctx,
+			"UPDATE pipeline_clips SET is_selected = 0 WHERE run_id = ?", runID)
+		if err != nil {
+			return fmt.Errorf("deselect all clips run %d: %w", runID, err)
+		}
+		return nil
+	}
+	placeholders := strings.Repeat("?,", len(selectedIDs))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]any, len(selectedIDs)+1)
+	for i, id := range selectedIDs {
+		args[i] = id
+	}
+	args[len(selectedIDs)] = runID
+	q := "UPDATE pipeline_clips SET is_selected = CASE WHEN id IN (" + placeholders + ") THEN 1 ELSE 0 END WHERE run_id = ?"
+	_, err := r.db.ExecContext(ctx, q, args...)
+	if err != nil {
+		return fmt.Errorf("batch update is_selected run %d: %w", runID, err)
+	}
+	return nil
+}
+
+// UpdateTitleAndText updates only title and thumbnail_text for a single clip.
+func (r *PipelineClipRepo) UpdateTitleAndText(ctx context.Context, clipID int64, title, thumbnailText string) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE pipeline_clips SET title = ?, thumbnail_text = ? WHERE id = ?",
+		title, thumbnailText, clipID)
+	if err != nil {
+		return fmt.Errorf("update title/text clip %d: %w", clipID, err)
+	}
+	return nil
 }
 
 func scanPipelineClipRows(rows *sql.Rows) (*PipelineClip, error) {
