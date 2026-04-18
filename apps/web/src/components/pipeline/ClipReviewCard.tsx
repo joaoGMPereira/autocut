@@ -14,6 +14,12 @@ interface ClipReviewCardProps {
   onThumbnailTextChange: (clipId: number, value: string) => void;
 }
 
+function formatDuration(sec: number) {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 export function ClipReviewCard({
   clip,
   index,
@@ -34,18 +40,27 @@ export function ClipReviewCard({
     ? `/files/${encodeURIComponent(clip.file_path)}`
     : null;
 
-  const formatDuration = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = Math.floor(sec % 60);
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  };
-
   const handleVideoToggle = useCallback(() => {
     setVideoOpen((prev) => {
       if (prev && videoRef.current) videoRef.current.pause();
       return !prev;
     });
   }, []);
+
+  const handleSelectToggle = useCallback(
+    () => onSelectToggle(clip.id, !isSelected),
+    [clip.id, isSelected, onSelectToggle],
+  );
+
+  const handleTitleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => onTitleChange(clip.id, e.target.value),
+    [clip.id, onTitleChange],
+  );
+
+  const handleThumbnailTextChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => onThumbnailTextChange(clip.id, e.target.value),
+    [clip.id, onThumbnailTextChange],
+  );
 
   return (
     <div
@@ -63,7 +78,7 @@ export function ClipReviewCard({
           <span className="text-xs text-zinc-500">{isSelected ? 'Selecionado' : 'Ignorar'}</span>
           <button
             type="button"
-            onClick={() => onSelectToggle(clip.id, !isSelected)}
+            onClick={handleSelectToggle}
             className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
               isSelected ? 'border-cyan-400 bg-cyan-400/20' : 'border-zinc-600 bg-zinc-800'
             }`}
@@ -113,13 +128,14 @@ export function ClipReviewCard({
       <div className="p-3 space-y-2">
         <div>
           <div className="flex justify-between mb-0.5">
-            <label className="text-xs text-zinc-400">Título</label>
+            <label htmlFor={`clip-title-${clip.id}`} className="text-xs text-zinc-400">Título</label>
             <span className="text-xs text-zinc-600">{title.length}/100</span>
           </div>
           <input
+            id={`clip-title-${clip.id}`}
             type="text"
             value={title}
-            onChange={(e) => onTitleChange(clip.id, e.target.value)}
+            onChange={handleTitleChange}
             placeholder="Título do clip..."
             maxLength={100}
             disabled={!isSelected}
@@ -128,13 +144,14 @@ export function ClipReviewCard({
         </div>
         <div>
           <div className="flex justify-between mb-0.5">
-            <label className="text-xs text-zinc-400">Texto do Thumbnail</label>
+            <label htmlFor={`clip-thumb-${clip.id}`} className="text-xs text-zinc-400">Texto do Thumbnail</label>
             <span className="text-xs text-zinc-600">{thumbnailText.length}/30</span>
           </div>
           <input
+            id={`clip-thumb-${clip.id}`}
             type="text"
             value={thumbnailText}
-            onChange={(e) => onThumbnailTextChange(clip.id, e.target.value)}
+            onChange={handleThumbnailTextChange}
             placeholder="GANCHO CURTO"
             maxLength={30}
             disabled={!isSelected}
