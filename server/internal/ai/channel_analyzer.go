@@ -44,23 +44,38 @@ var ptStopwords = map[string]bool{
 	"this": true, "my": true, "i": true, "you": true,
 }
 
+const analyticsTTLSec = 86400 // 24 hours
+
 // ChannelAnalyzer fetches and aggregates a YouTube channel's video history.
 type ChannelAnalyzer struct {
+	ytDlpPath     string
 	analyticsRepo *database.ChannelAnalyticsRepo
 	log           *slog.Logger
 }
 
 // NewChannelAnalyzer constructs a ChannelAnalyzer.
-func NewChannelAnalyzer(repo *database.ChannelAnalyticsRepo) *ChannelAnalyzer {
+// ytDlpPath is the path to the yt-dlp binary (e.g. "yt-dlp" or "/usr/local/bin/yt-dlp").
+func NewChannelAnalyzer(ytDlpPath string, repo *database.ChannelAnalyticsRepo) *ChannelAnalyzer {
 	return &ChannelAnalyzer{
+		ytDlpPath:     ytDlpPath,
 		analyticsRepo: repo,
 		log:           slog.With("component", "channel_analyzer"),
 	}
 }
 
-// FetchAndCache runs yt-dlp for channelURL, computes analytics, and upserts the result.
-// Returns the upserted analytics. On yt-dlp failure, returns an error — caller decides.
+// FetchAndCache returns cached analytics for channelID if fresh (TTL 24h).
+// On cache miss it runs yt-dlp, computes analytics, upserts, and returns the result.
 func (a *ChannelAnalyzer) FetchAndCache(ctx context.Context, channelID int64, channelURL string) (*database.ChannelAnalytics, error) {
+	// Cache-first: return immediately if fresh data exists.
+	cached, err := a.analyticsRepo.Get(ctx, channelID, analyticsTTLSec)
+	if err != nil {
+		a.log.Warn("channel_analyzer: cache lookup failed, will re-fetch", "err", err)
+	}
+	if cached != nil {
+		a.log.Debug("channel_analyzer: cache hit", "channel_id", channelID)
+		return cached, nil
+	}
+
 	videos, err := a.fetchVideos(ctx, channelURL)
 	if err != nil {
 		return nil, fmt.Errorf("channel_analyzer: fetch %s: %w", channelURL, err)
@@ -77,7 +92,7 @@ func (a *ChannelAnalyzer) FetchAndCache(ctx context.Context, channelID int64, ch
 // fetchVideos calls yt-dlp and returns parsed video metadata.
 func (a *ChannelAnalyzer) fetchVideos(ctx context.Context, channelURL string) ([]ytDlpVideo, error) {
 	cmd := exec.CommandContext(ctx,
-		"yt-dlp",
+		a.ytDlpPath,
 		"--dump-json",
 		"--playlist-end", "50",
 		"--skip-download",
