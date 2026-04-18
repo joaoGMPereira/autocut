@@ -21,6 +21,12 @@ import (
 	"github.com/joaoGMPereira/autocut/server/internal/processor"
 )
 
+// metaGeneratorIface is the subset of ai.MetadataGenerator used by the pipeline service.
+type metaGeneratorIface interface {
+	Available() bool
+	PrefillBatch(ctx context.Context, runID int64)
+}
+
 // Service orchestrates pipeline run state transitions and background download.
 type Service struct {
 	repo          *database.PipelineRunRepo
@@ -35,6 +41,13 @@ type Service struct {
 	dataDir       string
 	log           *slog.Logger
 	cancelMap     sync.Map // map[int64]context.CancelFunc — one entry per active run
+	metaGenerator metaGeneratorIface  // NEW — nil if Claude unavailable
+}
+
+// SetMetadataGenerator sets the metadata generator. Called from main.go after construction
+// to avoid circular initialization.
+func (s *Service) SetMetadataGenerator(g metaGeneratorIface) {
+	s.metaGenerator = g
 }
 
 // videoInfoPayload is the SSE payload for the video_info event.
@@ -306,7 +319,22 @@ func (s *Service) Advance(ctx context.Context, id int64, req AdvanceRequest) (Ad
 		return AdvanceResult{State: StateGeneratingClips}, nil
 
 	case StateWaitingThumbnailConfig:
-		return s.advanceSimple(ctx, id, StateWaitingThumbnailConfig, StateWaitingReviewMetadata)
+		if err := s.repo.AdvanceState(ctx, id, StateWaitingThumbnailConfig, StateWaitingReviewMetadata); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				if curr, _ := s.repo.GetByID(ctx, id); curr != nil {
+					return AdvanceResult{State: curr.State}, nil
+				}
+			}
+			return AdvanceResult{}, fmt.Errorf("advance run %d: %w", id, err)
+		}
+		s.hub.Publish(jobKey, hub.SSEEvent{
+			Type: "state_changed",
+			Data: stateChangedPayload{RunID: id, State: StateWaitingReviewMetadata},
+		})
+		if s.metaGenerator != nil && s.metaGenerator.Available() {
+			go s.metaGenerator.PrefillBatch(context.Background(), id)
+		}
+		return AdvanceResult{State: StateWaitingReviewMetadata}, nil
 
 	case StateWaitingReviewMetadata:
 		return s.advanceSimple(ctx, id, StateWaitingReviewMetadata, StateWaitingReviewClips)
