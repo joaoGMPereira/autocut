@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import type { GatePayload, Clip, ClipMetadataUpdate } from '@/types/pipeline';
+import type { GatePayload, ClipMetadataUpdate } from '@/types/pipeline';
 
 const log = createLogger('StepReviewMetadata');
 
@@ -24,6 +24,15 @@ interface ClipEdit {
   thumbnail_text: string;
 }
 
+function phaseLabel(status: string | undefined): string {
+  switch (status) {
+    case 'fetching_channel': return 'Baixando dados do canal...';
+    case 'generating':       return 'Preparando geração...';
+    case 'streaming':        return 'Gerando metadados com IA...';
+    default:                 return 'Aguardando início...';
+  }
+}
+
 export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
   const goUrl = useAppStore((s) => s.goUrl);
   const activeRunId = usePipelineStore((s) => s.activeRunId);
@@ -35,10 +44,21 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
   const isHistorical = historical !== undefined;
 
   const [edits, setEdits] = useState<Record<number, ClipEdit>>({});
-  const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [regeneratingClipId, setRegeneratingClipId] = useState<number | null>(null);
-  const [hasGenerated, setHasGenerated] = useState(false);
+
+  // True while the backend is auto-generating (PrefillBatch goroutine or manual re-trigger).
+  // Starts as true if clips have no metadata yet — server is generating in the background.
+  const hasMetadata = clips.length > 0 && clips.some((c) => c.title !== '');
+  const isActivelyGenerating =
+    metadataProgress?.status === 'fetching_channel' ||
+    metadataProgress?.status === 'generating' ||
+    metadataProgress?.status === 'streaming';
+
+  // Show loading screen when: no metadata yet (auto-gen in progress) OR SSE says in-progress.
+  const showLoading = !isHistorical && (isActivelyGenerating || (clips.length > 0 && !hasMetadata && metadataProgress?.status !== 'error'));
+  // While clips haven't loaded yet we show nothing — avoid flicker between loading and editor.
+  const clipsLoaded = clips.length > 0;
 
   // Load clips on mount
   useEffect(() => {
@@ -60,31 +80,18 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
     setEdits(newEdits);
   }, [clips]);
 
-  // Auto-generate on mount (once, if clips have no metadata)
-  useEffect(() => {
-    if (!activeRunId || clips.length === 0 || hasGenerated || isHistorical) return;
-    const hasMetadata = clips.some((c) => c.title !== '');
-    if (!hasMetadata) {
-      void handleGenerate();
-    }
-  }, [activeRunId, clips.length]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Watch for metadata_progress "done" to reload clips
+  // Watch for metadata_progress events
   useEffect(() => {
     if (metadataProgress?.status === 'done' && activeRunId) {
       void loadClips(goUrl, activeRunId);
-      setIsGenerating(false);
-      setHasGenerated(true);
     }
     if (metadataProgress?.status === 'error') {
-      setIsGenerating(false);
-      setGenerateError(metadataProgress.message || 'Generation failed');
+      setGenerateError(metadataProgress.message || 'Geração falhou');
     }
   }, [metadataProgress?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleGenerate = useCallback(async () => {
+  const handleRegenerate = useCallback(async () => {
     if (!activeRunId) return;
-    setIsGenerating(true);
     setGenerateError(null);
     try {
       const res = await fetch(`${goUrl}/api/metadata/runs/${activeRunId}/generate`, {
@@ -94,10 +101,8 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
         const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
         throw new Error(data.error || `Failed: ${res.status}`);
       }
-      // SSE events will update progress
     } catch (err) {
-      setIsGenerating(false);
-      setGenerateError(err instanceof Error ? err.message : 'Generation failed');
+      setGenerateError(err instanceof Error ? err.message : 'Geração falhou');
     }
   }, [goUrl, activeRunId]);
 
@@ -111,7 +116,6 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
       );
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
       const data = await res.json();
-      // Update local edits with generated data
       setEdits((prev) => ({
         ...prev,
         [clipId]: {
@@ -153,33 +157,90 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
+  // ── Loading screen (auto-generation in progress) ──────────────────────────
+  if (!isHistorical && !clipsLoaded) {
+    return (
+      <div className="flex items-center justify-center min-h-[300px]">
+        <p className="text-sm text-zinc-500">Carregando clips...</p>
+      </div>
+    );
+  }
+
+  if (showLoading) {
+    const status = metadataProgress?.status;
+    const percent = metadataProgress?.percent ?? 0;
+
+    return (
+      <div className="max-w-2xl space-y-8">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">Preparando metadados</h2>
+          <p className="text-sm text-zinc-500 mt-1">
+            Os metadados estão sendo gerados automaticamente. Aguarde...
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-6 space-y-4">
+          {/* Phase indicator */}
+          <div className="flex items-center gap-3">
+            <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+            <span className="text-sm font-medium text-foreground">
+              {phaseLabel(status)}
+            </span>
+          </div>
+
+          {/* Progress bar */}
+          <Progress value={percent} className="h-2" />
+
+          {/* Step messages */}
+          <div className="space-y-2">
+            <StepRow
+              done={status === 'generating' || status === 'streaming' || status === 'done'}
+              active={status === 'fetching_channel'}
+              label="Baixar dados do canal"
+            />
+            <StepRow
+              done={status === 'done'}
+              active={status === 'generating' || status === 'streaming'}
+              label="Gerar metadados com IA"
+            />
+          </div>
+
+          {metadataProgress?.message && (
+            <p className="text-xs text-zinc-500">{metadataProgress.message}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Editor ────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4 max-w-2xl">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-foreground">Review Metadata</h2>
+          <h2 className="text-xl font-semibold text-foreground">Revisar metadados</h2>
           <p className="text-sm text-zinc-500">
-            Edit titles, descriptions, tags, and thumbnail text for each clip.
+            Edite títulos, descrições, tags e texto de thumbnail de cada clip.
           </p>
         </div>
         <Button
           variant="outline"
           size="sm"
-          onClick={() => void handleGenerate()}
-          disabled={isGenerating || clips.length === 0}
+          onClick={() => void handleRegenerate()}
+          disabled={isActivelyGenerating || clips.length === 0}
         >
-          {isGenerating ? 'Generating...' : 'Generate All'}
+          {isActivelyGenerating ? 'Gerando...' : 'Regenerar tudo'}
         </Button>
       </div>
 
       {isHistorical && (
         <div className="rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-xs text-zinc-400">
-          Reviewing previous submission. Re-submitting will restart the pipeline from this step.
+          Revisando submissão anterior. Re-submeter reinicia o pipeline a partir deste passo.
         </div>
       )}
 
-      {/* Progress bar during generation */}
-      {isGenerating && metadataProgress && (
+      {/* Progress bar during manual re-generation */}
+      {isActivelyGenerating && metadataProgress && (
         <div className="space-y-1">
           <Progress value={metadataProgress.percent} className="h-2" />
           <p className="text-xs text-zinc-500">{metadataProgress.message}</p>
@@ -219,10 +280,10 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
                   variant="ghost"
                   size="sm"
                   onClick={() => void handleRegenerateSingle(clip.id)}
-                  disabled={isRegen || isGenerating}
+                  disabled={isRegen || isActivelyGenerating}
                   className="text-xs"
                 >
-                  {isRegen ? 'Regenerating...' : 'Regenerate'}
+                  {isRegen ? 'Regenerando...' : 'Regenerar'}
                 </Button>
               </div>
 
@@ -235,7 +296,7 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
                 <Input
                   value={edit.thumbnail_text}
                   onChange={(e) => updateEdit(clip.id, 'thumbnail_text', e.target.value)}
-                  placeholder="SHORT HOOK (2-3 words, ALL CAPS)"
+                  placeholder="GANCHO CURTO (2-3 palavras, CAIXA ALTA)"
                   maxLength={30}
                   className="text-sm uppercase"
                 />
@@ -244,13 +305,13 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
               {/* Title */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs text-zinc-400">Title</Label>
+                  <Label className="text-xs text-zinc-400">Título</Label>
                   <span className="text-xs text-zinc-600">{edit.title.length}/100</span>
                 </div>
                 <Input
                   value={edit.title}
                   onChange={(e) => updateEdit(clip.id, 'title', e.target.value)}
-                  placeholder="Clip title..."
+                  placeholder="Título do clip..."
                   maxLength={100}
                   className="text-sm"
                 />
@@ -259,13 +320,13 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
               {/* Description */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs text-zinc-400">Description</Label>
+                  <Label className="text-xs text-zinc-400">Descrição</Label>
                   <span className="text-xs text-zinc-600">{edit.description.length}/5000</span>
                 </div>
                 <textarea
                   value={edit.description}
                   onChange={(e) => updateEdit(clip.id, 'description', e.target.value)}
-                  placeholder="Clip description..."
+                  placeholder="Descrição do clip..."
                   maxLength={5000}
                   rows={3}
                   className="w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-foreground placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600"
@@ -294,11 +355,30 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
       {/* Submit button */}
       {clips.length > 0 && (
         <div className="flex justify-end pt-2">
-          <Button onClick={() => void handleSubmit()} disabled={isGenerating}>
-            Continue
+          <Button onClick={() => void handleSubmit()} disabled={isActivelyGenerating}>
+            Continuar
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+function StepRow({ done, active, label }: { done: boolean; active: boolean; label: string }) {
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      {done ? (
+        <span className="text-green-500">✓</span>
+      ) : active ? (
+        <span className="h-2 w-2 rounded-full bg-primary animate-pulse inline-block" />
+      ) : (
+        <span className="h-2 w-2 rounded-full bg-zinc-700 inline-block" />
+      )}
+      <span className={done ? 'text-zinc-400 line-through' : active ? 'text-foreground' : 'text-zinc-600'}>
+        {label}
+      </span>
     </div>
   );
 }

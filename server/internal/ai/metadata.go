@@ -393,8 +393,9 @@ TÉCNICAS DE HOOK (priorize):
 DESCRIÇÕES:
 - Above the Fold: primeiros 150 chars = gancho principal + keyword
 - Corpo Semântico: ferramentas, pessoas e conceitos citados pelo NOME (Knowledge Graph)
-- CTA simples no final
+- CTA simples antes das hashtags
 - Citabilidade: escreva para que LLMs possam citar como resposta
+- HASHTAGS: última linha da descrição = 3-5 hashtags das tags mais relevantes do canal (ex: #brino #react #clips)
 
 THUMBNAIL TEXT (max 38 chars, CAIXA ALTA):
 - 1-3 palavras de alto impacto visual
@@ -477,19 +478,22 @@ func buildUserPrompt(
 			}
 		}
 
-		// Top tags (cap at 10)
+		// Top tags (cap at 10) — also shown as hashtag suggestions for descriptions
 		if analytics.TopTags != "" && analytics.TopTags != "[]" {
 			var tags []TagCount
 			if err := json.Unmarshal([]byte(analytics.TopTags), &tags); err == nil && len(tags) > 0 {
 				if len(tags) > 10 {
 					tags = tags[:10]
 				}
-				sb.WriteString("\n### Tags frequentes do canal:\n")
+				sb.WriteString("\n### Tags frequentes do canal (use como hashtags na descrição):\n")
 				tagParts := make([]string, 0, len(tags))
+				hashtagParts := make([]string, 0, len(tags))
 				for _, t := range tags {
 					tagParts = append(tagParts, t.Tag)
+					hashtagParts = append(hashtagParts, "#"+strings.ReplaceAll(t.Tag, " ", ""))
 				}
 				sb.WriteString(strings.Join(tagParts, ", ") + "\n")
+				sb.WriteString("Hashtags sugeridas: " + strings.Join(hashtagParts[:min(5, len(hashtagParts))], " ") + "\n")
 			}
 		}
 
