@@ -113,7 +113,7 @@ func main() {
 	if claudeErr != nil {
 		slog.Warn("claude CLI not available — metadata generation disabled", "err", claudeErr)
 	}
-	metadataGen := ai.NewMetadataGenerator(claudeCLI, repo, clipRepo, highlightRepo, channelCfgRepo, settingRepo, sseHub)
+	metadataGen := ai.NewMetadataGenerator(claudeCLI, repo, clipRepo, highlightRepo, channelCfgRepo, settingRepo, sseHub, nil, nil)
 	metadataHandler := handlers.NewMetadataHandler(repo, clipRepo, metadataGen, sseHub)
 
 	router := api.NewRouter(

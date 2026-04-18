@@ -14,14 +14,17 @@ import (
 
 // MetadataGenerator orchestrates AI-powered metadata generation for pipeline clips.
 type MetadataGenerator struct {
-	cli           *ClaudeCLI
-	runRepo       *database.PipelineRunRepo
-	clipRepo      *database.PipelineClipRepo
-	highlightRepo *database.PipelineHighlightRepo
-	channelRepo   *database.ChannelConfigRepo
-	settingRepo   *database.AppSettingRepo
-	hub           *hub.SSEHub
-	log           *slog.Logger
+	cli            *ClaudeCLI
+	runRepo        *database.PipelineRunRepo
+	clipRepo       *database.PipelineClipRepo
+	highlightRepo  *database.PipelineHighlightRepo
+	channelRepo    *database.ChannelConfigRepo
+	channelBaseRepo *database.ChannelRepo
+	settingRepo    *database.AppSettingRepo
+	analyticsRepo  *database.ChannelAnalyticsRepo
+	hub            *hub.SSEHub
+	analyzer       *ChannelAnalyzer
+	log            *slog.Logger
 }
 
 // NewMetadataGenerator constructs a MetadataGenerator. cli may be nil if Claude is unavailable.
@@ -33,6 +36,8 @@ func NewMetadataGenerator(
 	channelRepo *database.ChannelConfigRepo,
 	settingRepo *database.AppSettingRepo,
 	h *hub.SSEHub,
+	analyticsRepo *database.ChannelAnalyticsRepo, // may be nil
+	analyzer *ChannelAnalyzer,                    // may be nil
 ) *MetadataGenerator {
 	return &MetadataGenerator{
 		cli:           cli,
@@ -42,8 +47,16 @@ func NewMetadataGenerator(
 		channelRepo:   channelRepo,
 		settingRepo:   settingRepo,
 		hub:           h,
+		analyticsRepo: analyticsRepo,
+		analyzer:      analyzer,
 		log:           slog.With("component", "metadata_generator"),
 	}
+}
+
+// SetChannelBaseRepo sets the ChannelRepo used for looking up channel URL/title.
+// Called during wiring (T4) — optional, gracefully degrades when nil.
+func (g *MetadataGenerator) SetChannelBaseRepo(r *database.ChannelRepo) {
+	g.channelBaseRepo = r
 }
 
 // Available returns true if the Claude CLI is ready.
@@ -76,7 +89,7 @@ func (g *MetadataGenerator) GenerateBatch(ctx context.Context, runID int64) ([]C
 	}
 
 	// 3. Publish "generating" status
-	g.publishProgress(jobKey, runID, "generating", 10, fmt.Sprintf("Preparing prompt for %d clips...", len(clips)), len(clips))
+	g.publishProgress(jobKey, runID, "generating", 10, fmt.Sprintf("Preparando prompt para %d clips...", len(clips)), len(clips))
 
 	// 4. Load channel config (optional)
 	var channelTags, channelCategory string
@@ -90,10 +103,28 @@ func (g *MetadataGenerator) GenerateBatch(ctx context.Context, runID int64) ([]C
 		}
 	}
 
-	// 5. Load selected highlights for context
+	// 5. Load channel analytics from cache (transparent to caller)
+	var analytics *database.ChannelAnalytics
+	var channelName string
+	if run.ChannelID.Valid && g.analyticsRepo != nil {
+		a, aErr := g.analyticsRepo.Get(ctx, run.ChannelID.Int64, 86400)
+		if aErr != nil {
+			g.log.Warn("failed to load channel analytics", "err", aErr)
+		} else {
+			analytics = a
+		}
+	}
+	if run.ChannelID.Valid && g.channelBaseRepo != nil {
+		ch, _ := g.channelBaseRepo.GetByID(ctx, run.ChannelID.Int64)
+		if ch != nil {
+			channelName = ch.ChannelTitle
+		}
+	}
+
+	// 6. Load selected highlights for context
 	highlights, _ := g.highlightRepo.ListSelectedByRun(ctx, runID)
 
-	// 6. Read transcript (if exists)
+	// 7. Read transcript (if exists)
 	var transcript string
 	if run.TranscriptPath != "" {
 		data, readErr := os.ReadFile(run.TranscriptPath)
@@ -106,41 +137,41 @@ func (g *MetadataGenerator) GenerateBatch(ctx context.Context, runID int64) ([]C
 		}
 	}
 
-	// 7. Read model setting
+	// 8. Read model setting
 	model := "haiku"
 	if m, _ := g.settingRepo.Get(ctx, "metadata_ai_model"); m != "" {
 		model = m
 	}
 
-	// 8. Build prompts
+	// 9. Build prompts
 	systemPrompt := buildSystemPrompt()
-	userPrompt := buildUserPrompt(run, clips, highlights, channelTags, channelCategory, transcript)
+	userPrompt := buildUserPrompt(run, clips, highlights, channelTags, channelCategory, transcript, analytics, channelName)
 
-	g.publishProgress(jobKey, runID, "streaming", 30, "Claude is generating metadata...", len(clips))
+	g.publishProgress(jobKey, runID, "streaming", 30, "Claude está gerando metadados...", len(clips))
 
-	// 9. Call Claude
+	// 10. Call Claude
 	resultText, err := g.cli.GenerateStream(ctx, GenerateRequest{
 		Prompt:       userPrompt,
 		SystemPrompt: systemPrompt,
 		Model:        model,
 	}, func(delta string) {
-		g.publishProgress(jobKey, runID, "streaming", 60, "Generating...", len(clips))
+		g.publishProgress(jobKey, runID, "streaming", 60, "Gerando...", len(clips))
 	})
 	if err != nil {
 		g.publishProgress(jobKey, runID, "error", 0, fmt.Sprintf("Generation failed: %s", err), len(clips))
 		return nil, fmt.Errorf("claude generate: %w", err)
 	}
 
-	g.publishProgress(jobKey, runID, "streaming", 80, "Parsing response...", len(clips))
+	g.publishProgress(jobKey, runID, "streaming", 80, "Processando resposta...", len(clips))
 
-	// 10. Parse JSON response
+	// 11. Parse JSON response
 	metadata, err := parseMetadataResponse(resultText, clips)
 	if err != nil {
 		g.publishProgress(jobKey, runID, "error", 0, fmt.Sprintf("Failed to parse response: %s", err), len(clips))
 		return nil, fmt.Errorf("parse response: %w", err)
 	}
 
-	// 11. Persist to database
+	// 12. Persist to database
 	for _, m := range metadata {
 		tags := strings.Join(m.Tags, ",")
 		if updateErr := g.clipRepo.UpdateMetadata(ctx, m.ClipID, m.Title, m.Description, tags, m.ThumbnailText); updateErr != nil {
@@ -148,8 +179,70 @@ func (g *MetadataGenerator) GenerateBatch(ctx context.Context, runID int64) ([]C
 		}
 	}
 
-	g.publishProgress(jobKey, runID, "done", 100, "Metadata generated successfully", len(clips))
+	g.publishProgress(jobKey, runID, "done", 100, "Metadados gerados com sucesso", len(clips))
 	return metadata, nil
+}
+
+// PrefillBatch is designed to be called in a goroutine. It optionally fetches fresh
+// channel analytics (cache-first) before delegating to GenerateBatch.
+// All errors are published as SSE events — the method never returns an error.
+func (g *MetadataGenerator) PrefillBatch(ctx context.Context, runID int64) {
+	jobKey := fmt.Sprintf("%d", runID)
+
+	// 1. Load run
+	run, err := g.runRepo.GetByID(ctx, runID)
+	if err != nil {
+		g.publishProgress(jobKey, runID, "error", 0, fmt.Sprintf("Failed to load run: %s", err), 0)
+		return
+	}
+
+	// 2. Optionally ensure fresh channel analytics
+	if run.ChannelID.Valid && g.analyzer != nil && g.analyticsRepo != nil {
+		channelIDInt := run.ChannelID.Int64
+
+		// Check cache first
+		cached, cacheErr := g.analyticsRepo.Get(ctx, channelIDInt, 86400)
+		if cacheErr != nil {
+			g.log.Warn("prefill: analytics cache lookup failed", "err", cacheErr)
+		}
+
+		if cached == nil {
+			// Cache miss: fetch from YouTube
+			g.publishProgress(jobKey, runID, "fetching_channel", 10, "Analisando histórico do canal...", 0)
+
+			// Build channel URL from channel base repo if available
+			channelURL := fmt.Sprintf("https://www.youtube.com/channel/%d", channelIDInt)
+			if g.channelBaseRepo != nil {
+				ch, chErr := g.channelBaseRepo.GetByID(ctx, channelIDInt)
+				if chErr == nil && ch != nil && ch.ChannelID != "" {
+					channelURL = "https://www.youtube.com/channel/" + ch.ChannelID
+				}
+			}
+
+			_, fetchErr := g.analyzer.FetchAndCache(ctx, channelIDInt, channelURL)
+			if fetchErr != nil {
+				// Graceful degradation: log and continue to generation
+				g.log.Warn("prefill: failed to fetch channel analytics", "err", fetchErr)
+			}
+		}
+	}
+
+	// 3. Load clip count for progress message
+	clips, clipsErr := g.clipRepo.ListByRun(ctx, runID)
+	clipCount := 0
+	if clipsErr == nil {
+		clipCount = len(clips)
+	}
+
+	g.publishProgress(jobKey, runID, "generating", 30, fmt.Sprintf("Preparando prompt para %d clips...", clipCount), clipCount)
+
+	// 4. Delegate to GenerateBatch (analytics loaded transparently inside)
+	_, genErr := g.GenerateBatch(ctx, runID)
+	if genErr != nil {
+		g.publishProgress(jobKey, runID, "error", 0, fmt.Sprintf("Generation failed: %s", genErr), clipCount)
+		return
+	}
+	// done is already published inside GenerateBatch
 }
 
 // GenerateSingle generates metadata for a single clip.
@@ -219,23 +312,23 @@ func (g *MetadataGenerator) GenerateSingle(ctx context.Context, runID, clipID in
 	}
 
 	systemPrompt := buildSystemPrompt()
-	userPrompt := fmt.Sprintf(`Generate YouTube metadata for 1 clip from this video.
+	userPrompt := fmt.Sprintf(`Gere metadados YouTube para 1 clip deste vídeo.
 
-## Source Video
-- Title: %s
+## Vídeo Fonte
+- Título: %s
 - URL: %s
 
-## Channel Tags
+## Tags do Canal
 %s
 
-## Clip (%.1fs - %.1fs, %.1fs duration)
-Highlight: %s
-Reason: %s
+## Clip (%.1fs - %.1fs, %.1fs de duração)
+Destaque: %s
+Razão: %s
 Score: %.1f
-Transcript: %s
+Transcrição: %s
 
-Return a JSON array with exactly 1 object:
-[{"thumbnail_text":"SHORT HOOK","title":"...","description":"...","tags":["..."],"category_id":22}]`,
+Retorne um array JSON com exatamente 1 objeto:
+[{"thumbnail_text":"TEXTO IMPACTO","title":"...","description":"...","tags":["..."],"category_id":22}]`,
 		run.VideoTitle, run.URL, channelTags,
 		targetClip.StartSec, targetClip.EndSec, targetClip.DurationSec,
 		highlightText, highlightReason, highlightScore, transcriptSegment)
@@ -283,43 +376,127 @@ func (g *MetadataGenerator) publishProgress(jobKey string, runID int64, status s
 
 // buildSystemPrompt returns the system prompt for metadata generation.
 func buildSystemPrompt() string {
-	return `You are a YouTube SEO metadata expert. Generate optimized metadata for video clips.
+	return `Você é um especialista em SEO de YouTube e criação de conteúdo viral para clips longos.
 
-Rules:
-- thumbnail_text: MAX 3 words, ALL CAPS, impactful hook for thumbnail overlay (e.g. "INSANE PLAY", "NO WAY", "EPIC FAIL")
-- title: Under 100 characters, attention-grabbing, include relevant keywords
-- description: 200-500 characters, brief summary + keywords + hashtags
-- tags: 5-15 relevant keywords/phrases, each tag max 30 characters
-- category_id: YouTube category (20=Gaming, 22=People & Blogs, 24=Entertainment, 27=Education, 28=Science & Tech)
-- Return ONLY valid JSON, no markdown fences, no explanation`
+TÍTULOS (max 100 chars, CAIXA ALTA):
+- Front-load: benefício/keyword principal nas 5 primeiras palavras
+- Curiosity Gap: prometa resultado ou crie lacuna de curiosidade
+- Especificidade: use números e resultados concretos
+- Anti-genérico: evite títulos vagos; seja ultra-específico
+- TÍTULOS AUTÔNOMOS: funcionem sozinhos, sem depender de sequência
+- SEM NUMERAÇÃO: NUNCA use "Parte 1", "PT1" ou números (mata CTR)
+
+TÉCNICAS DE HOOK (priorize):
+1. Pergunta de Curiosidade: "Por que ninguém está falando sobre X?"
+2. Pergunta de Resultado: "Como eu fiz X em apenas Y tempo?"
+3. Pergunta de Erro: "Você ainda está cometendo este erro em X?"
+4. Afirmação Contraintuitiva: "Pare de fazer X agora mesmo"
+5. Comparação Direta: "X vs Y: Qual é realmente melhor?"
+6. Lista Específica: "7 segredos para X que mudaram meu jogo"
+
+DESCRIÇÕES:
+- Above the Fold: primeiros 150 chars = gancho principal + keyword
+- Corpo Semântico: ferramentas, pessoas e conceitos citados pelo NOME (Knowledge Graph)
+- CTA simples no final
+- Citabilidade: escreva para que LLMs possam citar como resposta
+
+THUMBNAIL TEXT (max 38 chars, CAIXA ALTA):
+- 1-3 palavras de alto impacto visual
+- Anti-genérico: evite "INCRÍVEL", "LEGAL" — prefira "ERRO FATAL", "LUCRO REAL"
+- Complemento: adiciona camada de mistério que a imagem sozinha não conta
+
+TAGS: 5-8 tags semânticas de categorização (não keyword stuffing)
+IDIOMA: 100% Português do Brasil
+OUTPUT: JSON válido, sem markdown, sem explicações`
 }
 
 // buildUserPrompt constructs the user prompt with all available context.
+// analytics is optional — when non-nil, a channel context section is injected before the clips.
 func buildUserPrompt(
 	run *database.PipelineRun,
 	clips []database.PipelineClip,
 	highlights []database.PipelineHighlight,
 	channelTags, channelCategory, transcript string,
+	analytics *database.ChannelAnalytics,
+	channelName string,
 ) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("Generate YouTube metadata for %d clips from this video.\n\n", len(clips)))
+	sb.WriteString(fmt.Sprintf("Gere metadados YouTube para %d clips deste vídeo.\n\n", len(clips)))
 
 	// Source video
-	sb.WriteString("## Source Video\n")
-	sb.WriteString(fmt.Sprintf("- Title: %s\n", run.VideoTitle))
+	sb.WriteString("## Vídeo Fonte\n")
+	sb.WriteString(fmt.Sprintf("- Título: %s\n", run.VideoTitle))
 	sb.WriteString(fmt.Sprintf("- URL: %s\n", run.URL))
-	sb.WriteString(fmt.Sprintf("- Duration: %ds\n\n", run.DurationSec))
+	sb.WriteString(fmt.Sprintf("- Duração: %ds\n\n", run.DurationSec))
 
-	// Channel context
+	// Channel context from config
 	if channelTags != "" || channelCategory != "" {
-		sb.WriteString("## Channel Context\n")
+		sb.WriteString("## Contexto do Canal\n")
 		if channelTags != "" {
-			sb.WriteString(fmt.Sprintf("- Default tags: %s\n", channelTags))
+			sb.WriteString(fmt.Sprintf("- Tags padrão: %s\n", channelTags))
 		}
 		if channelCategory != "" {
-			sb.WriteString(fmt.Sprintf("- Category: %s\n", channelCategory))
+			sb.WriteString(fmt.Sprintf("- Categoria: %s\n", channelCategory))
 		}
+		sb.WriteString("\n")
+	}
+
+	// Analytics context section (injected before clips)
+	if analytics != nil {
+		name := channelName
+		if name == "" {
+			name = "Canal"
+		}
+		sb.WriteString(fmt.Sprintf("## Contexto do Canal: %s\n", name))
+		sb.WriteString(fmt.Sprintf("- Vídeos analisados: %d | Média de views: %d\n", analytics.VideoCount, analytics.AvgViews))
+
+		// Top title words (cap at 10)
+		if analytics.TopTitleWords != "" && analytics.TopTitleWords != "[]" {
+			var words []WordCount
+			if err := json.Unmarshal([]byte(analytics.TopTitleWords), &words); err == nil && len(words) > 0 {
+				if len(words) > 10 {
+					words = words[:10]
+				}
+				sb.WriteString("\n### Palavras mais usadas nos títulos:\n")
+				parts := make([]string, 0, len(words))
+				for _, w := range words {
+					parts = append(parts, fmt.Sprintf("%q (%dx)", w.Word, w.Count))
+				}
+				sb.WriteString("- " + strings.Join(parts, ", ") + "\n")
+			}
+		}
+
+		// Success titles (cap at 5)
+		if analytics.SuccessTitles != "" && analytics.SuccessTitles != "[]" {
+			var titles []string
+			if err := json.Unmarshal([]byte(analytics.SuccessTitles), &titles); err == nil && len(titles) > 0 {
+				if len(titles) > 5 {
+					titles = titles[:5]
+				}
+				sb.WriteString("\n### Títulos de sucesso (referência de estilo):\n")
+				for _, t := range titles {
+					sb.WriteString(fmt.Sprintf("- %s\n", t))
+				}
+			}
+		}
+
+		// Top tags (cap at 10)
+		if analytics.TopTags != "" && analytics.TopTags != "[]" {
+			var tags []TagCount
+			if err := json.Unmarshal([]byte(analytics.TopTags), &tags); err == nil && len(tags) > 0 {
+				if len(tags) > 10 {
+					tags = tags[:10]
+				}
+				sb.WriteString("\n### Tags frequentes do canal:\n")
+				tagParts := make([]string, 0, len(tags))
+				for _, t := range tags {
+					tagParts = append(tagParts, t.Tag)
+				}
+				sb.WriteString(strings.Join(tagParts, ", ") + "\n")
+			}
+		}
+
 		sb.WriteString("\n")
 	}
 
@@ -334,8 +511,8 @@ func buildUserPrompt(
 		sb.WriteString(fmt.Sprintf("### Clip %d (%.1fs - %.1fs, %.1fs)\n", i+1, clip.StartSec, clip.EndSec, clip.DurationSec))
 		if clip.HighlightID.Valid {
 			if h, ok := highlightMap[clip.HighlightID.Int64]; ok {
-				sb.WriteString(fmt.Sprintf("Highlight: %s\n", h.Text))
-				sb.WriteString(fmt.Sprintf("Reason: %s\n", h.Reason))
+				sb.WriteString(fmt.Sprintf("Destaque: %s\n", h.Text))
+				sb.WriteString(fmt.Sprintf("Razão: %s\n", h.Reason))
 				sb.WriteString(fmt.Sprintf("Score: %.1f\n", h.Score))
 			}
 		}
@@ -343,16 +520,16 @@ func buildUserPrompt(
 		if transcript != "" {
 			segment := extractTranscriptSegment(transcript, clip.StartSec, clip.EndSec)
 			if segment != "" {
-				sb.WriteString(fmt.Sprintf("Transcript: %s\n", segment))
+				sb.WriteString(fmt.Sprintf("Transcrição: %s\n", segment))
 			}
 		}
 		sb.WriteString("\n")
 	}
 
 	// Output format
-	sb.WriteString("## Output\n")
-	sb.WriteString(fmt.Sprintf("JSON array with exactly %d objects:\n", len(clips)))
-	sb.WriteString(`[{"thumbnail_text":"SHORT HOOK","title":"...","description":"...","tags":["..."],"category_id":22}]`)
+	sb.WriteString("## Saída\n")
+	sb.WriteString(fmt.Sprintf("Array JSON com exatamente %d objetos (mesma ordem dos clips acima):\n", len(clips)))
+	sb.WriteString(`[{"thumbnail_text":"TEXTO IMPACTO","title":"...","description":"...","tags":["..."],"category_id":22}]`)
 	sb.WriteString("\n")
 
 	return sb.String()
