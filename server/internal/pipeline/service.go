@@ -164,6 +164,58 @@ type AdvanceResult struct {
 	VideoReused bool   `json:"video_reused"`
 }
 
+// ReviewClipsPayload is the gate request for WAITING_REVIEW_CLIPS.
+type ReviewClipsPayload struct {
+	SelectedIDs []int64        `json:"selected_ids"`
+	ClipEdits   []ClipTextEdit `json:"clip_edits"`
+}
+
+// ClipTextEdit carries inline title/thumbnail_text edits from the review screen.
+type ClipTextEdit struct {
+	ID            int64  `json:"id"`
+	Title         string `json:"title"`
+	ThumbnailText string `json:"thumbnail_text"`
+}
+
+// ReviewClips persists clip selection and text edits, then advances to WAITING_UPLOAD_CONFIRM.
+func (s *Service) ReviewClips(ctx context.Context, runID int64, payload ReviewClipsPayload) (string, error) {
+	run, err := s.repo.GetByID(ctx, runID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", fmt.Errorf("run %d not found", runID)
+		}
+		return "", fmt.Errorf("get run %d: %w", runID, err)
+	}
+	if run.State != StateWaitingReviewClips {
+		return "", fmt.Errorf("run not in %s state (current: %s)", StateWaitingReviewClips, run.State)
+	}
+
+	// Persist selections
+	if err := s.clipRepo.UpdateIsSelectedBatch(ctx, runID, payload.SelectedIDs); err != nil {
+		return "", fmt.Errorf("update is_selected: %w", err)
+	}
+
+	// Save any inline text edits (non-fatal per clip)
+	for _, edit := range payload.ClipEdits {
+		if err := s.clipRepo.UpdateTitleAndText(ctx, edit.ID, edit.Title, edit.ThumbnailText); err != nil {
+			s.log.Warn("failed to update clip text", "clip_id", edit.ID, "err", err)
+		}
+	}
+
+	// Advance state
+	if err := s.repo.AdvanceState(ctx, runID, StateWaitingReviewClips, StateWaitingUploadConfirm); err != nil {
+		return "", fmt.Errorf("advance state: %w", err)
+	}
+
+	// Notify SSE subscribers
+	s.hub.Publish(fmt.Sprintf("%d", runID), hub.SSEEvent{
+		Type: "state_changed",
+		Data: map[string]interface{}{"run_id": runID, "state": StateWaitingUploadConfirm},
+	})
+
+	return StateWaitingUploadConfirm, nil
+}
+
 // Advance resolves the current gate state. Polymorphic — behavior depends on run's current state.
 func (s *Service) Advance(ctx context.Context, id int64, req AdvanceRequest) (AdvanceResult, error) {
 	run, err := s.repo.GetByID(ctx, id)
