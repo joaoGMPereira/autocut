@@ -1,4 +1,14 @@
 package uploader
 
-// TODO: Transcribe from Kotlin source — see AutoCut/.specify/memory/constitution.md
-// This file was cleared by clean-to-shell.sh as part of the constitution bootstrap.
+// VideoMetadata holds all YouTube upload metadata fields.
+// MadeForKids is always false — never read from channel config.
+type VideoMetadata struct {
+	ChannelID   int64    `json:"channel_id"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Tags        []string `json:"tags"`
+	CategoryID  string   `json:"category_id"`
+	Privacy     string   `json:"privacy"`
+	MadeForKids bool     `json:"made_for_kids"`
+	Language    string   `json:"language"`
+}
