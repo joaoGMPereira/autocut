@@ -272,6 +272,7 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
                   <Badge variant="secondary" className="text-xs">
                     Clip {idx + 1}
                   </Badge>
+                  <ThumbnailTypeBadge style={clip.thumbnail_style} />
                   <span className="text-xs text-zinc-500">
                     {formatDuration(clip.start_sec)} – {formatDuration(clip.end_sec)} ({formatDuration(clip.duration_sec)})
                   </span>
@@ -380,5 +381,20 @@ function StepRow({ done, active, label }: { done: boolean; active: boolean; labe
         {label}
       </span>
     </div>
+  );
+}
+
+function ThumbnailTypeBadge({ style }: { style: string }) {
+  const isLandscape = style === 'landscape';
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+        isLandscape
+          ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+          : 'bg-violet-500/15 text-violet-400 border-violet-500/30'
+      }`}
+    >
+      {isLandscape ? 'Landscape' : 'Shorts'}
+    </span>
   );
 }
