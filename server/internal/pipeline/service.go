@@ -19,6 +19,7 @@ import (
 	"github.com/joaoGMPereira/autocut/server/internal/downloader"
 	"github.com/joaoGMPereira/autocut/server/internal/hub"
 	"github.com/joaoGMPereira/autocut/server/internal/processor"
+	"github.com/joaoGMPereira/autocut/server/internal/uploader"
 )
 
 // ErrWrongState is returned when an operation cannot proceed because the run is not in the expected state.
@@ -38,6 +39,8 @@ type Service struct {
 	clipRepo      *database.PipelineClipRepo
 	channelCfgRepo *database.ChannelConfigRepo
 	settingRepo    *database.AppSettingRepo
+	uploadRepo     *database.UploadRepo      // NEW
+	queueStorage   *uploader.QueueStorage    // NEW
 	hub           *hub.SSEHub
 	ytDl          *downloader.YouTubeDownloader
 	twDl          *downloader.TwitchDownloader
@@ -105,6 +108,8 @@ func NewService(
 	twDl *downloader.TwitchDownloader,
 	dataDir string,
 	settingRepo *database.AppSettingRepo,
+	uploadRepo *database.UploadRepo,
+	queueStorage *uploader.QueueStorage,
 ) *Service {
 	return &Service{
 		repo:           repo,
@@ -113,6 +118,8 @@ func NewService(
 		clipRepo:       clipRepo,
 		channelCfgRepo: channelCfgRepo,
 		settingRepo:    settingRepo,
+		uploadRepo:     uploadRepo,
+		queueStorage:   queueStorage,
 		hub:            h,
 		ytDl:           ytDl,
 		twDl:           twDl,
@@ -402,20 +409,7 @@ func (s *Service) Advance(ctx context.Context, id int64, req AdvanceRequest) (Ad
 		return AdvanceResult{}, fmt.Errorf("use POST /gates/review-clips to advance from %s", StateWaitingReviewClips)
 
 	case StateWaitingUploadConfirm:
-		if err := s.repo.AdvanceState(ctx, id, StateWaitingUploadConfirm, StateUploading); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				if curr, _ := s.repo.GetByID(ctx, id); curr != nil {
-					return AdvanceResult{State: curr.State}, nil
-				}
-			}
-			return AdvanceResult{}, fmt.Errorf("advance run %d: %w", id, err)
-		}
-		s.hub.Publish(jobKey, hub.SSEEvent{
-			Type: "state_changed",
-			Data: stateChangedPayload{RunID: id, State: StateUploading},
-		})
-		go s.runUploadStub(id)
-		return AdvanceResult{State: StateUploading}, nil
+		return s.confirmUpload(ctx, id, run)
 
 	default:
 		return AdvanceResult{}, fmt.Errorf("no advance action for state %s", run.State)
@@ -1176,6 +1170,72 @@ func copyFile(src, dst string) error {
 		return fmt.Errorf("copy: %w", err)
 	}
 	return out.Close()
+}
+
+// confirmUpload queues all selected clips for the run to the upload_queue directory,
+// inserts upload records, then advances the run to DONE.
+func (s *Service) confirmUpload(ctx context.Context, id int64, run *database.PipelineRun) (AdvanceResult, error) {
+	jobKey := fmt.Sprintf("%d", id)
+
+	if !run.ChannelID.Valid {
+		return AdvanceResult{}, fmt.Errorf("run %d has no channel_id set", id)
+	}
+	channelID := run.ChannelID.Int64
+
+	// Load channel config for metadata
+	cfg, err := s.channelCfgRepo.GetByChannelID(ctx, channelID)
+	if err != nil {
+		return AdvanceResult{}, fmt.Errorf("load channel config for channel %d: %w", channelID, err)
+	}
+
+	// Load selected clips
+	allClips, err := s.clipRepo.ListByRun(ctx, id)
+	if err != nil {
+		return AdvanceResult{}, fmt.Errorf("load clips for run %d: %w", id, err)
+	}
+	var selected []database.PipelineClip
+	for _, c := range allClips {
+		if c.IsSelected {
+			selected = append(selected, c)
+		}
+	}
+	if len(selected) == 0 {
+		return AdvanceResult{}, fmt.Errorf("no selected clips to queue for run %d", id)
+	}
+
+	// Queue each clip
+	for i, clip := range selected {
+		meta := uploader.BuildMetadata(clip, *cfg)
+		metaBytes, _ := json.Marshal(meta)
+
+		qVideo, qThumb, saveErr := s.queueStorage.SaveToQueue(clip.FilePath, clip.ThumbnailPath, meta)
+		if saveErr != nil {
+			s.log.Error("save to queue failed", "clip_id", clip.ID, "err", saveErr)
+			return AdvanceResult{}, fmt.Errorf("save clip %d to queue: %w", clip.ID, saveErr)
+		}
+
+		_, createErr := s.uploadRepo.CreateQueued(ctx, channelID, clip.ID, qVideo, qThumb, string(metaBytes), "{}", i+1)
+		if createErr != nil {
+			s.log.Error("create queued upload failed", "clip_id", clip.ID, "err", createErr)
+			return AdvanceResult{}, fmt.Errorf("create upload record for clip %d: %w", clip.ID, createErr)
+		}
+	}
+
+	// Advance run directly to DONE (skip UPLOADING — we're queuing, not immediately uploading)
+	if err := s.repo.AdvanceState(ctx, id, StateWaitingUploadConfirm, StateDone); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			if curr, _ := s.repo.GetByID(ctx, id); curr != nil {
+				return AdvanceResult{State: curr.State}, nil
+			}
+		}
+		return AdvanceResult{}, fmt.Errorf("advance run %d to done: %w", id, err)
+	}
+	s.hub.Publish(jobKey, hub.SSEEvent{
+		Type: "state_changed",
+		Data: stateChangedPayload{RunID: id, State: StateDone},
+	})
+	s.log.Info("upload confirm: clips queued", "run_id", id, "count", len(selected))
+	return AdvanceResult{State: StateDone}, nil
 }
 
 // runUploadStub advances UPLOADING → DONE after a 100ms delay.

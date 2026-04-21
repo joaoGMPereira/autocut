@@ -20,6 +20,7 @@ import (
 	internaloauth "github.com/joaoGMPereira/autocut/server/internal/oauth"
 	"github.com/joaoGMPereira/autocut/server/internal/pipeline"
 	"github.com/joaoGMPereira/autocut/server/internal/stats"
+	"github.com/joaoGMPereira/autocut/server/internal/uploader"
 )
 
 func main() {
@@ -82,7 +83,9 @@ func main() {
 
 	highlightRepo := database.NewPipelineHighlightRepo(db, slog.Default())
 	clipRepo := database.NewPipelineClipRepo(db, slog.Default())
-	pipelineSvc := pipeline.NewService(repo, historyRepo, highlightRepo, clipRepo, channelCfgRepo, sseHub, ytDl, twDl, *dir, settingRepo)
+	uploadRepo := database.NewUploadRepo(db, slog.Default())
+	queueStorage := uploader.NewQueueStorage(*dir)
+	pipelineSvc := pipeline.NewService(repo, historyRepo, highlightRepo, clipRepo, channelCfgRepo, sseHub, ytDl, twDl, *dir, settingRepo, uploadRepo, queueStorage)
 	pipelineHandler := handlers.NewPipelineHandler(pipelineSvc, sseHub)
 	downloadHandler := handlers.NewDownloadHandler(sseHub, ytDl, twDl, nil)
 	urlHistoryHandler := handlers.NewURLHistoryHandler(historyRepo)
