@@ -63,6 +63,30 @@ func (m *mockConfigurator) DownloadWhisperModel(_ context.Context, _ string, log
 	return nil
 }
 
+func (m *mockConfigurator) Refresh() []configurator.ToolStatus { return m.tools }
+func (m *mockConfigurator) Sync() []configurator.ToolStatus   { return m.tools }
+func (m *mockConfigurator) Hardware() (configurator.HardwareProfile, configurator.ModelRecommendation) {
+	return configurator.HardwareProfile{}, configurator.ModelRecommendation{}
+}
+func (m *mockConfigurator) SetCustomPath(_ context.Context, _, _ string) error { return nil }
+func (m *mockConfigurator) ClearCustomPath(_ context.Context, _ string) error  { return nil }
+func (m *mockConfigurator) ApplyCustomPath(_ context.Context, toolName, _ string) (configurator.ToolStatus, string, error) {
+	for _, t := range m.tools {
+		if t.Name == toolName {
+			return t, "", nil
+		}
+	}
+	return configurator.ToolStatus{}, "not_found", &configurator.ErrToolNotFound{Name: toolName}
+}
+func (m *mockConfigurator) DetectAndClearCustomPath(_ context.Context, toolName string) (configurator.ToolStatus, error) {
+	for _, t := range m.tools {
+		if t.Name == toolName {
+			return t, nil
+		}
+	}
+	return configurator.ToolStatus{}, &configurator.ErrToolNotFound{Name: toolName}
+}
+
 // mockValidator satisfies configurator.ToolValidator.
 type mockValidator struct {
 	status configurator.ToolStatus

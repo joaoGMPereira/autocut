@@ -25,6 +25,7 @@ func NewRouter(
 	pvh *handlers.PreviewHandler,
 	th *handlers.ThumbnailHandler,
 	mh *handlers.MetadataHandler,
+	qh *handlers.QueueHandler,
 ) http.Handler {
 	mux := http.NewServeMux()
 
@@ -107,6 +108,15 @@ func NewRouter(
 	mux.HandleFunc("POST /api/metadata/runs/{id}/clips/{clipId}/generate", mh.PostSingleGenerate)
 	mux.HandleFunc("POST /api/pipeline/runs/{id}/gates/review-metadata", mh.PostReviewMetadata)
 	mux.HandleFunc("POST /api/pipeline/runs/{id}/gates/review-clips", ph.PostReviewClips)
+
+	// Queue endpoints
+	mux.HandleFunc("GET /api/queue", qh.GetQueue)
+	mux.HandleFunc("DELETE /api/queue/{id}", qh.DeleteQueue)
+	mux.HandleFunc("POST /api/queue/{id}/retry", qh.PostRetry)
+	mux.HandleFunc("POST /api/queue/{id}/schedule", qh.PostSchedule)
+	mux.HandleFunc("POST /api/queue/bulk-schedule", qh.PostBulkSchedule)
+	mux.HandleFunc("POST /api/queue/save-local", qh.PostSaveLocal)
+	mux.HandleFunc("GET /api/queue/{id}/thumbnail", qh.GetThumbnail)
 
 	// Stats endpoint
 	mux.HandleFunc("GET /api/stats", sth.GetStats)

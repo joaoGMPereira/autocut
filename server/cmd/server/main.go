@@ -112,6 +112,7 @@ func main() {
 	mediaLibraryHandler := handlers.NewMediaLibraryHandler(settingRepo)
 	previewHandler := handlers.NewPreviewHandler(repo, channelCfgRepo, settingRepo, *dir, sseHub)
 	thumbnailHandler := handlers.NewThumbnailHandler(repo, clipRepo, settingRepo, sseHub, *dir)
+	queueHandler := handlers.NewQueueHandler(uploadRepo, *dir)
 
 	// Claude CLI + metadata generator
 	claudeCLI, claudeErr := ai.NewClaudeCLI()
@@ -142,6 +143,7 @@ func main() {
 		previewHandler,
 		thumbnailHandler,
 		metadataHandler,
+		queueHandler,
 	)
 
 	addr := *host + ":" + *port
