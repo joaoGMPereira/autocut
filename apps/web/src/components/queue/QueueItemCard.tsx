@@ -12,6 +12,8 @@ const log = createLogger('QueueItemCard');
 
 interface Props {
   item: QueueItem;
+  channelName?: string;
+  goUrl: string;
 }
 
 function StatusBadge({ status }: { status: QueueItem['status'] }) {
@@ -30,7 +32,7 @@ function StatusBadge({ status }: { status: QueueItem['status'] }) {
   );
 }
 
-export function QueueItemCard({ item }: Props) {
+export function QueueItemCard({ item, channelName, goUrl }: Props) {
   const { retryItem, deleteItem, scheduleItem } = useQueueStore();
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleDraft, setScheduleDraft] = useState('');
@@ -72,12 +74,18 @@ export function QueueItemCard({ item }: Props) {
   };
 
   return (
-    <div className="rounded-xl bg-card border border-border p-4 flex gap-4 items-start">
-      {/* Order number */}
-      <div className="shrink-0 w-8 h-8 rounded-lg bg-[#1A1A26] flex items-center justify-center">
-        <span className="font-mono text-xs text-[#5C5C80] font-semibold">
-          {item.queue_order}
-        </span>
+    <div className="rounded-xl bg-card border border-border p-4 flex gap-3 items-start">
+      {/* Thumbnail */}
+      <div className="shrink-0 w-20 rounded-lg overflow-hidden bg-zinc-800 aspect-video flex items-center justify-center">
+        {item.thumbnail_path ? (
+          <img
+            src={`${goUrl}/api/queue/${item.id}/thumbnail`}
+            alt="thumbnail"
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full bg-zinc-700" />
+        )}
       </div>
 
       {/* Main content */}
@@ -89,6 +97,13 @@ export function QueueItemCard({ item }: Props) {
           <StatusBadge status={item.status} />
           <span className="text-[11px] text-[#5C5C80] font-mono">{item.video_type}</span>
         </div>
+
+        {/* Channel badge */}
+        {channelName && (
+          <span className="inline-flex w-fit items-center rounded-full border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-500">
+            {channelName}
+          </span>
+        )}
 
         {item.publish_at && (
           <span className="inline-flex w-fit items-center gap-1 rounded-full bg-violet-500/15 border border-violet-500/30 px-2 py-0.5 text-[11px] font-medium text-violet-400">

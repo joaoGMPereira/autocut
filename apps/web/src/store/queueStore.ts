@@ -17,6 +17,7 @@ export interface QueueItem {
   title?: string;
   video_type: string;
   created_at: number;
+  thumbnail_path?: string;  // present when clip has a thumbnail
 }
 
 interface QueueStore {
