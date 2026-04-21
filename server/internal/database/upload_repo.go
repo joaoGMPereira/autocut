@@ -314,22 +314,81 @@ func (r *UploadRepo) ListQueue(ctx context.Context) ([]QueueRow, error) {
 	return result, rows.Err()
 }
 
-// CreateQueued inserts a new upload with status='queued'.
-// clip_id is set to 0 (no clip association for queue-originated uploads).
-func (r *UploadRepo) CreateQueued(ctx context.Context, channelID int64, videoPath, metadataJSON, uploadConfigJSON string, queueOrder int) (int64, error) {
+// CreateQueued inserts a new upload with status='queued' for a specific clip.
+// clipID links the upload to its pipeline_clips row (0 if no clip association).
+// thumbnailPath is saved to local_thumbnail_path; empty string is allowed.
+func (r *UploadRepo) CreateQueued(ctx context.Context, channelID, clipID int64, videoPath, thumbnailPath, metadataJSON, uploadConfigJSON string, queueOrder int) (int64, error) {
 	now := time.Now().UnixMilli()
 	res, err := r.db.ExecContext(ctx, `
 		INSERT INTO uploads (
 			clip_id, channel_id, youtube_id, youtube_url, status,
-			error, video_type, local_video_path, metadata_json, upload_config_json,
+			error, video_type, local_video_path, local_thumbnail_path,
+			metadata_json, upload_config_json,
 			original_video_name, source_video_url, source_clip_url,
 			shorts_generated, queue_order, created_at
-		) VALUES (0, ?, '', '', 'queued', '', 'long_form', ?, ?, ?, '', '', '', 0, ?, ?)
-	`, channelID, videoPath, metadataJSON, uploadConfigJSON, queueOrder, now)
+		) VALUES (?, ?, '', '', 'queued', '', 'long_form', ?, ?, ?, ?, '', '', '', 0, ?, ?)
+	`, clipID, channelID, videoPath, thumbnailPath, metadataJSON, uploadConfigJSON, queueOrder, now)
 	if err != nil {
 		return 0, fmt.Errorf("create queued upload: %w", err)
 	}
 	return res.LastInsertId()
+}
+
+// QueueItemWithTitle is the rich projection used by the queue list API.
+// It joins pipeline_clips to include title, thumbnail_path, and video_type.
+type QueueItemWithTitle struct {
+	ID            int64
+	ClipID        int64
+	ChannelID     int64
+	Status        string
+	VideoPath     string
+	QueueOrder    int
+	PublishAt     sql.NullString
+	YoutubeID     string
+	YoutubeURL    string
+	Error         string
+	CreatedAt     int64
+	Title         string
+	ThumbnailPath string
+	VideoType     string
+}
+
+// ListQueueWithTitle returns uploads with status in
+// (queued, running, failed, error, uploaded) joined with pipeline_clips
+// for title, thumbnail_path, and video_type.
+func (r *UploadRepo) ListQueueWithTitle(ctx context.Context) ([]QueueItemWithTitle, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT u.id, u.clip_id, u.channel_id, u.status,
+		       COALESCE(u.local_video_path, '') as video_path,
+		       u.queue_order, u.publish_at,
+		       u.youtube_id, u.youtube_url, u.error, u.created_at,
+		       COALESCE(c.title, '') as title,
+		       COALESCE(c.thumbnail_path, '') as thumbnail_path,
+		       CASE WHEN COALESCE(c.duration_sec, 999) <= 60 THEN 'short' ELSE 'long_form' END as video_type
+		FROM uploads u
+		LEFT JOIN pipeline_clips c ON c.id = u.clip_id
+		WHERE u.status IN ('queued', 'running', 'failed', 'error', 'uploaded')
+		ORDER BY u.queue_order ASC, u.created_at ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list queue with title: %w", err)
+	}
+	defer rows.Close()
+
+	var result []QueueItemWithTitle
+	for rows.Next() {
+		var q QueueItemWithTitle
+		if err := rows.Scan(
+			&q.ID, &q.ClipID, &q.ChannelID, &q.Status, &q.VideoPath,
+			&q.QueueOrder, &q.PublishAt,
+			&q.YoutubeID, &q.YoutubeURL, &q.Error, &q.CreatedAt,
+			&q.Title, &q.ThumbnailPath, &q.VideoType,
+		); err != nil {
+			return nil, fmt.Errorf("scan queue item with title: %w", err)
+		}
+		result = append(result, q)
+	}
+	return result, rows.Err()
 }
 
 // SetSchedule updates publish_at and privacy (stored inside upload_config_json) for a queued upload.
