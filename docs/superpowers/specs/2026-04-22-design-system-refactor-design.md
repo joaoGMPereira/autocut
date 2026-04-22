@@ -126,11 +126,14 @@ Stay as-is (specialized, single-use):
 | # | Commit | Files |
 |---|---|---|
 | A | `feat(ui): extend Badge with success/warning/info/brand soft-fill variants` | `badge.tsx`, `badge.test.tsx` |
-| B | `feat(ui): rewrite Input with surface-bg + brand focus ring` | `input.tsx`, `input.test.tsx`. Audit existing shadcn `<Input>` consumers (AddChannelForm, settings rows) — visual spot-check before commit. |
+| B | `feat(ui): rewrite Input with surface-bg + brand focus ring` | `input.tsx`, `input.test.tsx`. Audit existing shadcn `<Input>` consumers (16 files, listed below) — visual spot-check before commit. |
 | C | `feat(ui): add PageHeader and FormField primitives` | `page-header.tsx`, `form-field.tsx`, tests |
 | D | `feat(ui): add count slot to TabsTrigger` | `tabs.tsx`, `tabs.test.tsx` |
 
 After each: `npx next build` + `npx vitest run` must pass.
+
+**Existing shadcn `<Input>` consumers** (audited in Commit B, must render correctly after rewrite):
+`app/channels/page.tsx`, `settings/AppSettingsSection.tsx`, `settings/OAuthProfilesSection.tsx`, `channels/CommentSyncSheet.tsx`, `channels/ChannelConfigSheet.tsx`, `pipeline/steps/StepReviewMetadata.tsx`, `pipeline/steps/StepThumbnailConfig.tsx`, `post-opt/LogoTab.tsx`, `post-opt/TransitionsTab.tsx`, `post-opt/ColorInputField.tsx`, `post-opt/TextStyleEditorPanel.tsx`, `post-opt/SpeedTab.tsx`, `post-opt/AntiDupTab.tsx`, `post-opt/TextOverlayTab.tsx`, `setup/CustomPathDialog.tsx`, `history/RunFilters.tsx`.
 
 If subagent E4 (settings) discovers 3+ clean repetitions of a settings-row pattern during its audit, add `setting-row.tsx` as a Commit C addendum before E4 dispatches.
 
@@ -142,14 +145,14 @@ Dispatched as a single message with all subagent calls so they run concurrently.
 |---|---|---|---|
 | E1 | shorts | `ShortsForm.tsx` (+ `ShortsResultList` if dirty) | Sonnet |
 | E2 | queue | `app/queue/page.tsx`, `BulkScheduleModal.tsx`, `QueueItemCard.tsx`, `ReviewScheduleModal.tsx` | Sonnet |
-| E3 | channels | `app/channels/page.tsx`, `ChannelCard.tsx`, `CommentSyncSheet.tsx` | Sonnet |
+| E3 | channels | `app/channels/page.tsx`, `ChannelCard.tsx`, `CommentSyncSheet.tsx`, `ChannelConfigSheet.tsx` | Sonnet |
 | E4 | settings | `app/settings/page.tsx`, `AppSettingsSection.tsx`, `ToolsSection.tsx`, `ModelsSection.tsx`, `ChannelsSection.tsx`, `ChannelAuthSection.tsx`, `OAuthProfilesSection.tsx` | **Opus** |
 | E5 | dashboard | `app/page.tsx`, `DashboardClient.tsx` | default |
 | E6 | history | `RunDetailPanel.tsx`, `RunFilters.tsx`, `RunsTable.tsx`, `StepRow.tsx` | Sonnet |
 | E7 | dispatcher | `DispatcherBar.tsx` | default |
-| E8 | post-opt + thumbnail | `LogoTab.tsx`, `TransitionsTab.tsx`, `BackgroundsGallery.tsx` | default |
-| E9 | setup | `ToolRow.tsx`, `WhisperToolRow.tsx` | default |
-| E10 | pipeline | 16 files in `pipeline/` excluding the specialized list | **Opus** |
+| E8 | post-opt + thumbnail | `LogoTab.tsx`, `TransitionsTab.tsx`, `BackgroundsGallery.tsx`, `ColorInputField.tsx`, `TextStyleEditorPanel.tsx`, `SpeedTab.tsx`, `AntiDupTab.tsx`, `TextOverlayTab.tsx` | Sonnet |
+| E9 | setup | `ToolRow.tsx`, `WhisperToolRow.tsx`, `CustomPathDialog.tsx` | default |
+| E10 | pipeline | 18 files in `pipeline/` and `pipeline/steps/` excluding the 7 specialized files (StepRail, LogStream, GateActionBar, ContextPanel, PipelineShell, ActiveStepArea, BackConfirmDialog) | **Opus** |
 
 ### Subagent contract
 
@@ -207,7 +210,7 @@ Render tests for new/extended primitives only. Stack: vitest + `@testing-library
 ## Risks
 
 1. **Input rewrite changes appearance of existing shadcn `<Input>` consumers.** Mitigation: visual spot-check after Commit B before continuing.
-2. **Pipeline blast radius (16 files).** Mitigation: dedicated Opus subagent + single atomic commit so failure reverts cleanly. Specialized files explicitly out of scope.
+2. **Pipeline blast radius (18 files in scope, including very large ones — `StepMode.tsx` is 102K, `StepThumbnailConfig.tsx` 24K, `StepReviewMetadata.tsx` 21K, `StepUpload.tsx` 18K).** Mitigation: dedicated Opus subagent + single atomic commit so failure reverts cleanly. Specialized files explicitly out of scope. If the subagent times out or context-pressures, the implementation plan may split E10 into E10a (small files) and E10b (the four large files) as a follow-up decision.
 3. **Subagent visual drift.** Mitigation: spec mandates "no behavior or visual change beyond changes mandated by primitive substitution." Verification = grep + build + manual spot-check at Commit F.
 4. **Concurrent commits to `main`.** Mitigation: file-disjoint scopes; git serializes any near-simultaneous commits.
 5. **`ChannelAvatar` cross-area dep.** Mitigation: spec calls this out in both E2 and E3 prompts.
