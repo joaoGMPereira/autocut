@@ -41,6 +41,8 @@ apps/desktop/release/
 # Go build artifacts
 server/bin/
 server/autocut
+server/server
+server/server.exe
 .gitnexus
 
 # Local databases (never commit — DB lives in ~/.autocut or ~/.autocut-dev)
