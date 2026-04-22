@@ -119,6 +119,7 @@ func NewRouter(
 	mux.HandleFunc("POST /api/queue/{id}/retry", qh.PostRetry)
 	mux.HandleFunc("POST /api/queue/{id}/schedule", qh.PostSchedule)
 	mux.HandleFunc("POST /api/queue/bulk-schedule", qh.PostBulkSchedule)
+	mux.HandleFunc("POST /api/queue/upload-now", qh.PostUploadNow)
 	mux.HandleFunc("POST /api/queue/save-local", qh.PostSaveLocal)
 	mux.HandleFunc("GET /api/queue/{id}/thumbnail", qh.GetThumbnail)
 

@@ -19,10 +19,10 @@ interface Props {
 
 function StatusBadge({ status }: { status: QueueItem['status'] }) {
   const variants: Record<QueueItem['status'], string> = {
-    queued: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30',
-    running: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-    done: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-    failed: 'bg-red-500/15 text-red-400 border-red-500/30',
+    queued:   'bg-zinc-500/15 text-zinc-400 border-zinc-500/30',
+    running:  'bg-blue-500/15 text-blue-400 border-blue-500/30',
+    uploaded: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+    error:    'bg-red-500/15 text-red-400 border-red-500/30',
   };
   return (
     <span
@@ -120,13 +120,13 @@ export function QueueItemCard({ item, channelName, goUrl }: Props) {
           </span>
         )}
 
-        {item.status === 'failed' && item.error && (
+        {item.status === 'error' && item.error && (
           <p className="text-xs text-red-400 bg-red-500/10 rounded-md px-3 py-1.5 border border-red-500/20">
             {item.error}
           </p>
         )}
 
-        {item.status === 'done' && item.youtube_url && (
+        {item.status === 'uploaded' && item.youtube_url && (
           <a
             href={item.youtube_url}
             target="_blank"
@@ -143,7 +143,7 @@ export function QueueItemCard({ item, channelName, goUrl }: Props) {
       {/* Action buttons */}
       <TooltipProvider>
         <div className="flex items-center gap-1.5 shrink-0">
-          {item.status === 'failed' && (
+          {item.status === 'error' && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

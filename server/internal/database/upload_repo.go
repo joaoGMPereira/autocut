@@ -373,7 +373,7 @@ func (r *UploadRepo) ListQueueWithTitle(ctx context.Context) ([]QueueItemWithTit
 		       COALESCE(u.metadata_json, '{}') as metadata_json
 		FROM uploads u
 		LEFT JOIN pipeline_clips c ON c.id = u.clip_id
-		WHERE u.status IN ('queued', 'running', 'failed', 'error', 'uploaded')
+		WHERE u.status IN ('queued', 'running', 'error', 'uploaded')
 		ORDER BY u.queue_order ASC, u.created_at ASC
 	`)
 	if err != nil {
@@ -407,6 +407,15 @@ func (r *UploadRepo) SetSchedule(ctx context.Context, id int64, publishAt, uploa
 		return fmt.Errorf("set schedule upload %d: %w", id, err)
 	}
 	return nil
+}
+
+// ListDueForUpload returns queued uploads whose publish_at <= now (ready for the worker).
+func (r *UploadRepo) ListDueForUpload(ctx context.Context) ([]Upload, error) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	return r.queryUploads(ctx,
+		"SELECT "+uploadCols+" FROM uploads WHERE status = 'queued' AND publish_at IS NOT NULL AND publish_at <= ? ORDER BY queue_order ASC, id ASC",
+		now,
+	)
 }
 
 // ListScheduled returns queued uploads that have a publish_at set.

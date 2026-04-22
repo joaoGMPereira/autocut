@@ -104,6 +104,7 @@ func main() {
 		os.Exit(1)
 	}
 	channelRepo := database.NewChannelRepo(db, slog.Default(), cipher)
+	oauthSecretRepo := database.NewOAuthClientSecretRepo(db, slog.Default())
 	sessionMgr := internaloauth.NewSessionManager(channelRepo)
 	channelHandler := handlers.NewChannelHandler(channelRepo, *dir)
 	oauthHandler := handlers.NewOAuthHandler(db, channelRepo, sessionMgr)
@@ -147,6 +148,14 @@ func main() {
 		queueHandler,
 		channelConfigHandler,
 	)
+
+	// Start YouTube upload worker (uploads scheduled items when publish_at is reached)
+	serverCtx, serverCancel := context.WithCancel(context.Background())
+	defer serverCancel()
+	ytUploader := uploader.NewYouTubeUploader(channelRepo, oauthSecretRepo, uploadRepo)
+	uploadWorker := uploader.NewWorker(ytUploader, uploadRepo)
+	go uploadWorker.Start(serverCtx)
+	queueHandler.SetUploadTrigger(func() { uploadWorker.Trigger(serverCtx) })
 
 	addr := *host + ":" + *port
 	slog.Info("server starting", "addr", addr, "data_dir", *dir)

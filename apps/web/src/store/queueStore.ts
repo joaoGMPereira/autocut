@@ -8,7 +8,7 @@ export interface QueueItem {
   id: number;
   clip_id: number;
   channel_id: number;
-  status: 'queued' | 'running' | 'done' | 'failed';
+  status: 'queued' | 'running' | 'uploaded' | 'error';
   youtube_id?: string;
   youtube_url?: string;
   queue_order: number;
@@ -33,6 +33,7 @@ interface QueueStore {
   saveLocal: () => Promise<void>;
   scheduleItem: (id: number, publishAt: string) => Promise<void>;
   bulkSchedule: (startAt: string, intervalMinutes: number) => Promise<void>;
+  uploadNow: () => Promise<void>;
 }
 
 export const useQueueStore = create<QueueStore>((set) => ({
@@ -64,7 +65,7 @@ export const useQueueStore = create<QueueStore>((set) => ({
       log.info('queue item retried', { id });
       set((state) => ({
         items: state.items.map((item) =>
-          item.id === id ? { ...item, status: 'queued', error: undefined } : item
+          item.id === id ? { ...item, status: 'queued' as const, error: undefined } : item
         ),
       }));
     } catch (err) {
@@ -119,6 +120,20 @@ export const useQueueStore = create<QueueStore>((set) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       log.error('schedule item failed', { id, err: message });
+      throw err;
+    }
+  },
+
+  uploadNow: async () => {
+    const goUrl = useAppStore.getState().goUrl;
+    try {
+      const res = await fetch(`${goUrl}/api/queue/upload-now`, { method: 'POST' });
+      if (!res.ok) throw new Error(`Failed: ${res.status}`);
+      log.info('upload now triggered');
+      await useQueueStore.getState().fetchQueue();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      log.error('upload now failed', { err: message });
       throw err;
     }
   },

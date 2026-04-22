@@ -34,6 +34,8 @@ var allMigrations = []migration{
 	{version: 16, name: "pipeline_run_thumbnail_url", fn: migrateV16},
 	{version: 17, name: "pipeline_clip_thumbnail_text", fn: migrateV17},
 	{version: 18, name: "channel_analytics", fn: migrateV18},
+	{version: 19, name: "reset_stub_uploaded", fn: migrateV19},
+	{version: 20, name: "clear_orphan_publish_at", fn: migrateV20},
 }
 
 // migrateV1 creates all 11 application tables.
@@ -991,6 +993,27 @@ func migrateV18(tx *sql.Tx) error {
 			success_titles  TEXT    NOT NULL DEFAULT '[]',
 			raw_titles      TEXT    NOT NULL DEFAULT '[]'
 		);
+	`)
+	return err
+}
+
+// migrateV20 clears publish_at for queued items that have no YouTube ID.
+// These scheduled dates were set before real upload was implemented and are now stale.
+func migrateV20(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		UPDATE uploads SET publish_at = NULL
+		WHERE status = 'queued' AND (youtube_id IS NULL OR youtube_id = '')
+	`)
+	return err
+}
+
+// migrateV19 resets uploads that were incorrectly marked 'uploaded' by stub code
+// (no real YouTube ID). Returns them to 'queued' so the upload worker processes them.
+func migrateV19(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		UPDATE uploads
+		SET status = 'queued', uploaded_at = NULL
+		WHERE status = 'uploaded' AND (youtube_id IS NULL OR youtube_id = '')
 	`)
 	return err
 }

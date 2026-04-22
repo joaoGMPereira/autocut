@@ -15,14 +15,20 @@ import (
 
 // QueueHandler serves the /api/queue endpoints.
 type QueueHandler struct {
-	repo    *database.UploadRepo
-	dataDir string
-	log     *slog.Logger
+	repo          *database.UploadRepo
+	dataDir       string
+	triggerUpload func() // optional: triggers the upload worker immediately
+	log           *slog.Logger
 }
 
 // NewQueueHandler constructs a QueueHandler.
 func NewQueueHandler(repo *database.UploadRepo, dataDir string) *QueueHandler {
 	return &QueueHandler{repo: repo, dataDir: dataDir, log: slog.With("handler", "queue")}
+}
+
+// SetUploadTrigger sets a function that immediately runs the upload worker.
+func (h *QueueHandler) SetUploadTrigger(fn func()) {
+	h.triggerUpload = fn
 }
 
 // queueItemJSON is the JSON shape returned by GET /api/queue.
@@ -176,6 +182,30 @@ func (h *QueueHandler) PostBulkSchedule(w http.ResponseWriter, r *http.Request) 
 		publishAt := t.UTC().Format(time.RFC3339)
 		_ = h.repo.SetSchedule(r.Context(), item.ID, publishAt, "{}")
 		t = t.Add(time.Duration(body.IntervalMinutes) * time.Minute)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// PostUploadNow handles POST /api/queue/upload-now
+// Sets publish_at = now() for all queued items with no publish_at, then triggers the worker.
+func (h *QueueHandler) PostUploadNow(w http.ResponseWriter, r *http.Request) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	items, err := h.repo.ListQueueWithTitle(r.Context())
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	for _, item := range items {
+		if item.Status != "queued" {
+			continue
+		}
+		// Only set publish_at if not already scheduled (or if scheduled in future)
+		if !item.PublishAt.Valid || item.PublishAt.String > now {
+			_ = h.repo.SetSchedule(r.Context(), item.ID, now, "{}")
+		}
+	}
+	if h.triggerUpload != nil {
+		go h.triggerUpload()
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

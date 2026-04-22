@@ -276,7 +276,7 @@ func (h *PipelineHandler) PostUploadConfirm(w http.ResponseWriter, r *http.Reque
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 
-	result, err := h.svc.Advance(r.Context(), id, pipeline.AdvanceRequest{})
+	result, err := h.svc.Advance(r.Context(), id, pipeline.AdvanceRequest{Mode: body.Mode})
 	if err != nil {
 		h.log.Error("upload confirm failed", "run_id", id, "err", err)
 		jsonError(w, err.Error(), http.StatusInternalServerError)

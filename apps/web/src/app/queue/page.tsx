@@ -11,38 +11,82 @@ import { createLogger } from '@/lib/logger';
 
 const log = createLogger('QueuePage');
 
+type StatusFilter = 'queue' | 'history';
+
 export default function QueuePage() {
   const goUrl = useAppStore((s) => s.goUrl);
-  const { items, loading, error, fetchQueue, bulkSchedule } = useQueueStore();
+  const { items, loading, error, fetchQueue, bulkSchedule, uploadNow } = useQueueStore();
   const { channels, fetchChannels } = useChannelStore();
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('queue');
   const [selectedChannelId, setSelectedChannelId] = useState<number | null>(null);
-  const [bulkOpen, setBulkOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
   const [bulkStartAt, setBulkStartAt] = useState('');
   const [bulkIntervalDays, setBulkIntervalDays] = useState(1);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [uploadNowLoading, setUploadNowLoading] = useState(false);
 
   useEffect(() => {
     void fetchQueue();
     if (channels.length === 0) void fetchChannels(goUrl);
   }, [goUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Unique channel IDs that appear in the queue
-  const channelIdsInQueue = [...new Set(items.map((i) => i.channel_id))];
-  const channelOptions = channelIdsInQueue.map((cid) => ({
+  // Counts for tab badges
+  const queueCount = items.filter((i) => ['queued', 'running', 'error'].includes(i.status)).length;
+  const historyCount = items.filter((i) => i.status === 'uploaded').length;
+
+  // Filter by status tab
+  const statusFiltered = items.filter((i) =>
+    statusFilter === 'queue'
+      ? ['queued', 'running', 'error'].includes(i.status)
+      : i.status === 'uploaded',
+  );
+
+  // Channel options derived from status-filtered items
+  const channelIdsInView = [...new Set(statusFiltered.map((i) => i.channel_id))];
+  const channelOptions = channelIdsInView.map((cid) => ({
     id: cid,
-    name: channels.find((c) => c.ID === cid)?.ChannelTitle ?? `Channel ${cid}`,
+    name: channels.find((c) => c.ID === cid)?.ChannelTitle ?? `Canal ${cid}`,
   }));
 
-  const visibleItems = selectedChannelId
-    ? items.filter((i) => i.channel_id === selectedChannelId)
-    : items;
+  // Filter by selected channel
+  const channelFiltered = selectedChannelId
+    ? statusFiltered.filter((i) => i.channel_id === selectedChannelId)
+    : statusFiltered;
 
-  const handleBulkConfirm = async () => {
+  // Group by channel when "Todos" is selected
+  const groups =
+    selectedChannelId === null
+      ? channelOptions
+          .map((co) => ({
+            channelId: co.id,
+            channelName: co.name,
+            items: channelFiltered.filter((i) => i.channel_id === co.id),
+          }))
+          .filter((g) => g.items.length > 0)
+      : [
+          {
+            channelId: selectedChannelId,
+            channelName: channelOptions.find((c) => c.id === selectedChannelId)?.name ?? '',
+            items: channelFiltered,
+          },
+        ];
+
+  const handleStatusFilterChange = (f: StatusFilter) => {
+    setStatusFilter(f);
+    setSelectedChannelId(null);
+  };
+
+  const handleBulkConfirm = async (andUpload = false) => {
     try {
       await bulkSchedule(new Date(bulkStartAt).toISOString(), bulkIntervalDays * 1440);
       setReviewOpen(false);
-      setBulkOpen(false);
+      setFormOpen(false);
       setBulkStartAt('');
+      if (andUpload) {
+        setUploadNowLoading(true);
+        try { await uploadNow(); } catch { /* logged in store */ }
+        finally { setUploadNowLoading(false); }
+      }
     } catch (err) {
       log.error('bulk schedule failed', { err });
     }
@@ -54,12 +98,45 @@ export default function QueuePage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Upload Queue</h1>
           <p className="text-sm text-zinc-500 mt-1">
-            {items.length} item{items.length !== 1 ? 's' : ''} in queue
+            {channelFiltered.length} item{channelFiltered.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setBulkOpen((v) => !v)}>
-          Bulk Schedule
-        </Button>
+        {statusFilter === 'queue' && (
+          <Button variant="outline" size="sm" onClick={() => setFormOpen((v) => !v)}>
+            Bulk Schedule
+          </Button>
+        )}
+      </div>
+
+      {/* Status filter tabs */}
+      <div className="flex items-center gap-1 rounded-lg bg-[#1A1A26] border border-border p-1 w-fit">
+        {(
+          [
+            { key: 'queue' as const, label: 'Para Subir', count: queueCount },
+            { key: 'history' as const, label: 'Histórico', count: historyCount },
+          ] as const
+        ).map(({ key, label, count }) => (
+          <button
+            key={key}
+            onClick={() => handleStatusFilterChange(key)}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              statusFilter === key
+                ? 'bg-primary text-primary-foreground'
+                : 'text-zinc-400 hover:text-zinc-300'
+            }`}
+          >
+            {label}
+            {count > 0 && (
+              <span
+                className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] ${
+                  statusFilter === key ? 'bg-white/20' : 'bg-zinc-700 text-zinc-400'
+                }`}
+              >
+                {count}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* Review modal (bulk) */}
@@ -71,12 +148,12 @@ export default function QueuePage() {
         intervalMinutes={bulkIntervalDays * 1440}
         channels={channelOptions}
         goUrl={goUrl}
-        onConfirm={handleBulkConfirm}
+        onConfirm={() => handleBulkConfirm(false)}
         onCancel={() => setReviewOpen(false)}
       />
 
-      {/* Bulk schedule form */}
-      {bulkOpen && (
+      {/* Bulk schedule / upload-now form */}
+      {formOpen && statusFilter === 'queue' && (
         <div className="rounded-xl border border-border bg-card p-4 flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-xs text-zinc-400">Start at</label>
@@ -99,12 +176,20 @@ export default function QueuePage() {
           </div>
           <Button
             size="sm"
+            disabled={!bulkStartAt || uploadNowLoading}
+            onClick={() => void handleBulkConfirm(true)}
+          >
+            {uploadNowLoading ? 'Uploading…' : 'Schedule & Upload Now'}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
             disabled={!bulkStartAt}
             onClick={() => setReviewOpen(true)}
           >
             Preview & Schedule
           </Button>
-          <Button size="sm" variant="outline" onClick={() => setBulkOpen(false)}>
+          <Button size="sm" variant="ghost" onClick={() => setFormOpen(false)}>
             Cancel
           </Button>
         </div>
@@ -152,28 +237,43 @@ export default function QueuePage() {
       )}
 
       {/* Empty state */}
-      {!loading && visibleItems.length === 0 && (
+      {!loading && channelFiltered.length === 0 && (
         <div className="rounded-xl border border-dashed border-zinc-700 p-10 text-center">
-          <p className="text-sm text-zinc-500">Nenhum item na fila.</p>
-          <p className="text-xs text-zinc-600 mt-1">
-            Confirme um upload no pipeline para adicionar clips aqui.
+          <p className="text-sm text-zinc-500">
+            {statusFilter === 'queue' ? 'Nenhum item na fila.' : 'Nenhum vídeo enviado ainda.'}
           </p>
+          {statusFilter === 'queue' && (
+            <p className="text-xs text-zinc-600 mt-1">
+              Confirme um upload no pipeline para adicionar clips aqui.
+            </p>
+          )}
         </div>
       )}
 
-      {/* Queue items */}
-      <div className="space-y-3">
-        {visibleItems.map((item) => {
-          const channelName = channels.find((c) => c.ID === item.channel_id)?.ChannelTitle;
-          return (
-            <QueueItemCard
-              key={item.id}
-              item={item}
-              channelName={channelName}
-              goUrl={goUrl}
-            />
-          );
-        })}
+      {/* Items — grouped by channel when "Todos" is selected and multiple channels exist */}
+      <div className="space-y-6">
+        {groups.map((group) => (
+          <div key={group.channelId}>
+            {selectedChannelId === null && channelOptions.length > 1 && (
+              <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 pb-1 border-b border-zinc-800">
+                {group.channelName}
+              </h2>
+            )}
+            <div className="space-y-3">
+              {group.items.map((item) => {
+                const channelName = channels.find((c) => c.ID === item.channel_id)?.ChannelTitle;
+                return (
+                  <QueueItemCard
+                    key={item.id}
+                    item={item}
+                    channelName={channelName}
+                    goUrl={goUrl}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

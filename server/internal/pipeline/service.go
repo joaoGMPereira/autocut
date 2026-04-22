@@ -409,7 +409,7 @@ func (s *Service) Advance(ctx context.Context, id int64, req AdvanceRequest) (Ad
 		return AdvanceResult{}, fmt.Errorf("use POST /gates/review-clips to advance from %s", StateWaitingReviewClips)
 
 	case StateWaitingUploadConfirm:
-		return s.confirmUpload(ctx, id, run)
+		return s.confirmUpload(ctx, id, run, req)
 
 	default:
 		return AdvanceResult{}, fmt.Errorf("no advance action for state %s", run.State)
@@ -1174,7 +1174,7 @@ func copyFile(src, dst string) error {
 
 // confirmUpload queues all selected clips for the run to the upload_queue directory,
 // inserts upload records, then advances the run to DONE.
-func (s *Service) confirmUpload(ctx context.Context, id int64, run *database.PipelineRun) (AdvanceResult, error) {
+func (s *Service) confirmUpload(ctx context.Context, id int64, run *database.PipelineRun, req AdvanceRequest) (AdvanceResult, error) {
 	jobKey := fmt.Sprintf("%d", id)
 
 	if !run.ChannelID.Valid {
@@ -1214,10 +1214,15 @@ func (s *Service) confirmUpload(ctx context.Context, id int64, run *database.Pip
 			return AdvanceResult{}, fmt.Errorf("save clip %d to queue: %w", clip.ID, saveErr)
 		}
 
-		_, createErr := s.uploadRepo.CreateQueued(ctx, channelID, clip.ID, qVideo, qThumb, string(metaBytes), "{}", i+1)
+		uploadID, createErr := s.uploadRepo.CreateQueued(ctx, channelID, clip.ID, qVideo, qThumb, string(metaBytes), "{}", i+1)
 		if createErr != nil {
 			s.log.Error("create queued upload failed", "clip_id", clip.ID, "err", createErr)
 			return AdvanceResult{}, fmt.Errorf("create upload record for clip %d: %w", clip.ID, createErr)
+		}
+		// For direct mode, schedule immediately so the upload worker picks it up on next tick
+		if req.Mode == "direct" {
+			now := time.Now().UTC().Format(time.RFC3339)
+			_ = s.uploadRepo.SetSchedule(ctx, uploadID, now, "{}")
 		}
 	}
 
