@@ -7,6 +7,22 @@ import (
 	"time"
 )
 
+// OAuth seed credentials — injected at build time via:
+//
+//	go build -ldflags "-X 'github.com/joaoGMPereira/autocut/server/internal/database.seedOAuthClientIDInerd=VALUE' ..."
+//
+// Defaults are placeholders; real values come from gh variable (see scripts/load-credentials.sh).
+var (
+	seedOAuthClientIDInerd       = ""
+	seedOAuthClientSecretInerd   = ""
+	seedOAuthClientIDMaromba     = ""
+	seedOAuthClientSecretMaromba = ""
+	seedOAuthClientIDReact       = ""
+	seedOAuthClientSecretReact   = ""
+	seedOAuthClientIDGenLang     = ""
+	seedOAuthClientSecretGenLang = ""
+)
+
 type migration struct {
 	version int
 	name    string
@@ -483,19 +499,26 @@ func migrateV11(tx *sql.Tx) error {
 // as "Not Authorized" and the user completes the OAuth flow once per channel after install.
 func migrateV12(tx *sql.Tx) error {
 	_, err := tx.Exec(`
-		-- OAuth client secret profiles (app-level credentials, safe to embed)
 		INSERT OR IGNORE INTO oauth_client_secrets (name, client_id, client_secret, project_id, is_default) VALUES
-			('OAuth cortes_inerd',          'PLACEHOLDER_CLIENT_ID_INERD', 'PLACEHOLDER_CLIENT_SECRET_INERD', 'video-clipper-484223',        1),
-			('OAuth cortes_maromba',        'PLACEHOLDER_CLIENT_ID_MAROMBA','PLACEHOLDER_CLIENT_SECRET_MAROMBA', 'video-clipper-484209',        0),
-			('OAuth cortes_react',          'PLACEHOLDER_CLIENT_ID_REACT', 'PLACEHOLDER_CLIENT_SECRET_REACT', 'video-clipper-484017',        0),
-			('gen-lang-client-0861870513',  'PLACEHOLDER_CLIENT_ID_GEN_LANG', 'PLACEHOLDER_CLIENT_SECRET_GEN_LANG', 'gen-lang-client-0861870513', 0);
-
-		-- Channels (no tokens — user must authorize via OAuth flow after install)
+			(?, ?, ?, 'video-clipper-484223',        1),
+			(?, ?, ?, 'video-clipper-484209',        0),
+			(?, ?, ?, 'video-clipper-484017',        0),
+			(?, ?, ?, 'gen-lang-client-0861870513',  0)
+	`,
+		"OAuth cortes_inerd", seedOAuthClientIDInerd, seedOAuthClientSecretInerd,
+		"OAuth cortes_maromba", seedOAuthClientIDMaromba, seedOAuthClientSecretMaromba,
+		"OAuth cortes_react", seedOAuthClientIDReact, seedOAuthClientSecretReact,
+		"gen-lang-client-0861870513", seedOAuthClientIDGenLang, seedOAuthClientSecretGenLang,
+	)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(`
 		INSERT OR IGNORE INTO channels (name, channel_id, channel_title, oauth_client_secret_id, is_favorite) VALUES
-			('dev_ao_cubo',         'UCSwTDK61hsBFV4CToQtFl-g', 'Dev ao Cubo',                    (SELECT id FROM oauth_client_secrets WHERE name = 'gen-lang-client-0861870513'), 1),
-			('cortes_maromba',      'UCpGpj9G3W1ofZGG2kcIWvnQ', 'Cortes da Maromba',              (SELECT id FROM oauth_client_secrets WHERE name = 'OAuth cortes_maromba'),        0),
-			('cortes_inerd',        'UCpjSuvMTQAq6SKuRE_SoaDQ', 'Cortes do Velho Peter (Ei Nerd)',(SELECT id FROM oauth_client_secrets WHERE name = 'OAuth cortes_inerd'),          0),
-			('cortes_react',        'UCNcaOXuxyjSwrbEhgZWA-NA', 'Cortes e React',                 (SELECT id FROM oauth_client_secrets WHERE name = 'OAuth cortes_react'),          0);
+			('dev_ao_cubo',     'UCSwTDK61hsBFV4CToQtFl-g', 'Dev ao Cubo',                    (SELECT id FROM oauth_client_secrets WHERE name = 'gen-lang-client-0861870513'), 1),
+			('cortes_maromba',  'UCpGpj9G3W1ofZGG2kcIWvnQ', 'Cortes da Maromba',              (SELECT id FROM oauth_client_secrets WHERE name = 'OAuth cortes_maromba'),        0),
+			('cortes_inerd',    'UCpjSuvMTQAq6SKuRE_SoaDQ', 'Cortes do Velho Peter (Ei Nerd)',(SELECT id FROM oauth_client_secrets WHERE name = 'OAuth cortes_inerd'),          0),
+			('cortes_react',    'UCNcaOXuxyjSwrbEhgZWA-NA', 'Cortes e React',                 (SELECT id FROM oauth_client_secrets WHERE name = 'OAuth cortes_react'),          0)
 	`)
 	return err
 }
