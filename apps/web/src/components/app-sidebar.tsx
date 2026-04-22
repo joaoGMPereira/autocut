@@ -6,17 +6,9 @@ import {
   Home,
   Play,
   Scissors,
-  FileText,
-  Brain,
-  Image,
-  Zap,
-  Split,
   Upload,
   Users,
   Settings,
-  Clapperboard,
-  Sparkles,
-  Gauge,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -29,19 +21,11 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { label: 'Dashboard',    href: '/',           icon: Home },
-  { label: 'Pipeline',     href: '/pipeline',   icon: Play },
-  { label: 'Shorts',       href: '/shorts',     icon: Clapperboard },
-  { label: 'Optimizer',    href: '/optimizer',  icon: Zap },
-  { label: 'Post-Opt',     href: '/post-opt',   icon: Split },
-  { label: 'Thumbnail',    href: '/thumbnail',  icon: Image },
-  { label: 'Metadata',     href: '/metadata',   icon: FileText },
-  { label: 'Mass Update',  href: '/mass-update', icon: Brain },
-  { label: 'Highlights',   href: '/highlights', icon: Sparkles },
-  { label: 'Queue',        href: '/queue',      icon: Upload },
-  { label: 'Quota',        href: '/quota',      icon: Gauge },
-  { label: 'Channels',     href: '/channels',   icon: Users },
-  { label: 'Settings',     href: '/settings',   icon: Settings },
+  { label: 'Dashboard', href: '/',         icon: Home },
+  { label: 'Pipeline',  href: '/pipeline', icon: Play },
+  { label: 'Queue',     href: '/queue',    icon: Upload },
+  { label: 'Channels',  href: '/channels', icon: Users },
+  { label: 'Settings',  href: '/settings', icon: Settings },
 ];
 
 export function AppSidebar() {
