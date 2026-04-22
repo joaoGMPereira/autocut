@@ -9,6 +9,9 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { FormField } from '@/components/ui/form-field';
+import { Input } from '@/components/ui/input';
 import { Calendar, CheckCircle2, XCircle, Tag } from 'lucide-react';
 import type { QueueItem } from '@/store/queueStore';
 import { useChannelConfigStore, type ChannelConfig } from '@/store/channelConfigStore';
@@ -52,16 +55,10 @@ function Chip({
   value?: string;
 }) {
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-        active
-          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
-          : 'border-zinc-700 bg-zinc-800/50 text-zinc-500'
-      }`}
-    >
+    <Badge variant={active ? 'success' : 'secondary'}>
       {active ? <CheckCircle2 className="size-2.5" /> : <XCircle className="size-2.5" />}
       {value ?? label}
-    </span>
+    </Badge>
   );
 }
 
@@ -74,7 +71,7 @@ function ChannelConfigSummary({
   videoType: string;
 }) {
   if (!config) {
-    return <p className="text-xs text-zinc-600 italic">Loading channel config…</p>;
+    return <p className="text-xs text-subtle italic">Loading channel config…</p>;
   }
 
   const playlist =
@@ -85,17 +82,17 @@ function ChannelConfigSummary({
   return (
     <div className="flex flex-wrap gap-1.5 mt-1.5">
       <Chip label="Made for Kids" active={config.made_for_kids} />
-      <span className="inline-flex items-center rounded-full border border-zinc-700 bg-zinc-800/50 px-2 py-0.5 text-[11px] text-zinc-400">
+      <Badge variant="secondary">
         {categoryName(config.default_category_id)}
-      </span>
+      </Badge>
       {playlist ? (
         <span className="inline-flex items-center rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] text-violet-400">
           Playlist: {playlist}
         </span>
       ) : (
-        <span className="inline-flex items-center rounded-full border border-zinc-700 bg-zinc-800/50 px-2 py-0.5 text-[11px] text-zinc-600 italic">
+        <Badge variant="secondary" className="italic">
           No playlist
-        </span>
+        </Badge>
       )}
       {config.speed_enabled && (
         <Chip label="Speed" active value={`${config.speed_factor ?? 1}x`} />
@@ -135,7 +132,7 @@ function ReviewItemRow({
       <div className="flex gap-3">
         {/* thumbnail — fixed 16:9 dimensions to avoid flex stretching */}
         <div
-          className="shrink-0 rounded-lg overflow-hidden bg-zinc-800"
+          className="shrink-0 rounded-lg overflow-hidden bg-muted"
           style={{ width: 96, height: 54 }}
         >
           <img
@@ -153,9 +150,9 @@ function ReviewItemRow({
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[11px] font-mono text-subtle">{item.video_type}</span>
             {channelName && (
-              <span className="inline-flex items-center rounded-full border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-500">
+              <Badge variant="outline" className="text-[10px]">
                 {channelName}
-              </span>
+              </Badge>
             )}
           </div>
 
@@ -174,7 +171,7 @@ function ReviewItemRow({
 
       {/* description from pipeline_clips */}
       {item.description && (
-        <p className="text-[11px] text-zinc-400 line-clamp-3 leading-relaxed border-l-2 border-zinc-700 pl-2">
+        <p className="text-[11px] text-caption line-clamp-3 leading-relaxed border-l-2 border-border pl-2">
           {item.description}
         </p>
       )}
@@ -182,17 +179,14 @@ function ReviewItemRow({
       {/* tags from pipeline_clips */}
       {tags.length > 0 && (
         <div className="flex items-center gap-1.5 flex-wrap">
-          <Tag className="size-3 text-zinc-600 shrink-0" />
+          <Tag className="size-3 text-subtle shrink-0" />
           {tags.slice(0, 8).map((tag) => (
-            <span
-              key={tag}
-              className="inline-flex items-center rounded-full border border-zinc-700 bg-zinc-800/50 px-2 py-0.5 text-[10px] text-zinc-400"
-            >
+            <Badge key={tag} variant="secondary" className="text-[10px]">
               {tag}
-            </span>
+            </Badge>
           ))}
           {tags.length > 8 && (
-            <span className="text-[10px] text-zinc-600">+{tags.length - 8} more</span>
+            <span className="text-[10px] text-subtle">+{tags.length - 8} more</span>
           )}
         </div>
       )}
@@ -241,20 +235,18 @@ function IndividualReview({ item, channelName, goUrl, onConfirm, onCancel }: Ind
 
       <div className="space-y-4 py-2">
         {/* datetime picker */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-zinc-400 font-medium">Publish at</label>
-          <input
+        <FormField label="Publish at">
+          <Input
             type="datetime-local"
             value={scheduleDraft}
             onChange={(e) => setScheduleDraft(e.target.value)}
-            className="rounded-lg bg-surface border border-border px-3 py-2 text-sm text-heading focus:outline-none focus:border-brand/60"
           />
-        </div>
+        </FormField>
 
         {/* review card */}
         <div>
-          <p className="text-xs text-zinc-500 font-medium mb-2 uppercase tracking-wider">
-            Video & Config
+          <p className="text-xs text-subtle font-medium mb-2 uppercase tracking-wider">
+            Video &amp; Config
           </p>
           <ReviewItemRow
             item={item}
@@ -333,7 +325,7 @@ function BulkReview({
 
       <div className="py-2 space-y-2 max-h-[60vh] overflow-y-auto pr-1">
         {queued.length === 0 ? (
-          <p className="text-sm text-zinc-500 text-center py-8">No queued items to schedule.</p>
+          <p className="text-sm text-subtle text-center py-8">No queued items to schedule.</p>
         ) : (
           queued.map((item, i) => {
             const scheduledAt = new Date(baseTime + i * intervalMinutes * 60 * 1000).toISOString();

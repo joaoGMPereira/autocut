@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Trash2, Calendar, RotateCcw, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { QueueItem } from '@/store/queueStore';
 import { useQueueStore } from '@/store/queueStore';
@@ -17,20 +18,13 @@ interface Props {
   goUrl: string;
 }
 
-function StatusBadge({ status }: { status: QueueItem['status'] }) {
-  const variants: Record<QueueItem['status'], string> = {
-    queued:   'bg-zinc-500/15 text-zinc-400 border-zinc-500/30',
-    running:  'bg-blue-500/15 text-blue-400 border-blue-500/30',
-    uploaded: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-    error:    'bg-red-500/15 text-red-400 border-red-500/30',
-  };
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${variants[status]}`}
-    >
-      {status}
-    </span>
-  );
+function statusVariant(status: QueueItem['status']): 'secondary' | 'info' | 'success' | 'destructive' {
+  switch (status) {
+    case 'queued':   return 'secondary';
+    case 'running':  return 'info';
+    case 'uploaded': return 'success';
+    case 'error':    return 'destructive';
+  }
 }
 
 export function QueueItemCard({ item, channelName, goUrl }: Props) {
@@ -85,7 +79,7 @@ export function QueueItemCard({ item, channelName, goUrl }: Props) {
       />
     <div className="rounded-xl bg-card border border-border p-4 flex gap-3 items-start">
       {/* Thumbnail */}
-      <div className="shrink-0 w-20 rounded-lg overflow-hidden bg-zinc-800 aspect-video flex items-center justify-center">
+      <div className="shrink-0 w-20 rounded-lg overflow-hidden bg-muted aspect-video flex items-center justify-center">
         <img
           src={`${goUrl}/api/queue/${item.id}/thumbnail`}
           alt="thumbnail"
@@ -102,15 +96,15 @@ export function QueueItemCard({ item, channelName, goUrl }: Props) {
           <span className="text-sm font-semibold text-heading truncate">
             {item.title ?? 'Untitled'}
           </span>
-          <StatusBadge status={item.status} />
+          <Badge variant={statusVariant(item.status)}>{item.status}</Badge>
           <span className="text-[11px] text-subtle font-mono">{item.video_type}</span>
         </div>
 
         {/* Channel badge */}
         {channelName && (
-          <span className="inline-flex w-fit items-center rounded-full border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-500">
+          <Badge variant="outline" className="w-fit text-[10px]">
             {channelName}
-          </span>
+          </Badge>
         )}
 
         {item.publish_at && (
@@ -121,7 +115,7 @@ export function QueueItemCard({ item, channelName, goUrl }: Props) {
         )}
 
         {item.status === 'error' && item.error && (
-          <p className="text-xs text-red-400 bg-red-500/10 rounded-md px-3 py-1.5 border border-red-500/20">
+          <p className="text-xs text-destructive bg-destructive/10 rounded-md px-3 py-1.5 border border-destructive/20">
             {item.error}
           </p>
         )}
@@ -181,7 +175,7 @@ export function QueueItemCard({ item, channelName, goUrl }: Props) {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7 w-7 p-0 text-red-400 hover:text-red-300 hover:border-red-500/50"
+                className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:border-destructive/50"
                 disabled={actionLoading === 'delete'}
                 onClick={() => void handleDelete()}
               >

@@ -9,6 +9,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { FormField } from '@/components/ui/form-field';
+import { Input } from '@/components/ui/input';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('BulkScheduleModal');
@@ -76,19 +78,17 @@ export function BulkScheduleModal({ open, onOpenChange, itemCount, onConfirm }: 
 
         <div className="flex flex-col gap-5 py-2">
           {/* Start date */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-caption">Start date &amp; time</label>
-            <input
+          <FormField label="Start date &amp; time">
+            <Input
               type="datetime-local"
               value={startAt}
               onChange={(e) => setStartAt(e.target.value)}
-              className="rounded-lg bg-surface border border-border px-3 py-2 text-sm text-heading focus:outline-none focus:border-brand/60"
             />
-          </div>
+          </FormField>
 
           {/* Interval */}
           <div className="flex flex-col gap-2">
-            <label className="text-xs font-medium text-caption">Interval between uploads</label>
+            <label className="text-xs font-medium text-subtle">Interval between uploads</label>
             <div className="flex flex-wrap gap-2">
               {INTERVAL_PRESETS.map((preset) => (
                 <button
@@ -119,13 +119,13 @@ export function BulkScheduleModal({ open, onOpenChange, itemCount, onConfirm }: 
 
             {selectedPreset === null && (
               <div className="flex items-center gap-2">
-                <input
+                <Input
                   type="number"
                   min="1"
                   value={customMinutes}
                   onChange={(e) => setCustomMinutes(e.target.value)}
                   placeholder="e.g. 90"
-                  className="w-28 rounded-lg bg-surface border border-border px-3 py-1.5 text-sm text-heading focus:outline-none focus:border-brand/60"
+                  className="w-28"
                 />
                 <span className="text-xs text-subtle">minutes</span>
               </div>

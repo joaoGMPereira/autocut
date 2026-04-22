@@ -7,6 +7,10 @@ import { useAppStore } from '@/store/appStore';
 import { QueueItemCard } from '@/components/queue/QueueItemCard';
 import { ReviewScheduleModal } from '@/components/queue/ReviewScheduleModal';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/page-header';
+import { FormField } from '@/components/ui/form-field';
+import { Input } from '@/components/ui/input';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('QueuePage');
@@ -94,50 +98,32 @@ export default function QueuePage() {
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-[28px] font-bold tracking-[-0.02em] text-heading">Upload Queue</h1>
-          <p className="text-sm text-zinc-500 mt-1">
-            {channelFiltered.length} item{channelFiltered.length !== 1 ? 's' : ''}
-          </p>
-        </div>
-        {statusFilter === 'queue' && (
-          <Button variant="outline" size="sm" onClick={() => setFormOpen((v) => !v)}>
-            Bulk Schedule
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title="Upload Queue"
+        description={`${channelFiltered.length} item${channelFiltered.length !== 1 ? 's' : ''}`}
+        actions={
+          statusFilter === 'queue' ? (
+            <Button variant="outline" size="sm" onClick={() => setFormOpen((v) => !v)}>
+              Bulk Schedule
+            </Button>
+          ) : undefined
+        }
+      />
 
       {/* Status filter tabs */}
-      <div className="flex items-center gap-1 rounded-lg bg-surface border border-border p-1 w-fit">
-        {(
-          [
-            { key: 'queue' as const, label: 'Para Subir', count: queueCount },
-            { key: 'history' as const, label: 'Histórico', count: historyCount },
-          ] as const
-        ).map(({ key, label, count }) => (
-          <button
-            key={key}
-            onClick={() => handleStatusFilterChange(key)}
-            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-              statusFilter === key
-                ? 'bg-primary text-primary-foreground'
-                : 'text-zinc-400 hover:text-zinc-300'
-            }`}
-          >
-            {label}
-            {count > 0 && (
-              <span
-                className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] ${
-                  statusFilter === key ? 'bg-white/20' : 'bg-zinc-700 text-zinc-400'
-                }`}
-              >
-                {count}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        value={statusFilter}
+        onValueChange={(v) => handleStatusFilterChange(v as StatusFilter)}
+      >
+        <TabsList>
+          <TabsTrigger value="queue" count={queueCount}>
+            Para Subir
+          </TabsTrigger>
+          <TabsTrigger value="history" count={historyCount}>
+            Histórico
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {/* Review modal (bulk) */}
       <ReviewScheduleModal
@@ -155,25 +141,22 @@ export default function QueuePage() {
       {/* Bulk schedule / upload-now form */}
       {formOpen && statusFilter === 'queue' && (
         <div className="rounded-xl border border-border bg-card p-4 flex flex-wrap items-end gap-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-zinc-400">Start at</label>
-            <input
+          <FormField label="Start at">
+            <Input
               type="datetime-local"
               value={bulkStartAt}
               onChange={(e) => setBulkStartAt(e.target.value)}
-              className="rounded-lg bg-surface border border-border px-2.5 py-1.5 text-xs text-heading focus:outline-none focus:border-brand/60"
             />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-zinc-400">Interval (days)</label>
-            <input
+          </FormField>
+          <FormField label="Interval (days)">
+            <Input
               type="number"
               min={1}
               value={bulkIntervalDays}
               onChange={(e) => setBulkIntervalDays(Number(e.target.value))}
-              className="w-24 rounded-lg bg-surface border border-border px-2.5 py-1.5 text-xs text-heading focus:outline-none focus:border-brand/60"
+              className="w-24"
             />
-          </div>
+          </FormField>
           <Button
             size="sm"
             disabled={!bulkStartAt || uploadNowLoading}
@@ -203,7 +186,7 @@ export default function QueuePage() {
             className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
               selectedChannelId === null
                 ? 'bg-primary text-primary-foreground border-primary'
-                : 'border-border text-zinc-400 hover:border-zinc-500'
+                : 'border-border text-caption hover:border-border'
             }`}
           >
             Todos
@@ -215,7 +198,7 @@ export default function QueuePage() {
               className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                 selectedChannelId === c.id
                   ? 'bg-primary text-primary-foreground border-primary'
-                  : 'border-border text-zinc-400 hover:border-zinc-500'
+                  : 'border-border text-caption hover:border-border'
               }`}
             >
               {c.name}
@@ -226,24 +209,24 @@ export default function QueuePage() {
 
       {/* Error state */}
       {error && (
-        <div className="rounded-md border border-red-800 bg-red-950 px-4 py-3 text-xs text-red-400">
+        <div className="rounded-md border border-destructive/20 bg-destructive/10 px-4 py-3 text-xs text-destructive">
           {error}
         </div>
       )}
 
       {/* Loading */}
       {loading && items.length === 0 && (
-        <p className="text-sm text-zinc-500">Carregando fila...</p>
+        <p className="text-sm text-subtle">Carregando fila...</p>
       )}
 
       {/* Empty state */}
       {!loading && channelFiltered.length === 0 && (
-        <div className="rounded-xl border border-dashed border-zinc-700 p-10 text-center">
-          <p className="text-sm text-zinc-500">
+        <div className="rounded-xl border border-dashed border-border p-10 text-center">
+          <p className="text-sm text-subtle">
             {statusFilter === 'queue' ? 'Nenhum item na fila.' : 'Nenhum vídeo enviado ainda.'}
           </p>
           {statusFilter === 'queue' && (
-            <p className="text-xs text-zinc-600 mt-1">
+            <p className="text-xs text-subtle mt-1">
               Confirme um upload no pipeline para adicionar clips aqui.
             </p>
           )}
@@ -255,7 +238,7 @@ export default function QueuePage() {
         {groups.map((group) => (
           <div key={group.channelId}>
             {selectedChannelId === null && channelOptions.length > 1 && (
-              <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 pb-1 border-b border-zinc-800">
+              <h2 className="text-xs font-semibold text-subtle uppercase tracking-wider mb-3 pb-1 border-b border-border">
                 {group.channelName}
               </h2>
             )}
