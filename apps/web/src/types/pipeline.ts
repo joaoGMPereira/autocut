@@ -193,6 +193,7 @@ export interface ModeConfig {
   min_part_secs?: number;
   upload_options?: {
     privacy: 'private' | 'unlisted' | 'public';
+    mode?: 'queue' | 'direct';
     schedule_enabled: boolean;
     auto_enabled: boolean;
     dry_run: boolean;
@@ -395,6 +396,7 @@ export interface ReviewClipsRequest {
 
 export interface UploadConfirmRequest {
   privacy: 'public' | 'unlisted' | 'private';
+  mode?: 'queue' | 'direct';
 }
 
 // ── PriorClipsResponse ───────────────────────────────────────────────────────

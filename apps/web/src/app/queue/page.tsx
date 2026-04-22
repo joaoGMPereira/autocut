@@ -18,7 +18,7 @@ export default function QueuePage() {
   const [selectedChannelId, setSelectedChannelId] = useState<number | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkStartAt, setBulkStartAt] = useState('');
-  const [bulkInterval, setBulkInterval] = useState(1440);
+  const [bulkIntervalDays, setBulkIntervalDays] = useState(1);
   const [reviewOpen, setReviewOpen] = useState(false);
 
   useEffect(() => {
@@ -39,7 +39,7 @@ export default function QueuePage() {
 
   const handleBulkConfirm = async () => {
     try {
-      await bulkSchedule(new Date(bulkStartAt).toISOString(), bulkInterval);
+      await bulkSchedule(new Date(bulkStartAt).toISOString(), bulkIntervalDays * 1440);
       setReviewOpen(false);
       setBulkOpen(false);
       setBulkStartAt('');
@@ -68,7 +68,7 @@ export default function QueuePage() {
         mode="bulk"
         items={items}
         startAt={bulkStartAt ? new Date(bulkStartAt).toISOString() : undefined}
-        intervalMinutes={bulkInterval}
+        intervalMinutes={bulkIntervalDays * 1440}
         channels={channelOptions}
         goUrl={goUrl}
         onConfirm={handleBulkConfirm}
@@ -88,12 +88,12 @@ export default function QueuePage() {
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-zinc-400">Interval (min)</label>
+            <label className="text-xs text-zinc-400">Interval (days)</label>
             <input
               type="number"
               min={1}
-              value={bulkInterval}
-              onChange={(e) => setBulkInterval(Number(e.target.value))}
+              value={bulkIntervalDays}
+              onChange={(e) => setBulkIntervalDays(Number(e.target.value))}
               className="w-24 rounded-lg bg-[#1A1A26] border border-border px-2.5 py-1.5 text-xs text-[#F0F0F8] focus:outline-none focus:border-[#00D4FF]/60"
             />
           </div>

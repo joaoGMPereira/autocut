@@ -111,6 +111,7 @@ func NewRouter(
 	mux.HandleFunc("POST /api/metadata/runs/{id}/clips/{clipId}/generate", mh.PostSingleGenerate)
 	mux.HandleFunc("POST /api/pipeline/runs/{id}/gates/review-metadata", mh.PostReviewMetadata)
 	mux.HandleFunc("POST /api/pipeline/runs/{id}/gates/review-clips", ph.PostReviewClips)
+	mux.HandleFunc("POST /api/pipeline/runs/{id}/gates/upload-confirm", ph.PostUploadConfirm)
 
 	// Queue endpoints
 	mux.HandleFunc("GET /api/queue", qh.GetQueue)

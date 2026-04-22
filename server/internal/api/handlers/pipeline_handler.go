@@ -262,6 +262,30 @@ func (h *PipelineHandler) PostReviewClips(w http.ResponseWriter, r *http.Request
 	_ = json.NewEncoder(w).Encode(map[string]string{"state": newState})
 }
 
+// PostUploadConfirm handles POST /api/pipeline/runs/{id}/gates/upload-confirm.
+// Accepts { privacy, mode } from the frontend and delegates to service.Advance.
+func (h *PipelineHandler) PostUploadConfirm(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseRunID(w, r)
+	if !ok {
+		return
+	}
+	// Decode request (privacy/mode) — currently informational; service queues all selected clips.
+	var body struct {
+		Privacy string `json:"privacy"`
+		Mode    string `json:"mode"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+
+	result, err := h.svc.Advance(r.Context(), id, pipeline.AdvanceRequest{})
+	if err != nil {
+		h.log.Error("upload confirm failed", "run_id", id, "err", err)
+		jsonError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"state": result.State})
+}
+
 // parseRunID extracts the {id} path value and writes an error response on failure.
 func parseRunID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	raw := r.PathValue("id")
