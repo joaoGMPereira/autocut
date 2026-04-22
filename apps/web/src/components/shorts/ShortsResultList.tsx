@@ -21,7 +21,7 @@ export function ShortsResultList({ jobId, language }: ShortsResultListProps) {
 
   if (results.length === 0) {
     return (
-      <p className="text-xs text-muted-foreground text-center py-4">
+      <p className="text-xs text-subtle text-center py-4">
         No shorts yet…
       </p>
     );
@@ -29,7 +29,7 @@ export function ShortsResultList({ jobId, language }: ShortsResultListProps) {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-subtle">
         {results.length} short{results.length !== 1 ? 's' : ''}{isDone ? ' (sorted by score)' : ' (in progress…)'}
       </p>
       {results.map((r, i) => (

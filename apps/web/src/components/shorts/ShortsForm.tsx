@@ -8,6 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { FormField } from '@/components/ui/form-field';
+import { PageHeader } from '@/components/ui/page-header';
 import { createLogger } from '@/lib/logger';
 import type { JobStatus } from '@/store/processorStore';
 import { ShortsResultList } from './ShortsResultList';
@@ -22,31 +26,15 @@ const PRESETS = [
 
 function StatusBadge({ status }: { status: JobStatus }) {
   if (status === 'running') {
-    return (
-      <span className="bg-blue-500/10 text-blue-400 text-xs px-2 py-0.5 rounded-md">
-        running
-      </span>
-    );
+    return <Badge variant="info">running</Badge>;
   }
   if (status === 'done') {
-    return (
-      <span className="bg-emerald-500/10 text-emerald-400 text-xs px-2 py-0.5 rounded-md">
-        done
-      </span>
-    );
+    return <Badge variant="success">done</Badge>;
   }
   if (status === 'error') {
-    return (
-      <span className="bg-destructive/10 text-destructive text-xs px-2 py-0.5 rounded-md">
-        error
-      </span>
-    );
+    return <Badge variant="destructive">error</Badge>;
   }
-  return (
-    <span className="bg-surface text-subtle text-xs px-2 py-0.5 rounded-md">
-      idle
-    </span>
-  );
+  return <Badge variant="secondary">idle</Badge>;
 }
 
 export function ShortsForm() {
@@ -95,38 +83,32 @@ export function ShortsForm() {
 
   return (
     <div className="px-10 py-8 flex flex-col gap-7">
-      <h1 className="font-display text-[32px] font-bold tracking-[-0.02em] text-heading">
-        Shorts
-      </h1>
+      <PageHeader title="Shorts" />
 
       <div className="rounded-xl bg-card border border-border p-5 flex flex-col gap-4">
         {/* Input path */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-subtle mb-1 block">Input Path</label>
-          <input
+        <FormField label="Input Path">
+          <Input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="/path/to/input.mp4"
-            className="w-full rounded-lg bg-surface border border-border px-3 py-2 text-sm focus:outline-none focus:border-brand/60"
           />
-        </div>
+        </FormField>
 
         {/* Output path */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-subtle mb-1 block">Output Path</label>
-          <input
+        <FormField label="Output Path">
+          <Input
             type="text"
             value={output}
             onChange={(e) => setOutput(e.target.value)}
             placeholder="/path/to/output/"
-            className="w-full rounded-lg bg-surface border border-border px-3 py-2 text-sm focus:outline-none focus:border-brand/60"
           />
-        </div>
+        </FormField>
 
         {/* Aspect ratio preset */}
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-subtle mb-1 block">Aspect Ratio</label>
+          <label className="text-xs font-medium text-subtle">Aspect Ratio</label>
           <select
             value={preset}
             onChange={(e) => setPreset(Number(e.target.value))}
@@ -143,51 +125,43 @@ export function ShortsForm() {
         {/* Custom dimensions */}
         {isCustom && (
           <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-subtle mb-1 block">Width (px)</label>
-              <input
+            <FormField label="Width (px)">
+              <Input
                 type="number"
                 value={customWidth}
                 onChange={(e) => setCustomWidth(Number(e.target.value))}
                 min={1}
-                className="w-full rounded-lg bg-surface border border-border px-3 py-2 text-sm focus:outline-none focus:border-brand/60"
               />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-subtle mb-1 block">Height (px)</label>
-              <input
+            </FormField>
+            <FormField label="Height (px)">
+              <Input
                 type="number"
                 value={customHeight}
                 onChange={(e) => setCustomHeight(Number(e.target.value))}
                 min={1}
-                className="w-full rounded-lg bg-surface border border-border px-3 py-2 text-sm focus:outline-none focus:border-brand/60"
               />
-            </div>
+            </FormField>
           </div>
         )}
 
         {/* Duration filters */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-subtle mb-1 block">Min Duration (s, 0=off)</label>
-            <input
+          <FormField label="Min Duration (s, 0=off)">
+            <Input
               type="number"
               value={shortsConfig.minDuration}
               onChange={(e) => setShortsConfig({ minDuration: Number(e.target.value) })}
               min={0}
-              className="w-full rounded-lg bg-surface border border-border px-3 py-2 text-sm focus:outline-none focus:border-brand/60"
             />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-subtle mb-1 block">Max Duration (s, 0=off)</label>
-            <input
+          </FormField>
+          <FormField label="Max Duration (s, 0=off)">
+            <Input
               type="number"
               value={shortsConfig.maxDuration}
               onChange={(e) => setShortsConfig({ maxDuration: Number(e.target.value) })}
               min={0}
-              className="w-full rounded-lg bg-surface border border-border px-3 py-2 text-sm focus:outline-none focus:border-brand/60"
             />
-          </div>
+          </FormField>
         </div>
 
         <Separator />
@@ -221,12 +195,12 @@ export function ShortsForm() {
               </Label>
             </div>
             {shortsConfig.addCaptions && (
-              <input
+              <Input
                 type="text"
                 value={shortsConfig.transcriptPath}
                 onChange={(e) => setShortsConfig({ transcriptPath: e.target.value })}
                 placeholder="/path/to/transcript.json"
-                className="w-full rounded-lg bg-surface border border-border px-3 py-2 text-sm focus:outline-none focus:border-brand/60 ml-6"
+                className="ml-6"
               />
             )}
           </div>
