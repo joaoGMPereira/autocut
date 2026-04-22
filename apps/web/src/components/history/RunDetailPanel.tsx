@@ -59,7 +59,7 @@ export function RunDetailPanel() {
               <SheetTitle className="text-sm font-mono text-zinc-400 truncate">
                 #{selectedRun.id}
               </SheetTitle>
-              <p className="text-[#F0F0F8] text-sm font-medium truncate mt-1">
+              <p className="text-heading text-sm font-medium truncate mt-1">
                 {truncateUrl(selectedRun.url)}
               </p>
 

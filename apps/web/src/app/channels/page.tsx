@@ -80,7 +80,7 @@ function AddChannelForm() {
 export default function ChannelsPage() {
   return (
     <div className="flex flex-col gap-6 p-6 max-w-3xl mx-auto w-full">
-      <h1 className="text-2xl font-semibold text-foreground">Channels</h1>
+      <h1 className="font-display text-[28px] font-bold tracking-[-0.02em] text-heading">Channels</h1>
       <AddChannelForm />
       <ChannelsSection />
       <ChannelAuthSection />

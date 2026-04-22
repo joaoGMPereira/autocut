@@ -64,7 +64,7 @@ export default function DashboardClient() {
       <div className="grid grid-cols-3 gap-4">
         <Card className="border-border bg-card">
           <CardContent className="flex items-center gap-4 p-5">
-            <Download className="h-5 w-5 text-[#00D4FF] shrink-0" />
+            <Download className="h-5 w-5 text-brand shrink-0" />
             <div className="min-w-0">
               <p className="text-xs text-muted-foreground leading-none mb-1">Active Downloads</p>
               <p className="font-mono text-2xl font-semibold tabular-nums leading-none">

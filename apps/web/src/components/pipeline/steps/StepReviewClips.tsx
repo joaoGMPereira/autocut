@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/store/appStore';
 import { usePipelineStore } from '@/store/pipelineStore';
 import { useChannelStore } from '@/store/channelStore';
@@ -199,7 +200,7 @@ export function StepReviewClips({ historical }: StepReviewClipsProps) {
             <p className="text-amber-400">Agendamento ativado</p>
           )}
           {uploadOptions.auto_enabled && (
-            <p className="text-cyan-400">Upload automático</p>
+            <p className="text-brand">Upload automático</p>
           )}
           {uploadOptions.dry_run && (
             <p className="text-yellow-500">Dry run — nenhum upload será feito</p>
@@ -252,14 +253,13 @@ export function StepReviewClips({ historical }: StepReviewClipsProps) {
 
       {/* Submit */}
       <div className="flex justify-end pt-2">
-        <button
-          type="button"
+        <Button
+          variant="brand"
           onClick={() => void handleSubmit()}
           disabled={submitting || selectedCount === 0}
-          className="px-4 py-2 rounded bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-white transition-colors"
         >
           {submitting ? 'Salvando…' : buttonLabel}
-        </button>
+        </Button>
       </div>
     </div>
   );

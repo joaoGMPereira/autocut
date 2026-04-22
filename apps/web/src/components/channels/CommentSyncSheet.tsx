@@ -231,7 +231,7 @@ export function CommentSyncSheet({ channel, open, onClose }: Props) {
 
             {syncing && syncProgress && (
               <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between text-xs text-[#5C5C80]">
+                <div className="flex items-center justify-between text-xs text-subtle">
                   <span>Syncing…</span>
                   <span>{syncProgress.done} / {syncProgress.total}</span>
                 </div>
@@ -259,9 +259,9 @@ export function CommentSyncSheet({ channel, open, onClose }: Props) {
             )}
 
             {loadingComments ? (
-              <p className="text-sm text-[#5C5C80] text-center py-8">Loading comments…</p>
+              <p className="text-sm text-subtle text-center py-8">Loading comments…</p>
             ) : comments.length === 0 ? (
-              <p className="text-sm text-[#5C5C80] text-center py-8">
+              <p className="text-sm text-subtle text-center py-8">
                 No comments yet. Try syncing first.
               </p>
             ) : (
@@ -269,23 +269,23 @@ export function CommentSyncSheet({ channel, open, onClose }: Props) {
                 {comments.map((comment) => (
                   <div key={comment.id} className="px-4 py-3 flex flex-col gap-1">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-medium text-[#F0F0F8] truncate">
+                      <span className="text-xs font-medium text-heading truncate">
                         {comment.author}
                       </span>
                       <div className="flex items-center gap-3 shrink-0">
                         {comment.likes > 0 && (
-                          <span className="text-xs text-[#5C5C80]">
+                          <span className="text-xs text-subtle">
                             {comment.likes} like{comment.likes !== 1 ? 's' : ''}
                           </span>
                         )}
-                        <span className="text-xs text-[#5C5C80]">
+                        <span className="text-xs text-subtle">
                           {comment.published_at
                             ? new Date(comment.published_at).toLocaleDateString()
                             : '—'}
                         </span>
                       </div>
                     </div>
-                    <p className="text-sm text-[#ADADCC] leading-relaxed">
+                    <p className="text-sm text-prose leading-relaxed">
                       {comment.text.length > 200
                         ? `${comment.text.slice(0, 200)}…`
                         : comment.text}
@@ -299,7 +299,7 @@ export function CommentSyncSheet({ channel, open, onClose }: Props) {
           {/* Pagination footer */}
           {totalPages > 1 && (
             <div className="border-t border-border px-4 py-3 flex items-center justify-between">
-              <span className="text-xs text-[#5C5C80]">
+              <span className="text-xs text-subtle">
                 Page {currentPage} of {totalPages} ({totalComments} total)
               </span>
               <div className="flex items-center gap-2">

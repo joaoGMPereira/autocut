@@ -89,7 +89,7 @@ export function TransitionsTab() {
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label>Duration: <span className="font-mono text-[#00D4FF]">{duration.toFixed(1)}s</span></Label>
+        <Label>Duration: <span className="font-mono text-brand">{duration.toFixed(1)}s</span></Label>
         <Slider
           min={0.3}
           max={2.0}

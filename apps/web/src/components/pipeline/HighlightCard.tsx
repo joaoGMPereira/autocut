@@ -42,16 +42,16 @@ export function HighlightCard({ highlight, videoDurationSec = 600, onUpdate }: H
   const widthPct = ((adjEnd - adjStart) / videoDurationSec) * 100;
 
   return (
-    <div className={`rounded-lg border p-3 space-y-2 transition-colors ${isSelected ? 'border-cyan-500/40 bg-cyan-500/5' : 'border-border bg-card/60 opacity-60'}`}>
+    <div className={`rounded-lg border p-3 space-y-2 transition-colors ${isSelected ? 'border-brand/40 bg-brand/5' : 'border-border bg-card/60 opacity-60'}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={handleToggle}
-            className={`w-4 h-4 rounded border shrink-0 flex items-center justify-center transition-colors ${isSelected ? 'border-cyan-400 bg-cyan-400/20' : 'border-zinc-600 bg-transparent'}`}
+            className={`w-4 h-4 rounded border shrink-0 flex items-center justify-center transition-colors ${isSelected ? 'border-brand bg-brand/20' : 'border-zinc-600 bg-transparent'}`}
             aria-label={isSelected ? 'Deselect highlight' : 'Select highlight'}
           >
-            {isSelected && <span className="text-cyan-400 text-xs">✓</span>}
+            {isSelected && <span className="text-brand text-xs">✓</span>}
           </button>
           <span className={`text-xs px-1.5 py-0.5 rounded font-mono ${scoreColor(highlight.score)}`}>
             {(highlight.score * 100).toFixed(0)}
@@ -72,7 +72,7 @@ export function HighlightCard({ highlight, videoDurationSec = 600, onUpdate }: H
       {/* Timeline bar */}
       <div className="relative w-full h-3 bg-zinc-800 rounded-full overflow-hidden">
         <div
-          className="absolute top-0 h-full bg-cyan-500/60 rounded-full"
+          className="absolute top-0 h-full bg-brand/60 rounded-full"
           style={{ left: `${startPct}%`, width: `${widthPct}%` }}
         />
       </div>
@@ -88,7 +88,7 @@ export function HighlightCard({ highlight, videoDurationSec = 600, onUpdate }: H
             step={0.5}
             value={adjStart}
             onChange={(e) => handleStartChange(parseFloat(e.target.value))}
-            className="w-full accent-cyan-400"
+            className="w-full accent-brand"
           />
         </div>
         <div>
@@ -100,7 +100,7 @@ export function HighlightCard({ highlight, videoDurationSec = 600, onUpdate }: H
             step={0.5}
             value={adjEnd}
             onChange={(e) => handleEndChange(parseFloat(e.target.value))}
-            className="w-full accent-cyan-400"
+            className="w-full accent-brand"
           />
         </div>
       </div>

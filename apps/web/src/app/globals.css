@@ -3,7 +3,8 @@
 
 @theme inline {
   --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
+  --font-mono: var(--font-jetbrains-mono), "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
+  --font-display: var(--font-display, "Space Grotesk", ui-sans-serif, system-ui, sans-serif);
 
   --color-background: oklch(0.145 0 0);
   --color-foreground: oklch(0.985 0 0);
@@ -29,14 +30,36 @@
   --color-chart-3: oklch(0.769 0.188 70.08);
   --color-chart-4: oklch(0.627 0.265 303.9);
   --color-chart-5: oklch(0.645 0.246 16.45);
-  --color-sidebar: oklch(0.085 0.012 264);       /* #0E0E16 */
+  --color-sidebar: oklch(0.085 0.012 264);        /* #0E0E16 */
   --color-sidebar-foreground: oklch(0.985 0 0);
   --color-sidebar-primary: oklch(0.985 0 0);
   --color-sidebar-primary-foreground: oklch(0.205 0 0);
-  --color-sidebar-accent: oklch(0.13 0.015 264); /* #1A1A26 */
-  --color-sidebar-accent-foreground: oklch(0.82 0.14 200); /* #00D4FF-ish */
-  --color-sidebar-border: oklch(0.13 0.015 264); /* #1E1E2E */
+  --color-sidebar-accent: oklch(0.13 0.015 264);  /* #1A1A26 */
+  --color-sidebar-accent-foreground: #C6F24E;     /* lime brand accent */
+  --color-sidebar-border: oklch(0.13 0.015 264);  /* #1E1E2E */
   --color-sidebar-ring: oklch(0.708 0 0);
+
+  /* Brand accent — lime */
+  --color-brand: #C6F24E;
+  --color-brand-foreground: #0E0E16;
+
+  /* Surface tiers */
+  --color-surface: oklch(0.13 0.015 264);       /* #1A1A26 — input/card inner bg */
+  --color-surface-deep: oklch(0.10 0.015 264);   /* #12121C — deeper surface */
+  --color-surface-inset: oklch(0.08 0.010 264);  /* #0E0E1A — log viewer inset bg */
+
+  /* Text scale */
+  --color-heading: #F0F0F8;
+  --color-subtle: #5C5C80;
+  --color-caption: #A0A0C0;
+  --color-prose: #ADADCC;
+
+  /* Semantic state */
+  --color-success: #34D399;
+  --color-warning: #FBBF24;
+  --color-info: #60A5FA;
+  --color-violet: #A78BFA;
+  --color-success-alt: #6BCB8B;
 
   --radius: 0.625rem;
   --radius-xs: calc(var(--radius) * 0.5);

@@ -99,11 +99,11 @@ export function QueueItemCard({ item, channelName, goUrl }: Props) {
       {/* Main content */}
       <div className="flex-1 min-w-0 flex flex-col gap-2">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-semibold text-[#F0F0F8] truncate">
+          <span className="text-sm font-semibold text-heading truncate">
             {item.title ?? 'Untitled'}
           </span>
           <StatusBadge status={item.status} />
-          <span className="text-[11px] text-[#5C5C80] font-mono">{item.video_type}</span>
+          <span className="text-[11px] text-subtle font-mono">{item.video_type}</span>
         </div>
 
         {/* Channel badge */}
@@ -131,7 +131,7 @@ export function QueueItemCard({ item, channelName, goUrl }: Props) {
             href={item.youtube_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-[#00D4FF] hover:underline w-fit"
+            className="inline-flex items-center gap-1 text-xs text-brand hover:underline w-fit"
           >
             <ExternalLink className="size-3" />
             View on YouTube

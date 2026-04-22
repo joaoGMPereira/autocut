@@ -29,7 +29,7 @@ export function ClipCard({ clip, variant, onMetadataChange, onSelectToggle }: Cl
   }
 
   return (
-    <div className={`rounded-lg border p-3 space-y-2 transition-colors ${selected ? 'border-cyan-500/40 bg-cyan-500/5' : 'border-border bg-card/60'}`}>
+    <div className={`rounded-lg border p-3 space-y-2 transition-colors ${selected ? 'border-brand/40 bg-brand/5' : 'border-border bg-card/60'}`}>
       {/* Thumbnail */}
       <div className="w-full aspect-video bg-zinc-800 rounded overflow-hidden flex items-center justify-center relative">
         {clip.thumbnail_path ? (
@@ -45,10 +45,10 @@ export function ClipCard({ clip, variant, onMetadataChange, onSelectToggle }: Cl
           <button
             type="button"
             onClick={handleToggle}
-            className={`absolute top-2 right-2 w-6 h-6 rounded border-2 flex items-center justify-center transition-colors ${selected ? 'border-cyan-400 bg-cyan-400/30' : 'border-zinc-500 bg-black/40'}`}
+            className={`absolute top-2 right-2 w-6 h-6 rounded border-2 flex items-center justify-center transition-colors ${selected ? 'border-brand bg-brand/30' : 'border-zinc-500 bg-black/40'}`}
             aria-label={selected ? 'Deselect clip' : 'Select clip'}
           >
-            {selected && <span className="text-cyan-400 text-xs font-bold">✓</span>}
+            {selected && <span className="text-brand text-xs font-bold">✓</span>}
           </button>
         )}
       </div>
@@ -71,21 +71,21 @@ export function ClipCard({ clip, variant, onMetadataChange, onSelectToggle }: Cl
             value={title}
             placeholder="Title"
             onChange={(e) => { setTitle(e.target.value); emitMetadata(e.target.value, description, tags); }}
-            className="w-full text-sm bg-zinc-800 border border-border rounded px-2 py-1 text-foreground placeholder-zinc-500 focus:outline-none focus:border-cyan-500"
+            className="w-full text-sm bg-zinc-800 border border-border rounded px-2 py-1 text-foreground placeholder-zinc-500 focus:outline-none focus:border-brand"
           />
           <textarea
             value={description}
             placeholder="Description"
             rows={2}
             onChange={(e) => { setDescription(e.target.value); emitMetadata(title, e.target.value, tags); }}
-            className="w-full text-xs bg-zinc-800 border border-border rounded px-2 py-1 text-foreground placeholder-zinc-500 focus:outline-none focus:border-cyan-500 resize-none"
+            className="w-full text-xs bg-zinc-800 border border-border rounded px-2 py-1 text-foreground placeholder-zinc-500 focus:outline-none focus:border-brand resize-none"
           />
           <input
             type="text"
             value={tags}
             placeholder="Tags (comma-separated)"
             onChange={(e) => { setTags(e.target.value); emitMetadata(title, description, e.target.value); }}
-            className="w-full text-xs bg-zinc-800 border border-border rounded px-2 py-1 text-foreground placeholder-zinc-500 focus:outline-none focus:border-cyan-500"
+            className="w-full text-xs bg-zinc-800 border border-border rounded px-2 py-1 text-foreground placeholder-zinc-500 focus:outline-none focus:border-brand"
           />
         </div>
       )}
@@ -96,7 +96,7 @@ export function ClipCard({ clip, variant, onMetadataChange, onSelectToggle }: Cl
           href={`https://www.youtube.com/watch?v=${clip.youtube_id}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="block text-xs text-cyan-400 hover:underline truncate"
+          className="block text-xs text-brand hover:underline truncate"
         >
           youtube.com/watch?v={clip.youtube_id}
         </a>

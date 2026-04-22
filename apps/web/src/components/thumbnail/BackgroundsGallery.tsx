@@ -54,7 +54,7 @@ export function BackgroundsGallery({ channelId }: BackgroundsGalleryProps) {
           value={uploadName}
           onChange={(e) => setUploadName(e.target.value)}
           placeholder="Background name (optional)"
-          className="rounded-lg bg-[#1A1A26] border border-border px-3 py-2 text-sm focus:outline-none focus:border-[#00D4FF]/60 w-52"
+          className="rounded-lg bg-surface border border-border px-3 py-2 text-sm focus:outline-none focus:border-brand/60 w-52"
         />
         <Button
           variant="outline"
@@ -90,7 +90,7 @@ export function BackgroundsGallery({ channelId }: BackgroundsGalleryProps) {
           Loading backgrounds…
         </div>
       ) : backgrounds.length === 0 ? (
-        <p className="text-sm text-[#5C5C80] py-2">No backgrounds yet. Upload one above.</p>
+        <p className="text-sm text-subtle py-2">No backgrounds yet. Upload one above.</p>
       ) : (
         <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
           {backgrounds.map((bg) => {
@@ -103,12 +103,12 @@ export function BackgroundsGallery({ channelId }: BackgroundsGalleryProps) {
                 className={[
                   'group relative rounded-lg overflow-hidden border-2 transition-all focus:outline-none',
                   isSelected
-                    ? 'border-[#00D4FF] ring-2 ring-[#00D4FF]/30'
-                    : 'border-border hover:border-[#00D4FF]/40',
+                    ? 'border-brand ring-2 ring-brand/30'
+                    : 'border-border hover:border-brand/40',
                 ].join(' ')}
               >
                 {/* Aspect-ratio wrapper */}
-                <div className="aspect-video w-full bg-[#1A1A26]">
+                <div className="aspect-video w-full bg-surface">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={bg.file_path}
@@ -118,11 +118,11 @@ export function BackgroundsGallery({ channelId }: BackgroundsGalleryProps) {
                 </div>
 
                 {/* Filename + default badge */}
-                <div className="px-2 py-1 bg-[#12121C] flex items-center gap-1 min-w-0">
+                <div className="px-2 py-1 bg-surface-deep flex items-center gap-1 min-w-0">
                   {bg.is_default && (
                     <Star className="h-3 w-3 shrink-0 text-amber-400 fill-amber-400" />
                   )}
-                  <span className="text-xs text-[#A0A0C0] truncate">{bg.name}</span>
+                  <span className="text-xs text-caption truncate">{bg.name}</span>
                 </div>
 
                 {/* Delete button (shown on hover) */}
@@ -145,7 +145,7 @@ export function BackgroundsGallery({ channelId }: BackgroundsGalleryProps) {
 
                 {/* Selected ring indicator */}
                 {isSelected && (
-                  <span className="absolute top-1 left-1 rounded bg-[#00D4FF] px-1.5 py-0.5 text-[10px] font-semibold text-black leading-none">
+                  <span className="absolute top-1 left-1 rounded bg-brand px-1.5 py-0.5 text-[10px] font-semibold text-black leading-none">
                     Selected
                   </span>
                 )}

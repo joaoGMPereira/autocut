@@ -151,7 +151,7 @@ function ReviewItemRow({
         {/* info */}
         <div className="flex-1 min-w-0 space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] font-mono text-[#5C5C80]">{item.video_type}</span>
+            <span className="text-[11px] font-mono text-subtle">{item.video_type}</span>
             {channelName && (
               <span className="inline-flex items-center rounded-full border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-500">
                 {channelName}
@@ -160,7 +160,7 @@ function ReviewItemRow({
           </div>
 
           {/* title from pipeline_clips */}
-          <p className="text-sm font-semibold text-[#F0F0F8] leading-tight">
+          <p className="text-sm font-semibold text-heading leading-tight">
             {item.title || 'Untitled'}
           </p>
 
@@ -247,7 +247,7 @@ function IndividualReview({ item, channelName, goUrl, onConfirm, onCancel }: Ind
             type="datetime-local"
             value={scheduleDraft}
             onChange={(e) => setScheduleDraft(e.target.value)}
-            className="rounded-lg bg-[#1A1A26] border border-border px-3 py-2 text-sm text-[#F0F0F8] focus:outline-none focus:border-[#00D4FF]/60"
+            className="rounded-lg bg-surface border border-border px-3 py-2 text-sm text-heading focus:outline-none focus:border-brand/60"
           />
         </div>
 

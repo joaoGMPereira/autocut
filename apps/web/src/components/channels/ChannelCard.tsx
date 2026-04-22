@@ -168,9 +168,9 @@ export function ChannelCard({
         'flex flex-col gap-1.5 rounded-lg border px-3 py-2.5 transition-all',
         isPicker ? (canSelect ? 'cursor-pointer' : 'cursor-not-allowed opacity-50') : '',
         isPicker && selected
-          ? 'border-zinc-300 bg-zinc-800 ring-1 ring-zinc-300'
+          ? 'border-brand/60 bg-brand/5 ring-1 ring-brand/30'
           : 'border-zinc-700 bg-zinc-900',
-        isPicker && canSelect && !selected ? 'hover:border-zinc-500' : '',
+        isPicker && canSelect && !selected ? 'hover:border-zinc-500 hover:bg-zinc-800/50' : '',
       ].join(' ')}
     >
       <div className="flex items-center gap-3">
@@ -211,7 +211,7 @@ export function ChannelCard({
         {actions}
 
         {isPicker && selected && (
-          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-zinc-300 text-zinc-900 text-[10px] font-bold shrink-0">✓</span>
+          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-brand text-brand-foreground text-[10px] font-bold shrink-0">✓</span>
         )}
       </div>
 

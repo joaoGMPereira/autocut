@@ -18,7 +18,7 @@ export function ThumbnailStylePicker({ value, onChange }: ThumbnailStylePickerPr
           onClick={() => onChange(style)}
           className={`rounded-lg border px-3 py-4 text-xs font-medium capitalize transition-colors ${
             value === style
-              ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400'
+              ? 'border-brand bg-brand/10 text-brand'
               : 'border-border bg-card text-zinc-400 hover:border-zinc-500'
           }`}
         >

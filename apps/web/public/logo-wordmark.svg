@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="40" viewBox="0 0 180 40" fill="none">
+  <rect x="2" y="4" width="32" height="32" rx="8" fill="#C6F24E"></rect>
+  <path d="M10 28 L18 10 L26 28" stroke="#0E0E16" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+  <line x1="12.5" y1="22" x2="23.5" y2="22" stroke="#0E0E16" stroke-width="3" stroke-linecap="round"></line>
+  <circle cx="23.5" cy="22" r="2" fill="#0E0E16"></circle>
+  <text x="44" y="27" font-family="Geist, system-ui, sans-serif" font-size="20" font-weight="700" fill="#FAFAFA" letter-spacing="-0.5">AutoCut</text>
+</svg>

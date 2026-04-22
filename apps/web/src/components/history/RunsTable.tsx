@@ -82,7 +82,7 @@ export function RunsTable() {
           size="sm"
           onClick={exportCSV}
           disabled={runs.length === 0}
-          className="text-zinc-400 hover:text-[#F0F0F8]"
+          className="text-zinc-400 hover:text-heading"
         >
           Export CSV
         </Button>
@@ -133,7 +133,7 @@ export function RunsTable() {
                       #{run.id}
                     </td>
                     <td className="px-3 py-2.5 max-w-[200px]">
-                      <span className="block truncate text-[#F0F0F8]">
+                      <span className="block truncate text-heading">
                         {truncateUrl(run.url)}
                       </span>
                     </td>
@@ -156,7 +156,7 @@ export function RunsTable() {
                         <button
                           type="button"
                           onClick={() => handleView(run.id)}
-                          className="rounded-md border border-border bg-zinc-800 px-3 py-1 text-xs text-zinc-400 hover:border-zinc-500 hover:text-[#F0F0F8] transition-colors"
+                          className="rounded-md border border-border bg-zinc-800 px-3 py-1 text-xs text-zinc-400 hover:border-zinc-500 hover:text-heading transition-colors"
                         >
                           View
                         </button>

@@ -240,7 +240,7 @@ function ProgressScreen({ clips, clipProgress, onCancel }: ProgressScreenProps) 
                     href={`https://youtube.com/watch?v=${clip.youtube_id}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-shrink-0 text-xs text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
+                    className="flex-shrink-0 text-xs text-brand hover:text-brand/80 underline underline-offset-2"
                   >
                     Ver no YT ↗
                   </a>
@@ -330,7 +330,7 @@ function DoneScreen({ clips, mode, onNewPipeline }: DoneScreenProps) {
                     href={`https://youtube.com/watch?v=${clip.youtube_id}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-shrink-0 text-xs text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
+                    className="flex-shrink-0 text-xs text-brand hover:text-brand/80 underline underline-offset-2"
                   >
                     Abrir no YouTube ↗
                   </a>

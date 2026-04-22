@@ -17,7 +17,7 @@ export default function SettingsPage() {
   return (
     <div className="flex flex-col gap-6 p-6 max-w-3xl mx-auto w-full" data-testid="settings-page">
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">Settings</h1>
+        <h1 className="font-display text-[28px] font-bold tracking-[-0.02em] text-heading">Settings</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Configure tools, preferences, models, and connected channels.
         </p>

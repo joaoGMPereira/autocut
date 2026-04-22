@@ -155,7 +155,7 @@ export function AppSettingsSection() {
 
             {/* Upload Strategy */}
             <div className="flex flex-col gap-3">
-              <h3 className="text-sm font-medium text-[#A0A0C8]">Upload Strategy</h3>
+              <h3 className="text-sm font-medium text-caption">Upload Strategy</h3>
 
               {/* Strategy toggle */}
               <div className="flex items-center justify-between">
@@ -187,7 +187,7 @@ export function AppSettingsSection() {
                 <div className="flex flex-col gap-2">
                   <div className="flex justify-between">
                     <Label>Concurrent uploads</Label>
-                    <span className="text-sm text-[#A0A0C8]">{uploadParallelCount}</span>
+                    <span className="text-sm text-caption">{uploadParallelCount}</span>
                   </div>
                   <input
                     type="range"
@@ -197,11 +197,11 @@ export function AppSettingsSection() {
                     onChange={(e) => { setUploadParallelCount(e.target.value); markDirty(); }}
                     className="w-full"
                   />
-                  <div className="flex justify-between text-xs text-[#5C5C80]">
+                  <div className="flex justify-between text-xs text-subtle">
                     <span>1 (sequential)</span>
                     <span>5 (max)</span>
                   </div>
-                  <p className="text-xs text-[#5C5C80]">
+                  <p className="text-xs text-subtle">
                     Reduce to 1-2 when YouTube quota usage exceeds 70%
                   </p>
                 </div>

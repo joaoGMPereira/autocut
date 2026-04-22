@@ -77,18 +77,18 @@ export function BulkScheduleModal({ open, onOpenChange, itemCount, onConfirm }: 
         <div className="flex flex-col gap-5 py-2">
           {/* Start date */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-[#A0A0C0]">Start date &amp; time</label>
+            <label className="text-xs font-medium text-caption">Start date &amp; time</label>
             <input
               type="datetime-local"
               value={startAt}
               onChange={(e) => setStartAt(e.target.value)}
-              className="rounded-lg bg-[#1A1A26] border border-border px-3 py-2 text-sm text-[#F0F0F8] focus:outline-none focus:border-[#00D4FF]/60"
+              className="rounded-lg bg-surface border border-border px-3 py-2 text-sm text-heading focus:outline-none focus:border-brand/60"
             />
           </div>
 
           {/* Interval */}
           <div className="flex flex-col gap-2">
-            <label className="text-xs font-medium text-[#A0A0C0]">Interval between uploads</label>
+            <label className="text-xs font-medium text-caption">Interval between uploads</label>
             <div className="flex flex-wrap gap-2">
               {INTERVAL_PRESETS.map((preset) => (
                 <button
@@ -97,8 +97,8 @@ export function BulkScheduleModal({ open, onOpenChange, itemCount, onConfirm }: 
                   onClick={() => { setSelectedPreset(preset.minutes); setCustomMinutes(''); }}
                   className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
                     selectedPreset === preset.minutes
-                      ? 'bg-[#00D4FF]/15 border-[#00D4FF]/50 text-[#00D4FF]'
-                      : 'bg-[#1A1A26] border-border text-[#A0A0C0] hover:border-[#00D4FF]/30'
+                      ? 'bg-brand/15 border-brand/50 text-brand'
+                      : 'bg-surface border-border text-caption hover:border-brand/30'
                   }`}
                 >
                   {preset.label}
@@ -109,8 +109,8 @@ export function BulkScheduleModal({ open, onOpenChange, itemCount, onConfirm }: 
                 onClick={() => setSelectedPreset(null)}
                 className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
                   selectedPreset === null
-                    ? 'bg-[#00D4FF]/15 border-[#00D4FF]/50 text-[#00D4FF]'
-                    : 'bg-[#1A1A26] border-border text-[#A0A0C0] hover:border-[#00D4FF]/30'
+                    ? 'bg-brand/15 border-brand/50 text-brand'
+                    : 'bg-surface border-border text-caption hover:border-brand/30'
                 }`}
               >
                 Custom
@@ -125,21 +125,21 @@ export function BulkScheduleModal({ open, onOpenChange, itemCount, onConfirm }: 
                   value={customMinutes}
                   onChange={(e) => setCustomMinutes(e.target.value)}
                   placeholder="e.g. 90"
-                  className="w-28 rounded-lg bg-[#1A1A26] border border-border px-3 py-1.5 text-sm text-[#F0F0F8] focus:outline-none focus:border-[#00D4FF]/60"
+                  className="w-28 rounded-lg bg-surface border border-border px-3 py-1.5 text-sm text-heading focus:outline-none focus:border-brand/60"
                 />
-                <span className="text-xs text-[#5C5C80]">minutes</span>
+                <span className="text-xs text-subtle">minutes</span>
               </div>
             )}
           </div>
 
           {/* Preview */}
           {previewText ? (
-            <div className="rounded-lg bg-[#1A1A26] border border-border px-3 py-2.5">
-              <p className="text-xs text-[#A0A0C0] leading-relaxed">{previewText}</p>
+            <div className="rounded-lg bg-surface border border-border px-3 py-2.5">
+              <p className="text-xs text-caption leading-relaxed">{previewText}</p>
             </div>
           ) : (
-            <div className="rounded-lg bg-[#1A1A26] border border-border px-3 py-2.5">
-              <p className="text-xs text-[#5C5C80]">
+            <div className="rounded-lg bg-surface border border-border px-3 py-2.5">
+              <p className="text-xs text-subtle">
                 Fill in start date and interval to see preview
               </p>
             </div>

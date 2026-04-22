@@ -65,7 +65,7 @@ export function ClipReviewCard({
   return (
     <div
       className={`rounded-lg border transition-colors ${
-        isSelected ? 'border-cyan-500/40 bg-cyan-500/5' : 'border-border bg-card/60 opacity-60'
+        isSelected ? 'border-brand/40 bg-brand/5' : 'border-border bg-card/60 opacity-60'
       }`}
     >
       {/* Header: index, duration, selection */}
@@ -80,11 +80,11 @@ export function ClipReviewCard({
             type="button"
             onClick={handleSelectToggle}
             className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-              isSelected ? 'border-cyan-400 bg-cyan-400/20' : 'border-zinc-600 bg-zinc-800'
+              isSelected ? 'border-brand bg-brand/20' : 'border-zinc-600 bg-zinc-800'
             }`}
             aria-label={isSelected ? 'Deselect clip' : 'Select clip'}
           >
-            {isSelected && <span className="text-cyan-400 text-xs leading-none">✓</span>}
+            {isSelected && <span className="text-brand text-xs leading-none">✓</span>}
           </button>
         </div>
       </div>
@@ -139,7 +139,7 @@ export function ClipReviewCard({
             placeholder="Título do clip..."
             maxLength={100}
             disabled={!isSelected}
-            className="w-full text-sm bg-zinc-800 border border-border rounded px-2 py-1 text-foreground placeholder-zinc-600 focus:outline-none focus:border-cyan-500 disabled:opacity-40"
+            className="w-full text-sm bg-zinc-800 border border-border rounded px-2 py-1 text-foreground placeholder-zinc-600 focus:outline-none focus:border-brand disabled:opacity-40"
           />
         </div>
         <div>
@@ -155,7 +155,7 @@ export function ClipReviewCard({
             placeholder="GANCHO CURTO"
             maxLength={30}
             disabled={!isSelected}
-            className="w-full text-xs bg-zinc-800 border border-border rounded px-2 py-1 text-foreground placeholder-zinc-600 focus:outline-none focus:border-cyan-500 uppercase disabled:opacity-40"
+            className="w-full text-xs bg-zinc-800 border border-border rounded px-2 py-1 text-foreground placeholder-zinc-600 focus:outline-none focus:border-brand uppercase disabled:opacity-40"
           />
         </div>
       </div>

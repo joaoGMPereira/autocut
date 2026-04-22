@@ -37,7 +37,7 @@ export function PositionGrid({ value, onChange }: PositionGridProps) {
             className={[
               'h-8 w-8 rounded text-sm font-mono flex items-center justify-center transition-colors',
               active
-                ? 'bg-[#00D4FF]/20 ring-2 ring-[#00D4FF] text-[#00D4FF]'
+                ? 'bg-brand/20 ring-2 ring-brand text-brand'
                 : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
             ].join(' ')}
           >

@@ -70,7 +70,7 @@ export function RunFilters() {
       <select
         value={filters.channelId ?? ''}
         onChange={handleChannelChange}
-        className="h-9 rounded-md border border-border bg-zinc-900 px-3 text-sm text-[#F0F0F8] focus:outline-none focus:ring-1 focus:ring-zinc-600"
+        className="h-9 rounded-md border border-border bg-zinc-900 px-3 text-sm text-heading focus:outline-none focus:ring-1 focus:ring-zinc-600"
         aria-label="Filter by channel"
       >
         <option value="">All Channels</option>
@@ -85,7 +85,7 @@ export function RunFilters() {
       <select
         value={filters.status}
         onChange={handleStatusChange}
-        className="h-9 rounded-md border border-border bg-zinc-900 px-3 text-sm text-[#F0F0F8] focus:outline-none focus:ring-1 focus:ring-zinc-600"
+        className="h-9 rounded-md border border-border bg-zinc-900 px-3 text-sm text-heading focus:outline-none focus:ring-1 focus:ring-zinc-600"
         aria-label="Filter by status"
       >
         {STATUS_OPTIONS.map((opt) => (
@@ -101,7 +101,7 @@ export function RunFilters() {
         value={filters.dateFrom}
         onChange={handleDateFromChange}
         aria-label="From date"
-        className="h-9 w-40 bg-zinc-900 border-border text-sm text-[#F0F0F8]"
+        className="h-9 w-40 bg-zinc-900 border-border text-sm text-heading"
       />
 
       {/* Date to */}
@@ -110,7 +110,7 @@ export function RunFilters() {
         value={filters.dateTo}
         onChange={handleDateToChange}
         aria-label="To date"
-        className="h-9 w-40 bg-zinc-900 border-border text-sm text-[#F0F0F8]"
+        className="h-9 w-40 bg-zinc-900 border-border text-sm text-heading"
       />
 
       {/* Reset */}
@@ -118,7 +118,7 @@ export function RunFilters() {
         variant="ghost"
         size="sm"
         onClick={handleReset}
-        className="text-zinc-400 hover:text-[#F0F0F8]"
+        className="text-zinc-400 hover:text-heading"
       >
         Reset
       </Button>

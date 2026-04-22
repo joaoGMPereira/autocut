@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/store/appStore';
 import { usePipelineStore } from '@/store/pipelineStore';
 import { useUrlHistoryStore } from '@/store/urlHistoryStore';
@@ -124,7 +125,7 @@ export function StepUrl({ historical }: StepUrlProps) {
   return (
     <div className="space-y-6 max-w-lg">
       <div className="space-y-1">
-        <h2 className="text-xl font-semibold text-foreground">Video URL</h2>
+        <h2 className="font-display text-2xl font-bold tracking-[-0.02em] text-heading">Video URL</h2>
         <p className="text-sm text-zinc-500">Paste a YouTube or Twitch URL to start the pipeline.</p>
       </div>
 
@@ -166,17 +167,18 @@ export function StepUrl({ historical }: StepUrlProps) {
           placeholder="https://www.youtube.com/watch?v=..."
           disabled={isLoading}
           data-testid="step-url-input"
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500 disabled:opacity-50"
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand/50 focus:border-brand/50 disabled:opacity-50"
         />
 
-        <button
+        <Button
+          variant="brand"
           onClick={() => void (isHistorical ? handleResubmit() : handleStart())}
           disabled={isLoading || !url.trim() || (!isHistorical && !canStart)}
           data-testid="step-url-submit"
-          className="w-full rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+          className="w-full"
         >
           {isLoading ? 'Starting…' : isHistorical ? 'Re-submit' : 'Start Pipeline'}
-        </button>
+        </Button>
 
         {!isHistorical && !canStart && channels.length > 0 && (
           <p className="text-xs text-zinc-500 text-center">
@@ -195,12 +197,13 @@ export function StepUrl({ historical }: StepUrlProps) {
         <div className="space-y-3 rounded-md border border-zinc-700 bg-zinc-900 p-4">
           <p className="text-sm text-zinc-300">Video já baixado anteriormente</p>
           <div className="flex gap-2">
-            <button
+            <Button
+              variant="brand"
               onClick={() => confirmReuse()}
-              className="flex-1 rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-200"
+              className="flex-1"
             >
               Reusar e continuar
-            </button>
+            </Button>
             <button
               onClick={() => {
                 const runId = usePipelineStore.getState().activeRunId;

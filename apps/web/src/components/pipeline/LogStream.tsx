@@ -29,7 +29,7 @@ export function LogStream() {
         </p>
       )}
       {phaseProgress && (
-        <p className="text-cyan-400">
+        <p className="text-brand">
           <span className="text-zinc-600">[progress] </span>
           {phaseProgress.phase} {Math.round(phaseProgress.percentDone)}%
           {phaseProgress.speedKbs != null ? ` @ ${phaseProgress.speedKbs.toFixed(0)} KB/s` : ''}

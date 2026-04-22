@@ -118,7 +118,7 @@ export function ToolRow({ tool }: ToolRowProps) {
         {tool.updateAvailable && (
           <Button
             size="sm"
-            className="h-7 text-xs bg-[#00D4FF]/10 border border-[#00D4FF]/25 text-[#00D4FF] hover:bg-[#00D4FF]/20"
+            className="h-7 text-xs bg-brand/10 border border-brand/25 text-brand hover:bg-brand/20"
             onClick={() => startInstall(goUrl, tool.name)}
           >
             Update
@@ -142,7 +142,7 @@ export function ToolRow({ tool }: ToolRowProps) {
             href={manualUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-[#5c5c80] hover:text-muted-foreground transition-colors shrink-0"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-subtle hover:text-muted-foreground transition-colors shrink-0"
           >
             <ExternalLink className="h-3 w-3" />
             How to install

@@ -41,7 +41,7 @@ export function DownloadInfoCard() {
 
       <div className="w-full h-1.5 bg-zinc-700 rounded-full overflow-hidden">
         <div
-          className="h-full bg-cyan-400 rounded-full transition-all duration-300"
+          className="h-full bg-brand rounded-full transition-all duration-300"
           style={{ width: `${pct}%` }}
         />
       </div>

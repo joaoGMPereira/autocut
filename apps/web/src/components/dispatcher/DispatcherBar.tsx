@@ -23,10 +23,10 @@ function DownloadPill({ task, onDone }: TaskPillProps) {
     <div
       className={`flex items-center gap-3 rounded-lg border px-4 py-2 text-xs font-medium ${
         task.status === 'done'
-          ? 'border-[#6BCB8B]/40 bg-[#6BCB8B]/10 text-[#6BCB8B]'
+          ? 'border-success-alt/40 bg-success-alt/10 text-success-alt'
           : task.status === 'error'
             ? 'border-red-500/40 bg-red-500/10 text-red-400'
-            : 'border-[#00D4FF]/40 bg-[#00D4FF]/10 text-[#00D4FF]'
+            : 'border-brand/40 bg-brand/10 text-brand'
       }`}
     >
       {task.status === 'done' && <span>✓ Download concluído</span>}
@@ -34,14 +34,14 @@ function DownloadPill({ task, onDone }: TaskPillProps) {
       {task.status === 'running' && (
         <>
           <span>⬇ Baixando vídeo...</span>
-          <div className="max-w-[120px] flex-1 overflow-hidden rounded-full bg-[#00D4FF]/20 h-1">
+          <div className="max-w-[120px] flex-1 overflow-hidden rounded-full bg-brand/20 h-1">
             {task.progress > 0 ? (
               <div
-                className="h-full rounded-full bg-[#00D4FF] transition-all duration-300"
+                className="h-full rounded-full bg-brand transition-all duration-300"
                 style={{ width: `${task.progress}%` }}
               />
             ) : (
-              <div className="h-full w-full animate-pulse rounded-full bg-[#00D4FF]/60" />
+              <div className="h-full w-full animate-pulse rounded-full bg-brand/60" />
             )}
           </div>
           {task.progress > 0 && <span>{Math.round(task.progress)}%</span>}

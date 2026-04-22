@@ -47,7 +47,7 @@ export function LogoTab() {
         </div>
         <div className="flex flex-col gap-4 flex-1">
           <div className="flex flex-col gap-2">
-            <Label>Opacity: <span className="font-mono text-[#00D4FF]">{opacity.toFixed(2)}</span></Label>
+            <Label>Opacity: <span className="font-mono text-brand">{opacity.toFixed(2)}</span></Label>
             <Slider
               min={0.1}
               max={1.0}
@@ -57,7 +57,7 @@ export function LogoTab() {
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label>Scale: <span className="font-mono text-[#00D4FF]">{scale.toFixed(2)}x</span></Label>
+            <Label>Scale: <span className="font-mono text-brand">{scale.toFixed(2)}x</span></Label>
             <Slider
               min={0.1}
               max={2.0}

@@ -96,7 +96,7 @@ export default function QueuePage() {
     <div className="p-6 max-w-3xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Upload Queue</h1>
+          <h1 className="font-display text-[28px] font-bold tracking-[-0.02em] text-heading">Upload Queue</h1>
           <p className="text-sm text-zinc-500 mt-1">
             {channelFiltered.length} item{channelFiltered.length !== 1 ? 's' : ''}
           </p>
@@ -109,7 +109,7 @@ export default function QueuePage() {
       </div>
 
       {/* Status filter tabs */}
-      <div className="flex items-center gap-1 rounded-lg bg-[#1A1A26] border border-border p-1 w-fit">
+      <div className="flex items-center gap-1 rounded-lg bg-surface border border-border p-1 w-fit">
         {(
           [
             { key: 'queue' as const, label: 'Para Subir', count: queueCount },
@@ -161,7 +161,7 @@ export default function QueuePage() {
               type="datetime-local"
               value={bulkStartAt}
               onChange={(e) => setBulkStartAt(e.target.value)}
-              className="rounded-lg bg-[#1A1A26] border border-border px-2.5 py-1.5 text-xs text-[#F0F0F8] focus:outline-none focus:border-[#00D4FF]/60"
+              className="rounded-lg bg-surface border border-border px-2.5 py-1.5 text-xs text-heading focus:outline-none focus:border-brand/60"
             />
           </div>
           <div className="flex flex-col gap-1">
@@ -171,7 +171,7 @@ export default function QueuePage() {
               min={1}
               value={bulkIntervalDays}
               onChange={(e) => setBulkIntervalDays(Number(e.target.value))}
-              className="w-24 rounded-lg bg-[#1A1A26] border border-border px-2.5 py-1.5 text-xs text-[#F0F0F8] focus:outline-none focus:border-[#00D4FF]/60"
+              className="w-24 rounded-lg bg-surface border border-border px-2.5 py-1.5 text-xs text-heading focus:outline-none focus:border-brand/60"
             />
           </div>
           <Button

@@ -10,24 +10,24 @@ interface StepRailItemProps {
 
 const ringClass: Record<StepStatus, string> = {
   idle: 'border-2 border-zinc-700 bg-transparent',
-  running: 'border-2 border-cyan-400 bg-cyan-400/10 animate-pulse',
-  gate: 'border-2 border-amber-400 bg-amber-400/10',
+  running: 'border-2 border-brand bg-brand/10 animate-pulse',
+  gate: 'border-2 border-brand bg-brand/10',
   done: 'border-2 border-emerald-400 bg-emerald-400/20',
   error: 'border-2 border-red-500 bg-red-500/20',
 };
 
 const dotClass: Record<StepStatus, string> = {
   idle: 'bg-zinc-600',
-  running: 'bg-cyan-400',
-  gate: 'bg-amber-400',
+  running: 'bg-brand',
+  gate: 'bg-brand',
   done: 'bg-emerald-400',
   error: 'bg-red-500',
 };
 
 const labelClass: Record<StepStatus, string> = {
   idle: 'text-zinc-500',
-  running: 'text-cyan-400 font-medium',
-  gate: 'text-amber-400 font-medium',
+  running: 'text-brand font-medium',
+  gate: 'text-brand font-medium',
   done: 'text-emerald-400',
   error: 'text-red-400',
 };

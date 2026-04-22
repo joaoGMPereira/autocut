@@ -34,7 +34,7 @@ export function StepRow({ step }: StepRowProps) {
   return (
     <div className="flex flex-col gap-1 rounded-lg border border-border bg-zinc-950 px-3 py-2.5">
       <div className="flex items-center gap-3">
-        <span className="flex-1 text-sm font-medium text-[#F0F0F8]">{step.step_name}</span>
+        <span className="flex-1 text-sm font-medium text-heading">{step.step_name}</span>
 
         <span
           className={`shrink-0 rounded-md border px-2 py-0.5 text-xs ${statusClass}`}

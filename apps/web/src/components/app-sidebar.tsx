@@ -1,11 +1,11 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   Home,
   Play,
-  Scissors,
   Upload,
   Users,
   Settings,
@@ -38,7 +38,7 @@ export function AppSidebar() {
 
       {/* Logo */}
       <div className="flex items-center justify-center h-9 mb-1">
-        <Scissors className="h-5 w-5 text-sidebar-primary" />
+        <Image src="/logo-mark.svg" alt="AutoCut" width={28} height={28} priority />
       </div>
 
       <Separator className="bg-sidebar-border mx-2 w-auto" />
@@ -56,10 +56,10 @@ export function AppSidebar() {
                   href={href}
                   className={cn(
                     'flex items-center justify-center h-9 w-9 rounded-md transition-colors',
-                    'hover:bg-[#1A1A26] hover:text-[#00D4FF]',
+                    'hover:bg-surface hover:text-brand',
                     isActive
-                      ? 'bg-[#1A1A26] text-[#00D4FF]'
-                      : 'text-[#5C5C80]',
+                      ? 'bg-surface text-brand'
+                      : 'text-subtle',
                   )}
                 >
                   <Icon className="h-4 w-4" />

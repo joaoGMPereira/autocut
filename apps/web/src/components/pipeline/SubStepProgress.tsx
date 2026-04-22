@@ -47,7 +47,7 @@ export function SubStepProgress({
         </div>
         <div className="w-full h-1 bg-zinc-700 rounded-full overflow-hidden">
           <div
-            className={`h-full rounded-full transition-all duration-500 ${isDone ? 'bg-emerald-400' : isActive ? 'bg-cyan-400' : 'bg-zinc-600'}`}
+            className={`h-full rounded-full transition-all duration-500 ${isDone ? 'bg-emerald-400' : isActive ? 'bg-brand' : 'bg-zinc-600'}`}
             style={{ width: `${pct}%` }}
           />
         </div>
