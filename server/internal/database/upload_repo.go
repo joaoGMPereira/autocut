@@ -335,7 +335,7 @@ func (r *UploadRepo) CreateQueued(ctx context.Context, channelID, clipID int64, 
 }
 
 // QueueItemWithTitle is the rich projection used by the queue list API.
-// It joins pipeline_clips to include title, thumbnail_path, and video_type.
+// It joins pipeline_clips to include title, description, tags, thumbnail_path, and video_type.
 type QueueItemWithTitle struct {
 	ID            int64
 	ClipID        int64
@@ -349,8 +349,11 @@ type QueueItemWithTitle struct {
 	Error         string
 	CreatedAt     int64
 	Title         string
+	Description   string
+	Tags          string
 	ThumbnailPath string
 	VideoType     string
+	MetadataJSON  string
 }
 
 // ListQueueWithTitle returns uploads with status in
@@ -363,8 +366,11 @@ func (r *UploadRepo) ListQueueWithTitle(ctx context.Context) ([]QueueItemWithTit
 		       u.queue_order, u.publish_at,
 		       u.youtube_id, u.youtube_url, u.error, u.created_at,
 		       COALESCE(c.title, '') as title,
+		       COALESCE(c.description, '') as description,
+		       COALESCE(c.tags, '') as tags,
 		       COALESCE(c.thumbnail_path, '') as thumbnail_path,
-		       CASE WHEN COALESCE(c.duration_sec, 999) <= 60 THEN 'short' ELSE 'long_form' END as video_type
+		       CASE WHEN COALESCE(c.duration_sec, 999) <= 60 THEN 'short' ELSE 'long_form' END as video_type,
+		       COALESCE(u.metadata_json, '{}') as metadata_json
 		FROM uploads u
 		LEFT JOIN pipeline_clips c ON c.id = u.clip_id
 		WHERE u.status IN ('queued', 'running', 'failed', 'error', 'uploaded')
@@ -382,7 +388,7 @@ func (r *UploadRepo) ListQueueWithTitle(ctx context.Context) ([]QueueItemWithTit
 			&q.ID, &q.ClipID, &q.ChannelID, &q.Status, &q.VideoPath,
 			&q.QueueOrder, &q.PublishAt,
 			&q.YoutubeID, &q.YoutubeURL, &q.Error, &q.CreatedAt,
-			&q.Title, &q.ThumbnailPath, &q.VideoType,
+			&q.Title, &q.Description, &q.Tags, &q.ThumbnailPath, &q.VideoType, &q.MetadataJSON,
 		); err != nil {
 			return nil, fmt.Errorf("scan queue item with title: %w", err)
 		}

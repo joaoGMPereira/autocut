@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -38,8 +39,11 @@ type queueItemJSON struct {
 	Error         string  `json:"error"`
 	CreatedAt     int64   `json:"created_at"`
 	Title         string  `json:"title"`
+	Description   string  `json:"description"`
+	Tags          string  `json:"tags"` // comma-separated from pipeline_clips
 	ThumbnailPath string  `json:"thumbnail_path"`
 	VideoType     string  `json:"video_type"`
+	MetadataJSON  string  `json:"metadata_json"`
 }
 
 // GetQueue handles GET /api/queue
@@ -64,8 +68,11 @@ func (h *QueueHandler) GetQueue(w http.ResponseWriter, r *http.Request) {
 			Error:         q.Error,
 			CreatedAt:     q.CreatedAt,
 			Title:         q.Title,
+			Description:   q.Description,
+			Tags:          q.Tags,
 			ThumbnailPath: q.ThumbnailPath,
 			VideoType:     q.VideoType,
+			MetadataJSON:  q.MetadataJSON,
 		}
 		if q.PublishAt.Valid {
 			j.PublishAt = &q.PublishAt.String
@@ -195,14 +202,24 @@ func (h *QueueHandler) GetThumbnail(w http.ResponseWriter, r *http.Request) {
 	thumbPath := ""
 	if u.LocalThumbnailPath.Valid && u.LocalThumbnailPath.String != "" {
 		thumbPath = u.LocalThumbnailPath.String
-	} else {
-		// Fall back to clip's thumbnail_path via the join query
+	}
+
+	// Fallback 1: clip's thumbnail_path via join query
+	if thumbPath == "" {
 		all, _ := h.repo.ListQueueWithTitle(r.Context())
 		for _, q := range all {
 			if q.ID == id && q.ThumbnailPath != "" {
 				thumbPath = q.ThumbnailPath
 				break
 			}
+		}
+	}
+
+	// Fallback 2: thumbnail.jpg alongside local_video_path (SaveToQueue layout)
+	if thumbPath == "" && u.LocalVideoPath.Valid && u.LocalVideoPath.String != "" {
+		candidate := filepath.Join(filepath.Dir(u.LocalVideoPath.String), "thumbnail.jpg")
+		if _, statErr := os.Stat(candidate); statErr == nil {
+			thumbPath = candidate
 		}
 	}
 

@@ -13,9 +13,27 @@ export interface ChannelConfig {
   thumbnail_text_color_1: string;
   default_category_id: number;
   default_tags: string; // comma-separated
+  made_for_kids: boolean;
+  default_playlist_id_cortes?: string | null;
+  default_playlist_id_shorts?: string | null;
+  shorts_title_hashtags?: string;
+  video_description_hashtags?: string;
   anti_duplicate_enabled: boolean;
+  anti_duplicate_mode?: string;
+  speed_enabled?: boolean;
+  speed_factor?: number;
+  visual_color_grading_enabled?: boolean;
+  visual_crop_enabled?: boolean;
+  visual_zoom_enabled?: boolean;
   branding_logo_enabled: boolean;
   branding_logo_path?: string;
+  branding_intro_enabled?: boolean;
+  branding_outro_enabled?: boolean;
+  audio_music_enabled?: boolean;
+  audio_music_volume?: number;
+  preview_captions_enabled?: boolean;
+  preview_caption_style?: string;
+  pinned_comment_template?: string;
   max_highlights?: number;
 }
 

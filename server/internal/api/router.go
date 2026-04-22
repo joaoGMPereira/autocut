@@ -26,6 +26,7 @@ func NewRouter(
 	th *handlers.ThumbnailHandler,
 	mh *handlers.MetadataHandler,
 	qh *handlers.QueueHandler,
+	cch *handlers.ChannelConfigHandler,
 ) http.Handler {
 	mux := http.NewServeMux()
 
@@ -73,6 +74,7 @@ func NewRouter(
 	mux.HandleFunc("GET /api/channels/{id}", ch.GetChannel)
 	mux.HandleFunc("DELETE /api/channels/{id}", ch.DeleteChannel)
 	mux.HandleFunc("GET /api/channels/{id}/avatar", ch.GetAvatar)
+	mux.HandleFunc("GET /api/channels/{id}/config", cch.GetConfig)
 	mux.HandleFunc("POST /api/channels/{id}/auth", oh.InitOAuthFlow)
 	mux.HandleFunc("POST /api/channels/{id}/auth/refresh", oh.RefreshToken)
 
@@ -96,6 +98,7 @@ func NewRouter(
 	// Thumbnail endpoints
 	mux.HandleFunc("POST /api/thumbnail/runs/{id}/generate", th.PostBatchGenerate)
 	mux.HandleFunc("POST /api/thumbnail/runs/{id}/clips/{clipId}/generate", th.PostSingleGenerate)
+	mux.HandleFunc("POST /api/thumbnail/runs/{id}/clips/{clipId}/preview-text", th.PostPreviewText)
 	mux.HandleFunc("GET /api/thumbnail/runs/{id}/clips/{clipId}/file", th.GetThumbnailFile)
 	mux.HandleFunc("GET /api/thumbnail/fonts", th.GetFonts)
 	mux.HandleFunc("GET /api/thumbnail/templates", th.GetTemplates)

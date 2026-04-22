@@ -128,6 +128,7 @@ func main() {
 	metadataGen.SetChannelBaseRepo(channelRepo)
 	pipelineSvc.SetMetadataGenerator(metadataGen)
 	metadataHandler := handlers.NewMetadataHandler(repo, clipRepo, metadataGen, sseHub)
+	channelConfigHandler := handlers.NewChannelConfigHandler(channelCfgRepo)
 
 	router := api.NewRouter(
 		pipelineHandler,
@@ -144,6 +145,7 @@ func main() {
 		thumbnailHandler,
 		metadataHandler,
 		queueHandler,
+		channelConfigHandler,
 	)
 
 	addr := *host + ":" + *port

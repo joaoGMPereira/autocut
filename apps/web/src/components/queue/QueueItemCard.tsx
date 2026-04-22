@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { QueueItem } from '@/store/queueStore';
 import { useQueueStore } from '@/store/queueStore';
+import { ReviewScheduleModal } from '@/components/queue/ReviewScheduleModal';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('QueueItemCard');
@@ -34,8 +35,7 @@ function StatusBadge({ status }: { status: QueueItem['status'] }) {
 
 export function QueueItemCard({ item, channelName, goUrl }: Props) {
   const { retryItem, deleteItem, scheduleItem } = useQueueStore();
-  const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [scheduleDraft, setScheduleDraft] = useState('');
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState<'retry' | 'delete' | 'schedule' | null>(null);
 
   const handleRetry = async () => {
@@ -59,13 +59,12 @@ export function QueueItemCard({ item, channelName, goUrl }: Props) {
     }
   };
 
-  const handleSchedule = async () => {
-    if (!scheduleDraft) return;
+  const handleScheduleConfirm = async (publishAt?: string) => {
+    if (!publishAt) return;
     setActionLoading('schedule');
     try {
-      await scheduleItem(item.id, new Date(scheduleDraft).toISOString());
-      setScheduleOpen(false);
-      setScheduleDraft('');
+      await scheduleItem(item.id, publishAt);
+      setReviewOpen(false);
     } catch (err) {
       log.error('schedule failed', { id: item.id, err });
     } finally {
@@ -74,18 +73,27 @@ export function QueueItemCard({ item, channelName, goUrl }: Props) {
   };
 
   return (
+    <>
+      <ReviewScheduleModal
+        open={reviewOpen}
+        mode="individual"
+        item={item}
+        channelName={channelName}
+        goUrl={goUrl}
+        onConfirm={handleScheduleConfirm}
+        onCancel={() => setReviewOpen(false)}
+      />
     <div className="rounded-xl bg-card border border-border p-4 flex gap-3 items-start">
       {/* Thumbnail */}
       <div className="shrink-0 w-20 rounded-lg overflow-hidden bg-zinc-800 aspect-video flex items-center justify-center">
-        {item.thumbnail_path ? (
-          <img
-            src={`${goUrl}/api/queue/${item.id}/thumbnail`}
-            alt="thumbnail"
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full bg-zinc-700" />
-        )}
+        <img
+          src={`${goUrl}/api/queue/${item.id}/thumbnail`}
+          alt="thumbnail"
+          className="w-full h-full object-cover"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).style.display = 'none';
+          }}
+        />
       </div>
 
       {/* Main content */}
@@ -130,33 +138,6 @@ export function QueueItemCard({ item, channelName, goUrl }: Props) {
           </a>
         )}
 
-        {/* Inline schedule picker */}
-        {scheduleOpen && (
-          <div className="flex items-center gap-2 mt-1">
-            <input
-              type="datetime-local"
-              value={scheduleDraft}
-              onChange={(e) => setScheduleDraft(e.target.value)}
-              className="rounded-lg bg-[#1A1A26] border border-border px-2.5 py-1.5 text-xs text-[#F0F0F8] focus:outline-none focus:border-[#00D4FF]/60"
-            />
-            <Button
-              size="sm"
-              className="h-7 text-xs"
-              disabled={!scheduleDraft || actionLoading === 'schedule'}
-              onClick={() => void handleSchedule()}
-            >
-              {actionLoading === 'schedule' ? 'Saving…' : 'Set'}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs"
-              onClick={() => { setScheduleOpen(false); setScheduleDraft(''); }}
-            >
-              Cancel
-            </Button>
-          </div>
-        )}
       </div>
 
       {/* Action buttons */}
@@ -186,13 +167,13 @@ export function QueueItemCard({ item, channelName, goUrl }: Props) {
                 variant="outline"
                 size="sm"
                 className="h-7 w-7 p-0"
-                onClick={() => setScheduleOpen((v) => !v)}
+                onClick={() => setReviewOpen(true)}
               >
                 <Calendar className="size-3.5" />
                 <span className="sr-only">Schedule</span>
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Schedule publish time</TooltipContent>
+            <TooltipContent>Review & schedule</TooltipContent>
           </Tooltip>
 
           <Tooltip>
@@ -213,5 +194,6 @@ export function QueueItemCard({ item, channelName, goUrl }: Props) {
         </div>
       </TooltipProvider>
     </div>
+    </>
   );
 }

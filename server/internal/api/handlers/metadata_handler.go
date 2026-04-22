@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/joaoGMPereira/autocut/server/internal/ai"
 	"github.com/joaoGMPereira/autocut/server/internal/database"
@@ -181,6 +183,15 @@ func (g *MetadataHandler) PostReviewMetadata(w http.ResponseWriter, r *http.Requ
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, "invalid JSON body", http.StatusBadRequest)
 		return
+	}
+
+	// Reject placeholder titles (empty or still "Part N")
+	placeholderRe := regexp.MustCompile(`(?i)^(part\s*\d+)?$`)
+	for _, clip := range req.Clips {
+		if placeholderRe.MatchString(strings.TrimSpace(clip.Title)) {
+			jsonError(w, fmt.Sprintf("clip %d has no title — generate metadata or enter a title before continuing", clip.ID), http.StatusBadRequest)
+			return
+		}
 	}
 
 	// Update each clip's metadata

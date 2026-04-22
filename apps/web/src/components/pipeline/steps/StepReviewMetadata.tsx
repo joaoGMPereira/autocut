@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAppStore } from '@/store/appStore';
 import { usePipelineStore } from '@/store/pipelineStore';
 import { createLogger } from '@/lib/logger';
@@ -47,18 +47,84 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [regeneratingClipId, setRegeneratingClipId] = useState<number | null>(null);
 
+  // Thumbnail preview state
+  const [thumbCacheBust, setThumbCacheBust] = useState<Record<number, number>>({});
+  const [thumbRegen, setThumbRegen] = useState<Set<number>>(new Set());
+  const thumbDebounceRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  // Set to true after AI metadata generation completes, triggers auto-regen
+  const [autoRegenPending, setAutoRegenPending] = useState(false);
+  // Blocks the editor until the initial thumbnail regen batch is done.
+  // Starts true — only flips false when we actually kick off a regen batch.
+  const [thumbsReady, setThumbsReady] = useState(true);
+  // True only after at least one successful regen batch has completed.
+  const [thumbsHaveBeenGenerated, setThumbsHaveBeenGenerated] = useState(false);
+
   // True while the backend is auto-generating (PrefillBatch goroutine or manual re-trigger).
-  // Starts as true if clips have no metadata yet — server is generating in the background.
-  const hasMetadata = clips.length > 0 && clips.some((c) => c.title !== '');
+  // description starts empty and is only set after AI runs — safer sentinel than title
+  // (clips always have a default "Part N" title before AI generation)
+  const hasMetadata = clips.length > 0 && clips.some((c) => c.description !== '' || c.tags !== '');
   const isActivelyGenerating =
     metadataProgress?.status === 'fetching_channel' ||
     metadataProgress?.status === 'generating' ||
     metadataProgress?.status === 'streaming';
 
-  // Show loading screen when: no metadata yet (auto-gen in progress) OR SSE says in-progress.
-  const showLoading = !isHistorical && (isActivelyGenerating || (clips.length > 0 && !hasMetadata && metadataProgress?.status !== 'error'));
   // While clips haven't loaded yet we show nothing — avoid flicker between loading and editor.
   const clipsLoaded = clips.length > 0;
+  // Show loading screen when: metadata generating OR (metadata exists but thumbnails not ready).
+  const showLoading = !isHistorical && (
+    isActivelyGenerating ||
+    (clipsLoaded && !hasMetadata && metadataProgress?.status !== 'error') ||
+    (clipsLoaded && hasMetadata && !thumbsReady)
+  );
+
+  // ── Thumbnail preview regeneration ──────────────────────────────────────────
+  const regenThumbnail = useCallback(async (clipId: number, text: string) => {
+    if (!activeRunId) return;
+    setThumbRegen((prev) => new Set(prev).add(clipId));
+    try {
+      const res = await fetch(
+        `${goUrl}/api/thumbnail/runs/${activeRunId}/clips/${clipId}/preview-text`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        }
+      );
+      if (res.ok || res.status === 204) {
+        setThumbCacheBust((prev) => ({ ...prev, [clipId]: Date.now() }));
+      }
+    } catch (err) {
+      log.error('thumbnail preview-text failed', { clipId, error: err instanceof Error ? err.message : 'unknown' });
+    } finally {
+      setThumbRegen((prev) => { const s = new Set(prev); s.delete(clipId); return s; });
+    }
+  }, [goUrl, activeRunId]);
+
+  // Auto-regen all thumbnails that have thumbnail_text — fires on initial load
+  // (once activeRunId is known) and whenever AI metadata generation completes.
+  // Blocks the editor (thumbsReady=false) until all regens finish.
+  const initialRegenDoneRef = useRef<number | null>(null); // stores runId of last regen
+  useEffect(() => {
+    if (!activeRunId || clips.length === 0) return;
+    const shouldRegen = autoRegenPending || initialRegenDoneRef.current !== activeRunId;
+    if (!shouldRegen) return;
+
+    const clipsWithText = clips.filter((c) => !!c.thumbnail_text);
+    // No clips with text yet (metadata still generating or loadClips not done) — wait.
+    // Don't consume the flag here so we retry when clips reload with thumbnail_text.
+    if (clipsWithText.length === 0) return;
+
+    // Consume flags only after confirming there are clips to regen.
+    initialRegenDoneRef.current = activeRunId;
+    setAutoRegenPending(false);
+
+    setThumbsReady(false);
+    void Promise.all(clipsWithText.map((clip) => regenThumbnail(clip.id, clip.thumbnail_text)))
+      .finally(() => {
+        setThumbsReady(true);
+        setThumbsHaveBeenGenerated(true);
+      });
+  }, [activeRunId, autoRegenPending, clips, regenThumbnail]);
 
   // Load clips on mount
   useEffect(() => {
@@ -84,6 +150,7 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
   useEffect(() => {
     if (metadataProgress?.status === 'done' && activeRunId) {
       void loadClips(goUrl, activeRunId);
+      setAutoRegenPending(true);
     }
     if (metadataProgress?.status === 'error') {
       setGenerateError(metadataProgress.message || 'Geração falhou');
@@ -116,28 +183,40 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
       );
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
       const data = await res.json();
+      const newText = Array.isArray(data.tags) ? data.tags.join(',') : (data.tags || '');
       setEdits((prev) => ({
         ...prev,
         [clipId]: {
           title: data.title || prev[clipId]?.title || '',
           description: data.description || prev[clipId]?.description || '',
-          tags: Array.isArray(data.tags) ? data.tags.join(',') : (data.tags || prev[clipId]?.tags || ''),
+          tags: newText || prev[clipId]?.tags || '',
           thumbnail_text: data.thumbnail_text || prev[clipId]?.thumbnail_text || '',
         },
       }));
+      // Regenerate thumbnail with new text
+      const newThumbText = data.thumbnail_text || '';
+      if (newThumbText) {
+        void regenThumbnail(clipId, newThumbText);
+      }
     } catch (err) {
       log.error('Regenerate single failed', { clipId, error: err instanceof Error ? err.message : 'Unknown' });
     } finally {
       setRegeneratingClipId(null);
     }
-  }, [goUrl, activeRunId]);
+  }, [goUrl, activeRunId, regenThumbnail]);
 
   const updateEdit = useCallback((clipId: number, field: keyof ClipEdit, value: string) => {
     setEdits((prev) => ({
       ...prev,
       [clipId]: { ...prev[clipId], [field]: value },
     }));
-  }, []);
+    if (field === 'thumbnail_text') {
+      clearTimeout(thumbDebounceRef.current[clipId]);
+      thumbDebounceRef.current[clipId] = setTimeout(() => {
+        void regenThumbnail(clipId, value);
+      }, 700);
+    }
+  }, [regenThumbnail]);
 
   const handleSubmit = useCallback(async () => {
     if (!activeRunId) return;
@@ -199,11 +278,41 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
               label="Baixar dados do canal"
             />
             <StepRow
-              done={status === 'done'}
+              done={!isActivelyGenerating && hasMetadata}
               active={status === 'generating' || status === 'streaming'}
               label="Gerar metadados com IA"
             />
+            <StepRow
+              done={thumbsHaveBeenGenerated && thumbsReady}
+              active={hasMetadata && !isActivelyGenerating && !thumbsReady}
+              label="Gerar thumbnails com texto"
+            />
           </div>
+
+          {/* Thumbnail previews while regenerating */}
+          {status === 'done' && !thumbsReady && clips.length > 0 && (
+            <div className="flex gap-2 pt-1">
+              {clips.map((clip) => (
+                <div
+                  key={clip.id}
+                  className="flex-1 rounded overflow-hidden bg-zinc-800 aspect-video relative"
+                >
+                  <img
+                    key={thumbCacheBust[clip.id] ?? 0}
+                    src={`${goUrl}/api/thumbnail/runs/${activeRunId}/clips/${clip.id}/file?t=${thumbCacheBust[clip.id] ?? 0}`}
+                    alt=""
+                    className={`w-full h-full object-cover transition-opacity duration-300 ${thumbRegen.has(clip.id) ? 'opacity-40' : 'opacity-100'}`}
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
+                  {thumbRegen.has(clip.id) && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           {metadataProgress?.message && (
             <p className="text-xs text-zinc-500">{metadataProgress.message}</p>
@@ -260,12 +369,38 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
           const edit = edits[clip.id];
           if (!edit) return null;
           const isRegen = regeneratingClipId === clip.id;
+          const isThumbRegen = thumbRegen.has(clip.id);
+          const cacheBust = thumbCacheBust[clip.id] ?? 0;
 
           return (
             <div
               key={clip.id}
               className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 space-y-3"
             >
+              {/* Thumbnail preview */}
+              <div
+                className={`relative rounded-lg overflow-hidden bg-zinc-800 ${
+                  clip.thumbnail_style === 'landscape'
+                    ? 'w-full aspect-video'
+                    : 'mx-auto aspect-[9/16] w-44'
+                }`}
+              >
+                {isThumbRegen && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-10">
+                    <span className="text-xs text-zinc-300 animate-pulse">Atualizando thumbnail...</span>
+                  </div>
+                )}
+                <img
+                  key={cacheBust}
+                  src={`${goUrl}/api/thumbnail/runs/${activeRunId}/clips/${clip.id}/file?t=${cacheBust}`}
+                  alt="thumbnail"
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              </div>
+
               {/* Card header */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">

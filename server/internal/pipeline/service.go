@@ -848,7 +848,7 @@ func (s *Service) runClipGeneration(id int64) {
 			inputs[i] = clipInput{
 				startSec: seg.StartSec,
 				endSec:   seg.EndSec,
-				title:    fmt.Sprintf("Part %d", i+1),
+				title:    "",
 			}
 		}
 		s.generateClipsFromInputs(ctx, id, run, inputs, channelCfg, blurEdgePct, noiseStrength, publishError)

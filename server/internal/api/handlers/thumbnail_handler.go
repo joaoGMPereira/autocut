@@ -231,6 +231,92 @@ func (h *ThumbnailHandler) PostSingleGenerate(w http.ResponseWriter, r *http.Req
 	})
 }
 
+// PostPreviewText regenerates a clip's thumbnail using only a text override.
+// Allowed in WAITING_THUMBNAIL_CONFIG or WAITING_REVIEW_METADATA states so the
+// metadata-review screen can show live thumbnail previews as the user edits thumbnail_text.
+// POST /api/thumbnail/runs/{id}/clips/{clipId}/preview-text
+// Body: {"text":"YOUR TEXT"}
+func (h *ThumbnailHandler) PostPreviewText(w http.ResponseWriter, r *http.Request) {
+	runID, ok := parseRunID(w, r)
+	if !ok {
+		return
+	}
+	clipIDStr := r.PathValue("clipId")
+	clipID, err := strconv.ParseInt(clipIDStr, 10, 64)
+	if err != nil || clipID <= 0 {
+		jsonError(w, "invalid clip id", http.StatusBadRequest)
+		return
+	}
+
+	run, err := h.runRepo.GetByID(r.Context(), runID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			jsonError(w, "run not found", http.StatusNotFound)
+			return
+		}
+		jsonError(w, "failed to load run", http.StatusInternalServerError)
+		return
+	}
+	isLandscape := run.Mode == "ai" || run.Mode == "longform"
+	if isLandscape {
+		if err := thumbnail.CheckImageMagickAvailable(); err != nil {
+			jsonError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		if err := thumbnail.CheckFFmpegAvailable(); err != nil {
+			jsonError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	var body struct {
+		Text string `json:"text"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		jsonError(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	clips, err := h.clipRepo.ListByRun(r.Context(), runID)
+	if err != nil {
+		jsonError(w, "failed to load clips", http.StatusInternalServerError)
+		return
+	}
+	var targetClip *database.PipelineClip
+	for i := range clips {
+		if clips[i].ID == clipID {
+			targetClip = &clips[i]
+			break
+		}
+	}
+	if targetClip == nil {
+		jsonError(w, "clip not found in this run", http.StatusNotFound)
+		return
+	}
+
+	cfg := thumbnail.DefaultConfig()
+	cfg.ClipTexts = map[int64]string{clipID: body.Text}
+
+	req := &thumbnail.GenerateRequest{
+		Config:       cfg,
+		ThumbnailURL: run.ThumbnailURL,
+	}
+	if isLandscape {
+		lc := thumbnail.DefaultLandscapeConfig()
+		lc.ClipTexts = map[int64]string{clipID: body.Text}
+		req.LandscapeConfig = &lc
+	}
+
+	if _, err := h.generator.GenerateSingle(r.Context(), runID, *targetClip, cfg, run.Mode, req); err != nil {
+		h.log.Error("preview-text generation failed", "run_id", runID, "clip_id", clipID, "err", err)
+		jsonError(w, fmt.Sprintf("generation failed: %s", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // GetFonts lists available system fonts.
 // GET /api/thumbnail/fonts
 func (h *ThumbnailHandler) GetFonts(w http.ResponseWriter, r *http.Request) {

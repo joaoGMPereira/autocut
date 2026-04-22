@@ -15,9 +15,12 @@ export interface QueueItem {
   publish_at?: string;
   error?: string;
   title?: string;
+  description?: string;
+  tags?: string; // comma-separated from pipeline_clips
   video_type: string;
   created_at: number;
-  thumbnail_path?: string;  // present when clip has a thumbnail
+  thumbnail_path?: string;
+  metadata_json?: string;
 }
 
 interface QueueStore {

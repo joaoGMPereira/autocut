@@ -5,6 +5,7 @@ import { useQueueStore } from '@/store/queueStore';
 import { useChannelStore } from '@/store/channelStore';
 import { useAppStore } from '@/store/appStore';
 import { QueueItemCard } from '@/components/queue/QueueItemCard';
+import { ReviewScheduleModal } from '@/components/queue/ReviewScheduleModal';
 import { Button } from '@/components/ui/button';
 import { createLogger } from '@/lib/logger';
 
@@ -18,7 +19,7 @@ export default function QueuePage() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkStartAt, setBulkStartAt] = useState('');
   const [bulkInterval, setBulkInterval] = useState(1440);
-  const [bulkLoading, setBulkLoading] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   useEffect(() => {
     void fetchQueue();
@@ -36,17 +37,14 @@ export default function QueuePage() {
     ? items.filter((i) => i.channel_id === selectedChannelId)
     : items;
 
-  const handleBulkSchedule = async () => {
-    if (!bulkStartAt) return;
-    setBulkLoading(true);
+  const handleBulkConfirm = async () => {
     try {
       await bulkSchedule(new Date(bulkStartAt).toISOString(), bulkInterval);
+      setReviewOpen(false);
       setBulkOpen(false);
       setBulkStartAt('');
     } catch (err) {
       log.error('bulk schedule failed', { err });
-    } finally {
-      setBulkLoading(false);
     }
   };
 
@@ -63,6 +61,19 @@ export default function QueuePage() {
           Bulk Schedule
         </Button>
       </div>
+
+      {/* Review modal (bulk) */}
+      <ReviewScheduleModal
+        open={reviewOpen}
+        mode="bulk"
+        items={items}
+        startAt={bulkStartAt ? new Date(bulkStartAt).toISOString() : undefined}
+        intervalMinutes={bulkInterval}
+        channels={channelOptions}
+        goUrl={goUrl}
+        onConfirm={handleBulkConfirm}
+        onCancel={() => setReviewOpen(false)}
+      />
 
       {/* Bulk schedule form */}
       {bulkOpen && (
@@ -88,10 +99,10 @@ export default function QueuePage() {
           </div>
           <Button
             size="sm"
-            disabled={!bulkStartAt || bulkLoading}
-            onClick={() => void handleBulkSchedule()}
+            disabled={!bulkStartAt}
+            onClick={() => setReviewOpen(true)}
           >
-            {bulkLoading ? 'Scheduling…' : 'Apply'}
+            Preview & Schedule
           </Button>
           <Button size="sm" variant="outline" onClick={() => setBulkOpen(false)}>
             Cancel
