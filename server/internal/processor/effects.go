@@ -131,8 +131,12 @@ func BuildEffectChain(log *slog.Logger, req EffectRequest) ([]string, []func()) 
 	// The effect: raw video blurred + scaled-to-fill as background; processed video
 	// scaled down as foreground, overlaid centered. This creates the "portrait blur" look.
 	if req.BlurEdgePct > 0 {
-		overlayOps = append([]overlayOp{{kind: opBlurBg, blurEdgePct: req.BlurEdgePct}}, overlayOps...)
-		log.Info("effect layer: blur background", "edge_pct", req.BlurEdgePct)
+		bgSpeedFactor := 0.0
+		if cc.SpeedEnabled && cc.SpeedFactor > 0 && cc.SpeedFactor != 1.0 {
+			bgSpeedFactor = cc.SpeedFactor
+		}
+		overlayOps = append([]overlayOp{{kind: opBlurBg, blurEdgePct: req.BlurEdgePct, speedFactor: bgSpeedFactor}}, overlayOps...)
+		log.Info("effect layer: blur background", "edge_pct", req.BlurEdgePct, "speed_factor", bgSpeedFactor)
 	}
 
 	// --- Layer 2e: Noise ---
@@ -200,7 +204,11 @@ func BuildEffectChain(log *slog.Logger, req EffectRequest) ([]string, []func()) 
 				log.Warn("caption style JSON parse failed, using defaults", "err", err)
 			}
 		}
-		assPath, cleanup, err := GenerateASSFromTranscript(req.TranscriptPath, req.StartSec, req.DurationSec, captionStyle)
+		captionSpeed := 1.0
+		if cc.SpeedEnabled && cc.SpeedFactor > 0 {
+			captionSpeed = cc.SpeedFactor
+		}
+		assPath, cleanup, err := GenerateASSFromTranscript(req.TranscriptPath, req.StartSec, req.DurationSec, captionStyle, captionSpeed)
 		if err != nil {
 			log.Warn("effect layer skipped: captions (ASS generation failed)", "err", err)
 		} else {
@@ -250,6 +258,7 @@ type overlayOp struct {
 	scalePct    int     // video overlay only
 	position    string
 	blurEdgePct float64 // blurBg only
+	speedFactor float64 // blurBg only: match bg speed to fg speed
 }
 
 // assembleFFmpegArgs builds the final ffmpeg argument list from collected filters and overlays.
@@ -335,10 +344,13 @@ func buildFilterComplex(simpleFilters []string, postFilters []string, ops []over
 			}
 			sigma := 20.0 + e*30.0 // sigma 20–50: heavier blur for wider edges
 
+			bgFilter := fmt.Sprintf("gblur=sigma=%.0f,scale=iw:ih:force_original_aspect_ratio=increase,crop=iw:ih", sigma)
+			if op.speedFactor > 0 && op.speedFactor != 1.0 {
+				bgFilter = fmt.Sprintf("setpts=PTS/%.4f,%s", op.speedFactor, bgFilter)
+			}
 			parts = append(parts,
 				// BG: blur the raw (unprocessed) stream and scale to fill the frame
-				fmt.Sprintf("%sgblur=sigma=%.0f,scale=iw:ih:force_original_aspect_ratio=increase,crop=iw:ih%s",
-					bgRawStream, sigma, bgBlurred),
+				fmt.Sprintf("%s%s%s", bgRawStream, bgFilter, bgBlurred),
 				// FG: scale down the processed stream (has color grading, captions, etc.)
 				fmt.Sprintf("%sscale=trunc(iw*%.4f/2)*2:trunc(ih*%.4f/2)*2%s",
 					currentLabel, fgScale, fgScale, fgSmall),

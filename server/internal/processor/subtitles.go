@@ -183,7 +183,10 @@ type transcriptWhisperRaw struct {
 // window, shifts times to be relative to startSec, and emits real dialogue lines.
 // Falls back to GenerateASS if the transcript is missing, unparseable, or has no segments
 // in the preview window.
-func GenerateASSFromTranscript(transcriptPath string, startSec int, durationSec int64, style CaptionTextStyle) (string, func(), error) {
+func GenerateASSFromTranscript(transcriptPath string, startSec int, durationSec int64, style CaptionTextStyle, speedFactor float64) (string, func(), error) {
+	if speedFactor <= 0 {
+		speedFactor = 1.0
+	}
 	// Fall back immediately if no path given
 	if transcriptPath == "" {
 		return GenerateASS(style)
@@ -303,8 +306,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 	dialogues.WriteString(header)
 
 	for _, seg := range filtered {
-		adjStart := seg.Start - windowStart
-		adjEnd := seg.End - windowStart
+		adjStart := (seg.Start - windowStart) / speedFactor
+		adjEnd := (seg.End - windowStart) / speedFactor
 
 		// Clamp to [0, durationSec]
 		if adjStart < 0 {

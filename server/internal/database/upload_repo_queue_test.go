@@ -45,6 +45,8 @@ func openQueueTestDB(t *testing.T) *sql.DB {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			run_id INTEGER NOT NULL DEFAULT 0,
 			title TEXT NOT NULL DEFAULT '',
+			description TEXT NOT NULL DEFAULT '',
+			tags TEXT NOT NULL DEFAULT '',
 			thumbnail_path TEXT NOT NULL DEFAULT '',
 			duration_sec REAL NOT NULL DEFAULT 0
 		);
