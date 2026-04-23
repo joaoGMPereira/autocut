@@ -12,6 +12,7 @@ import { InfoBanner } from '@/components/ui/info-banner';
 import { Input } from '@/components/ui/input';
 import { InputWithAction } from '@/components/ui/input-with-action';
 import { Label } from '@/components/ui/label';
+import { PanelHeader } from '@/components/ui/panel-header';
 import { SectionPanel } from '@/components/ui/section-panel';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { ToggleGroup } from '@/components/ui/toggle-group';
@@ -1702,10 +1703,10 @@ export function StepMode({ historical }: StepModeProps) {
           {/* State: Downloading */}
           {!downloadComplete && (
             <>
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium text-prose">Preview</h3>
-                <span className="text-xs text-subtle">Aguardando download...</span>
-              </div>
+              <PanelHeader
+                title="Preview"
+                actions={<span className="text-xs text-subtle">Aguardando download...</span>}
+              />
               {phaseProgress?.phase === 'download' && (
                 <div className="space-y-1">
                   <div className="h-2 w-full overflow-hidden rounded-full bg-surface">
@@ -1731,22 +1732,24 @@ export function StepMode({ historical }: StepModeProps) {
 
           {/* State: Ready (download complete) */}
           {downloadComplete && (
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium text-prose">Preview</h3>
-              <Button
-                onClick={() => {
-                  if (!activeRunId) return;
-                  const cfg = buildModeConfig();
-                  void generatePreview(goUrl, activeRunId, cfg);
-                }}
-                disabled={previewStatus === 'generating'}
-                variant="secondary"
-                size="sm"
-                className="text-xs"
-              >
-                {previewStatus === 'generating' ? 'Generating…' : previewStatus === 'ready' ? 'Regenerate Preview' : 'Generate Preview'}
-              </Button>
-            </div>
+            <PanelHeader
+              title="Preview"
+              actions={
+                <Button
+                  onClick={() => {
+                    if (!activeRunId) return;
+                    const cfg = buildModeConfig();
+                    void generatePreview(goUrl, activeRunId, cfg);
+                  }}
+                  disabled={previewStatus === 'generating'}
+                  variant="secondary"
+                  size="sm"
+                  className="text-xs"
+                >
+                  {previewStatus === 'generating' ? 'Generating…' : previewStatus === 'ready' ? 'Regenerate Preview' : 'Generate Preview'}
+                </Button>
+              }
+            />
           )}
 
           {/* Preview generation progress (shared across ready/reused states) */}
