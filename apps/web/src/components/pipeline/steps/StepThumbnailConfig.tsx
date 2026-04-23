@@ -279,7 +279,7 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
       <h2 className="text-xl font-semibold text-foreground">Thumbnail Configuration</h2>
 
       {isHistorical && (
-        <div className="rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-xs text-zinc-400">
+        <div className="rounded-md border border-border bg-card px-4 py-3 text-xs text-subtle">
           Reviewing previous submission. Re-submitting will restart the pipeline from this step.
         </div>
       )}
@@ -292,29 +292,28 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
           fonts={fonts}
         />
       ) : (
-        <div className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-          <h3 className="text-sm font-medium text-zinc-300">Visual Settings</h3>
+        <div className="space-y-3 rounded-lg border border-border bg-card/50 p-4">
+          <h3 className="text-sm font-medium text-prose">Visual Settings</h3>
 
           {/* Global Text */}
           <div className="space-y-1">
-            <Label className="text-xs text-zinc-400">Overlay Text (global)</Label>
+            <Label className="text-xs font-medium text-subtle">Overlay Text (global)</Label>
             <Input
               value={config.text}
               onChange={(e) => setConfig((c) => ({ ...c, text: e.target.value }))}
               placeholder="e.g. BEST MOMENT EVER"
               maxLength={200}
-              className="bg-zinc-800 border-zinc-700"
             />
-            <p className="text-[10px] text-zinc-500">Text is auto-uppercased. Max 200 chars.</p>
+            <p className="text-[10px] text-subtle">Text is auto-uppercased. Max 200 chars.</p>
           </div>
 
           {/* Font Picker */}
           <div className="space-y-1">
-            <Label className="text-xs text-zinc-400">Font Family</Label>
+            <Label className="text-xs font-medium text-subtle">Font Family</Label>
             <select
               value={config.font_family}
               onChange={(e) => setConfig((c) => ({ ...c, font_family: e.target.value }))}
-              className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-foreground"
+              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground"
             >
               {fonts.map((f) => (
                 <option key={f.family} value={f.family}>{f.family}</option>
@@ -326,34 +325,34 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
           {/* Color pickers row */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs text-zinc-400">Text Color</Label>
+              <Label className="text-xs font-medium text-subtle">Text Color</Label>
               <div className="flex items-center gap-2">
                 <input
                   type="color"
                   value={config.text_color}
                   onChange={(e) => setConfig((c) => ({ ...c, text_color: e.target.value }))}
-                  className="h-8 w-8 cursor-pointer rounded border border-zinc-700"
+                  className="h-8 w-8 cursor-pointer rounded border border-border"
                 />
-                <span className="text-xs text-zinc-400">{config.text_color}</span>
+                <span className="text-xs text-subtle">{config.text_color}</span>
               </div>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-zinc-400">Outline Color</Label>
+              <Label className="text-xs font-medium text-subtle">Outline Color</Label>
               <div className="flex items-center gap-2">
                 <input
                   type="color"
                   value={config.outline_color}
                   onChange={(e) => setConfig((c) => ({ ...c, outline_color: e.target.value }))}
-                  className="h-8 w-8 cursor-pointer rounded border border-zinc-700"
+                  className="h-8 w-8 cursor-pointer rounded border border-border"
                 />
-                <span className="text-xs text-zinc-400">{config.outline_color}</span>
+                <span className="text-xs text-subtle">{config.outline_color}</span>
               </div>
             </div>
           </div>
 
           {/* Stroke Width */}
           <div className="space-y-1">
-            <Label className="text-xs text-zinc-400">Stroke Width: {config.stroke_width}px</Label>
+            <Label className="text-xs font-medium text-subtle">Stroke Width: {config.stroke_width}px</Label>
             <Slider
               value={[config.stroke_width]}
               onValueChange={([v]) => setConfig((c) => ({ ...c, stroke_width: v }))}
@@ -367,7 +366,7 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
               checked={config.blur_enabled}
               onCheckedChange={(v) => setConfig((c) => ({ ...c, blur_enabled: v }))}
             />
-            <Label className="text-xs text-zinc-400">Background Blur</Label>
+            <Label className="text-xs font-medium text-subtle">Background Blur</Label>
             {config.blur_enabled && (
               <div className="flex-1">
                 <Slider
@@ -375,7 +374,7 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
                   onValueChange={([v]) => setConfig((c) => ({ ...c, blur_amount: v }))}
                   min={1} max={100} step={1}
                 />
-                <span className="text-[10px] text-zinc-500">{config.blur_amount}</span>
+                <span className="text-[10px] text-subtle">{config.blur_amount}</span>
               </div>
             )}
           </div>
@@ -386,7 +385,7 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
               checked={config.darken_enabled}
               onCheckedChange={(v) => setConfig((c) => ({ ...c, darken_enabled: v }))}
             />
-            <Label className="text-xs text-zinc-400">Darken Background</Label>
+            <Label className="text-xs font-medium text-subtle">Darken Background</Label>
             {config.darken_enabled && (
               <div className="flex-1">
                 <Slider
@@ -394,14 +393,14 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
                   onValueChange={([v]) => setConfig((c) => ({ ...c, darken_amount: v / 100 }))}
                   min={0} max={100} step={1}
                 />
-                <span className="text-[10px] text-zinc-500">{Math.round(config.darken_amount * 100)}%</span>
+                <span className="text-[10px] text-subtle">{Math.round(config.darken_amount * 100)}%</span>
               </div>
             )}
           </div>
 
           {/* Center Scale */}
           <div className="space-y-1">
-            <Label className="text-xs text-zinc-400">Center Scale: {Math.round(config.center_scale * 100)}%</Label>
+            <Label className="text-xs font-medium text-subtle">Center Scale: {Math.round(config.center_scale * 100)}%</Label>
             <Slider
               value={[Math.round(config.center_scale * 100)]}
               onValueChange={([v]) => setConfig((c) => ({ ...c, center_scale: v / 100 }))}
@@ -411,7 +410,7 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
 
           {/* Corner Radius */}
           <div className="space-y-1">
-            <Label className="text-xs text-zinc-400">Corner Radius: {config.corner_radius}px</Label>
+            <Label className="text-xs font-medium text-subtle">Corner Radius: {config.corner_radius}px</Label>
             <Slider
               value={[config.corner_radius]}
               onValueChange={([v]) => setConfig((c) => ({ ...c, corner_radius: v }))}
@@ -423,23 +422,22 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
 
       {/* Global text input (shown in landscape mode since the panel above doesn't have it) */}
       {isLandscapeMode && (
-        <div className="space-y-1 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-          <Label className="text-xs text-zinc-400">Overlay Text (global)</Label>
+        <div className="space-y-1 rounded-lg border border-border bg-card/50 p-4">
+          <Label className="text-xs font-medium text-subtle">Overlay Text (global)</Label>
           <Input
             value={config.text}
             onChange={(e) => setConfig((c) => ({ ...c, text: e.target.value }))}
             placeholder="e.g. BEST MOMENT EVER"
             maxLength={200}
-            className="bg-zinc-800 border-zinc-700"
           />
-          <p className="text-[10px] text-zinc-500">Text is auto-uppercased. Max 200 chars.</p>
+          <p className="text-[10px] text-subtle">Text is auto-uppercased. Max 200 chars.</p>
         </div>
       )}
 
       {/* Templates */}
       {filteredTemplates.length > 0 && (
-        <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-          <h3 className="text-sm font-medium text-zinc-300">Templates</h3>
+        <div className="space-y-2 rounded-lg border border-border bg-card/50 p-4">
+          <h3 className="text-sm font-medium text-prose">Templates</h3>
           <div className="flex flex-wrap gap-2">
             {filteredTemplates.map((t) => (
               <div key={t.name} className="flex items-center gap-1">
@@ -449,7 +447,7 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
                 <Button
                   variant="ghost" size="icon-xs"
                   onClick={() => handleDeleteTemplate(t.name)}
-                  className="text-zinc-500 hover:text-red-400"
+                  className="text-subtle hover:text-destructive"
                 >
                   &times;
                 </Button>
@@ -467,7 +465,7 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
               value={templateName}
               onChange={(e) => setTemplateName(e.target.value)}
               placeholder="Template name"
-              className="bg-zinc-800 border-zinc-700 w-48"
+              className="w-48"
             />
             <Button variant="outline" size="sm" onClick={handleSaveTemplate} disabled={!templateName.trim()}>
               Save
@@ -498,7 +496,7 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
         )}
 
         {batchDone && thumbnailProgress && (
-          <p className="text-xs text-zinc-400">
+          <p className="text-xs text-subtle">
             Done: {thumbnailProgress.successCount ?? 0} succeeded, {thumbnailProgress.errorCount ?? 0} failed
           </p>
         )}
@@ -507,26 +505,26 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
       {/* Thumbnail Preview Grid */}
       {clips.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-sm font-medium text-zinc-300">Clips ({clips.length})</h3>
+          <h3 className="text-sm font-medium text-prose">Clips ({clips.length})</h3>
           <div className={gridClass}>
             {clips.map((clip, i) => (
-              <div key={clip.id} className="space-y-1 rounded-lg border border-zinc-800 bg-zinc-900/50 p-2">
+              <div key={clip.id} className="space-y-1 rounded-lg border border-border bg-card/50 p-2">
                 {/* Thumbnail preview */}
                 {clip.thumbnail_path ? (
                   <img
                     src={`${goUrl}/api/thumbnail/runs/${activeRunId}/clips/${clip.id}/file?t=${Date.now()}`}
                     alt={`Clip ${clip.id} thumbnail`}
-                    className={`w-full rounded ${aspectClass} object-cover bg-zinc-800`}
+                    className={`w-full rounded ${aspectClass} object-cover bg-surface`}
                   />
                 ) : videoInfo?.thumbnailUrl && isLandscapeMode ? (
                   <img
                     src={videoInfo.thumbnailUrl}
                     alt="YouTube thumbnail preview"
-                    className={`w-full rounded ${aspectClass} object-cover bg-zinc-800 opacity-60`}
+                    className={`w-full rounded ${aspectClass} object-cover bg-surface opacity-60`}
                   />
                 ) : (
-                  <div className={`w-full rounded ${aspectClass} bg-zinc-800 flex items-center justify-center`}>
-                    <span className="text-xs text-zinc-500">No thumbnail</span>
+                  <div className={`w-full rounded ${aspectClass} bg-surface flex items-center justify-center`}>
+                    <span className="text-xs text-subtle">No thumbnail</span>
                   </div>
                 )}
 
@@ -535,7 +533,7 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
                   value={clipTexts[String(clip.id)] ?? ''}
                   onChange={(e) => setClipTexts((prev) => ({ ...prev, [String(clip.id)]: e.target.value }))}
                   placeholder={isLandscapeMode ? `PT${i + 1}` : (config.text || 'Per-clip text...')}
-                  className="bg-zinc-800 border-zinc-700 text-xs h-7"
+                  className="text-xs h-7"
                 />
 
                 {/* Per-clip base image (landscape mode) */}
@@ -545,10 +543,10 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
                       value={clipBaseImages[String(clip.id)] ?? ''}
                       onChange={(e) => setClipBaseImages((prev) => ({ ...prev, [String(clip.id)]: e.target.value }))}
                       placeholder="Image URL or path..."
-                      className="bg-zinc-800 border-zinc-700 text-xs h-7"
+                      className="text-xs h-7"
                     />
                     <div className="flex items-center gap-2">
-                      <label className="cursor-pointer text-[10px] text-blue-400 hover:text-blue-300">
+                      <label className="cursor-pointer text-[10px] text-info hover:text-info/80">
                         <input
                           type="file"
                           accept="image/*"
@@ -567,7 +565,7 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
                             delete next[String(clip.id)];
                             return next;
                           })}
-                          className="text-[10px] text-zinc-500 hover:text-zinc-400"
+                          className="text-[10px] text-subtle hover:text-foreground"
                         >
                           Clear
                         </button>

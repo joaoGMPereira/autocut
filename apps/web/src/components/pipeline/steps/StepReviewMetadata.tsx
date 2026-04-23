@@ -240,7 +240,7 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
   if (!isHistorical && !clipsLoaded) {
     return (
       <div className="flex items-center justify-center min-h-[300px]">
-        <p className="text-sm text-zinc-500">Carregando clips...</p>
+        <p className="text-sm text-subtle">Carregando clips...</p>
       </div>
     );
   }
@@ -253,12 +253,12 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
       <div className="max-w-2xl space-y-8">
         <div>
           <h2 className="text-xl font-semibold text-foreground">Preparando metadados</h2>
-          <p className="text-sm text-zinc-500 mt-1">
+          <p className="text-sm text-subtle mt-1">
             Os metadados estão sendo gerados automaticamente. Aguarde...
           </p>
         </div>
 
-        <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-6 space-y-4">
+        <div className="rounded-lg border border-border bg-card/50 p-6 space-y-4">
           {/* Phase indicator */}
           <div className="flex items-center gap-3">
             <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
@@ -295,7 +295,7 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
               {clips.map((clip) => (
                 <div
                   key={clip.id}
-                  className="flex-1 rounded overflow-hidden bg-zinc-800 aspect-video relative"
+                  className="flex-1 rounded overflow-hidden bg-surface aspect-video relative"
                 >
                   <img
                     key={thumbCacheBust[clip.id] ?? 0}
@@ -315,7 +315,7 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
           )}
 
           {metadataProgress?.message && (
-            <p className="text-xs text-zinc-500">{metadataProgress.message}</p>
+            <p className="text-xs text-subtle">{metadataProgress.message}</p>
           )}
         </div>
       </div>
@@ -328,7 +328,7 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold text-foreground">Revisar metadados</h2>
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-subtle">
             Edite títulos, descrições, tags e texto de thumbnail de cada clip.
           </p>
         </div>
@@ -343,7 +343,7 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
       </div>
 
       {isHistorical && (
-        <div className="rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-xs text-zinc-400">
+        <div className="rounded-md border border-border bg-card px-4 py-3 text-xs text-subtle">
           Revisando submissão anterior. Re-submeter reinicia o pipeline a partir deste passo.
         </div>
       )}
@@ -352,13 +352,13 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
       {isActivelyGenerating && metadataProgress && (
         <div className="space-y-1">
           <Progress value={metadataProgress.percent} className="h-2" />
-          <p className="text-xs text-zinc-500">{metadataProgress.message}</p>
+          <p className="text-xs text-subtle">{metadataProgress.message}</p>
         </div>
       )}
 
       {/* Error banner */}
       {generateError && (
-        <div className="rounded-md border border-red-800 bg-red-950 px-4 py-3 text-xs text-red-400">
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-xs text-destructive">
           {generateError}
         </div>
       )}
@@ -375,11 +375,11 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
           return (
             <div
               key={clip.id}
-              className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 space-y-3"
+              className="rounded-lg border border-border bg-card/50 p-4 space-y-3"
             >
               {/* Thumbnail preview */}
               <div
-                className={`relative rounded-lg overflow-hidden bg-zinc-800 ${
+                className={`relative rounded-lg overflow-hidden bg-surface ${
                   clip.thumbnail_style === 'landscape'
                     ? 'w-full aspect-video'
                     : 'mx-auto aspect-[9/16] w-44'
@@ -387,7 +387,7 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
               >
                 {isThumbRegen && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-10">
-                    <span className="text-xs text-zinc-300 animate-pulse">Atualizando thumbnail...</span>
+                    <span className="text-xs text-prose animate-pulse">Atualizando thumbnail...</span>
                   </div>
                 )}
                 <img
@@ -408,7 +408,7 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
                     Clip {idx + 1}
                   </Badge>
                   <ThumbnailTypeBadge style={clip.thumbnail_style} />
-                  <span className="text-xs text-zinc-500">
+                  <span className="text-xs text-subtle">
                     {formatDuration(clip.start_sec)} – {formatDuration(clip.end_sec)} ({formatDuration(clip.duration_sec)})
                   </span>
                 </div>
@@ -426,8 +426,8 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
               {/* Thumbnail text */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs text-zinc-400">Thumbnail Text</Label>
-                  <span className="text-xs text-zinc-600">{edit.thumbnail_text.length}/30</span>
+                  <Label className="text-xs font-medium text-subtle">Thumbnail Text</Label>
+                  <span className="text-xs text-caption">{edit.thumbnail_text.length}/30</span>
                 </div>
                 <Input
                   value={edit.thumbnail_text}
@@ -441,8 +441,8 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
               {/* Title */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs text-zinc-400">Título</Label>
-                  <span className="text-xs text-zinc-600">{edit.title.length}/100</span>
+                  <Label className="text-xs font-medium text-subtle">Título</Label>
+                  <span className="text-xs text-caption">{edit.title.length}/100</span>
                 </div>
                 <Input
                   value={edit.title}
@@ -456,8 +456,8 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
               {/* Description */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs text-zinc-400">Descrição</Label>
-                  <span className="text-xs text-zinc-600">{edit.description.length}/5000</span>
+                  <Label className="text-xs font-medium text-subtle">Descrição</Label>
+                  <span className="text-xs text-caption">{edit.description.length}/5000</span>
                 </div>
                 <textarea
                   value={edit.description}
@@ -465,15 +465,15 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
                   placeholder="Descrição do clip..."
                   maxLength={5000}
                   rows={3}
-                  className="w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-foreground placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-caption focus:outline-none focus-visible:border-brand/60 focus-visible:ring-brand/30 focus-visible:ring-[3px]"
                 />
               </div>
 
               {/* Tags */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs text-zinc-400">Tags</Label>
-                  <span className="text-xs text-zinc-600">{edit.tags.length}/500</span>
+                  <Label className="text-xs font-medium text-subtle">Tags</Label>
+                  <span className="text-xs text-caption">{edit.tags.length}/500</span>
                 </div>
                 <Input
                   value={edit.tags}
@@ -506,13 +506,13 @@ function StepRow({ done, active, label }: { done: boolean; active: boolean; labe
   return (
     <div className="flex items-center gap-2 text-xs">
       {done ? (
-        <span className="text-green-500">✓</span>
+        <span className="text-success">✓</span>
       ) : active ? (
         <span className="h-2 w-2 rounded-full bg-primary animate-pulse inline-block" />
       ) : (
-        <span className="h-2 w-2 rounded-full bg-zinc-700 inline-block" />
+        <span className="h-2 w-2 rounded-full bg-border inline-block" />
       )}
-      <span className={done ? 'text-zinc-400 line-through' : active ? 'text-foreground' : 'text-zinc-600'}>
+      <span className={done ? 'text-subtle line-through' : active ? 'text-foreground' : 'text-caption'}>
         {label}
       </span>
     </div>
@@ -522,14 +522,15 @@ function StepRow({ done, active, label }: { done: boolean; active: boolean; labe
 function ThumbnailTypeBadge({ style }: { style: string }) {
   const isLandscape = style === 'landscape';
   return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+    <Badge
+      variant={isLandscape ? 'warning' : 'secondary'}
+      className={
         isLandscape
-          ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-          : 'bg-violet-500/15 text-violet-400 border-violet-500/30'
-      }`}
+          ? 'text-[10px] font-semibold'
+          : 'text-[10px] font-semibold border-violet/30 bg-violet/15 text-violet'
+      }
     >
       {isLandscape ? 'Landscape' : 'Shorts'}
-    </span>
+    </Badge>
   );
 }
