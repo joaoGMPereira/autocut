@@ -8,6 +8,7 @@ import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { SliderRow } from '@/components/ui/slider-row';
 import { useAppStore } from '@/store/appStore';
 import { useSettingsStore, SETTINGS_KEYS } from '@/store/settingsStore';
 import { createLogger } from '@/lib/logger';
@@ -169,17 +170,12 @@ export function AppSettingsSection() {
               {/* Parallel count slider — only visible when parallel is enabled */}
               {uploadStrategy === 'parallel' && (
                 <div className="flex flex-col gap-2">
-                  <div className="flex justify-between">
-                    <Label>Concurrent uploads</Label>
-                    <span className="text-sm text-caption">{uploadParallelCount}</span>
-                  </div>
-                  <input
-                    type="range"
+                  <SliderRow
+                    label="Concurrent uploads"
                     min={1}
                     max={5}
                     value={parseInt(uploadParallelCount, 10)}
-                    onChange={(e) => { setUploadParallelCount(e.target.value); markDirty(); }}
-                    className="w-full"
+                    onChange={(v) => { setUploadParallelCount(String(v)); markDirty(); }}
                   />
                   <div className="flex justify-between text-xs text-subtle">
                     <span>1 (sequential)</span>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Slider } from '@/components/ui/slider';
 import type { Highlight } from '@/types/pipeline';
 
 interface HighlightCardProps {
@@ -82,26 +83,24 @@ export function HighlightCard({ highlight, videoDurationSec = 600, onUpdate }: H
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="text-xs text-subtle block mb-0.5">Start</label>
-          <input
-            type="range"
+          <Slider
+            value={[adjStart]}
+            onValueChange={([v]) => handleStartChange(v)}
             min={0}
             max={videoDurationSec}
             step={0.5}
-            value={adjStart}
-            onChange={(e) => handleStartChange(parseFloat(e.target.value))}
-            className="w-full accent-brand"
+            className="w-full"
           />
         </div>
         <div>
           <label className="text-xs text-subtle block mb-0.5">End</label>
-          <input
-            type="range"
+          <Slider
+            value={[adjEnd]}
+            onValueChange={([v]) => handleEndChange(v)}
             min={0}
             max={videoDurationSec}
             step={0.5}
-            value={adjEnd}
-            onChange={(e) => handleEndChange(parseFloat(e.target.value))}
-            className="w-full accent-brand"
+            className="w-full"
           />
         </div>
       </div>
