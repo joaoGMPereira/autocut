@@ -19,7 +19,7 @@ export function ThumbnailStylePicker({ value, onChange }: ThumbnailStylePickerPr
           className={`rounded-lg border px-3 py-4 text-xs font-medium capitalize transition-colors ${
             value === style
               ? 'border-brand bg-brand/10 text-brand'
-              : 'border-border bg-card text-zinc-400 hover:border-zinc-500'
+              : 'border-border bg-card text-subtle hover:border-caption'
           }`}
         >
           {style}

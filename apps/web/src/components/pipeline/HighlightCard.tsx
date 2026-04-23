@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import type { Highlight } from '@/types/pipeline';
 
 interface HighlightCardProps {
@@ -9,10 +10,10 @@ interface HighlightCardProps {
   onUpdate: (id: number, adjStart: number, adjEnd: number, isSelected: boolean) => void;
 }
 
-function scoreColor(score: number): string {
-  if (score >= 0.7) return 'bg-emerald-500 text-white';
-  if (score >= 0.4) return 'bg-amber-500 text-white';
-  return 'bg-red-500 text-white';
+function scoreVariant(score: number): 'success' | 'warning' | 'destructive' {
+  if (score >= 0.7) return 'success';
+  if (score >= 0.4) return 'warning';
+  return 'destructive';
 }
 
 export function HighlightCard({ highlight, videoDurationSec = 600, onUpdate }: HighlightCardProps) {
@@ -48,29 +49,29 @@ export function HighlightCard({ highlight, videoDurationSec = 600, onUpdate }: H
           <button
             type="button"
             onClick={handleToggle}
-            className={`w-4 h-4 rounded border shrink-0 flex items-center justify-center transition-colors ${isSelected ? 'border-brand bg-brand/20' : 'border-zinc-600 bg-transparent'}`}
+            className={`w-4 h-4 rounded border shrink-0 flex items-center justify-center transition-colors ${isSelected ? 'border-brand bg-brand/20' : 'border-caption bg-transparent'}`}
             aria-label={isSelected ? 'Deselect highlight' : 'Select highlight'}
           >
             {isSelected && <span className="text-brand text-xs">✓</span>}
           </button>
-          <span className={`text-xs px-1.5 py-0.5 rounded font-mono ${scoreColor(highlight.score)}`}>
+          <Badge variant={scoreVariant(highlight.score)} className="font-mono">
             {(highlight.score * 100).toFixed(0)}
-          </span>
+          </Badge>
         </div>
-        <span className="text-xs text-zinc-500 font-mono">
+        <span className="text-xs text-subtle font-mono">
           {adjStart.toFixed(1)}s – {adjEnd.toFixed(1)}s
         </span>
       </div>
 
       {highlight.text && (
-        <p className="text-xs text-zinc-300 line-clamp-2">{highlight.text}</p>
+        <p className="text-xs text-prose line-clamp-2">{highlight.text}</p>
       )}
       {highlight.reason && (
-        <p className="text-xs text-zinc-500 italic">{highlight.reason}</p>
+        <p className="text-xs text-subtle italic">{highlight.reason}</p>
       )}
 
       {/* Timeline bar */}
-      <div className="relative w-full h-3 bg-zinc-800 rounded-full overflow-hidden">
+      <div className="relative w-full h-3 bg-surface rounded-full overflow-hidden">
         <div
           className="absolute top-0 h-full bg-brand/60 rounded-full"
           style={{ left: `${startPct}%`, width: `${widthPct}%` }}
@@ -80,7 +81,7 @@ export function HighlightCard({ highlight, videoDurationSec = 600, onUpdate }: H
       {/* Drag handles — range inputs */}
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-xs text-zinc-500 block mb-0.5">Start</label>
+          <label className="text-xs text-subtle block mb-0.5">Start</label>
           <input
             type="range"
             min={0}
@@ -92,7 +93,7 @@ export function HighlightCard({ highlight, videoDurationSec = 600, onUpdate }: H
           />
         </div>
         <div>
-          <label className="text-xs text-zinc-500 block mb-0.5">End</label>
+          <label className="text-xs text-subtle block mb-0.5">End</label>
           <input
             type="range"
             min={0}

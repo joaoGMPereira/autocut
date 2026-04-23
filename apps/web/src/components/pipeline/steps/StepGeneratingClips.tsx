@@ -14,8 +14,8 @@ export function StepGeneratingClips() {
   return (
     <div className="space-y-4 max-w-xl">
       <div>
-        <h2 className="text-xl font-semibold">Cutting Clips</h2>
-        <p className="text-sm text-zinc-500 mt-1">
+        <h2 className="text-xl font-semibold text-heading">Cutting Clips</h2>
+        <p className="text-sm text-subtle mt-1">
           {isEffectsPhase ? 'Applying effects to each clip…' : 'Cutting video into segments…'}
         </p>
       </div>
@@ -31,14 +31,14 @@ export function StepGeneratingClips() {
         <div className="space-y-2 pl-2">
           {entries.map(([clipId, pct], i) => (
             <div key={clipId} className="flex items-center gap-3 text-sm">
-              <span className="text-zinc-400 w-16 shrink-0">Part {i + 1}</span>
-              <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+              <span className="text-prose w-16 shrink-0">Part {i + 1}</span>
+              <div className="flex-1 h-1.5 bg-brand/20 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-brand rounded-full transition-all duration-300"
                   style={{ width: `${Math.round(pct)}%` }}
                 />
               </div>
-              <span className="text-zinc-500 w-10 text-right tabular-nums">{Math.round(pct)}%</span>
+              <span className="text-subtle w-10 text-right tabular-nums">{Math.round(pct)}%</span>
             </div>
           ))}
         </div>

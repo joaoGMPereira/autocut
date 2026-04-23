@@ -149,8 +149,8 @@ export function StepReviewClips({ historical }: StepReviewClipsProps) {
   if (loading) {
     return (
       <div className="space-y-2 max-w-lg">
-        <h2 className="text-xl font-semibold text-foreground">Revisar Clips</h2>
-        <p className="text-sm text-zinc-500">Carregando clips...</p>
+        <h2 className="text-xl font-semibold text-heading">Revisar Clips</h2>
+        <p className="text-sm text-subtle">Carregando clips...</p>
       </div>
     );
   }
@@ -158,8 +158,8 @@ export function StepReviewClips({ historical }: StepReviewClipsProps) {
   if (clips.length === 0) {
     return (
       <div className="space-y-2 max-w-lg">
-        <h2 className="text-xl font-semibold text-foreground">Revisar Clips</h2>
-        <p className="text-sm text-zinc-500">Nenhum clip encontrado para este pipeline.</p>
+        <h2 className="text-xl font-semibold text-heading">Revisar Clips</h2>
+        <p className="text-sm text-subtle">Nenhum clip encontrado para este pipeline.</p>
       </div>
     );
   }
@@ -171,39 +171,39 @@ export function StepReviewClips({ historical }: StepReviewClipsProps) {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-foreground">Revisar Clips</h2>
-          <p className="text-sm text-zinc-500">Selecione os clips e ajuste título e texto do thumbnail.</p>
+          <h2 className="text-xl font-semibold text-heading">Revisar Clips</h2>
+          <p className="text-sm text-subtle">Selecione os clips e ajuste título e texto do thumbnail.</p>
         </div>
-        <span className="text-xs text-zinc-400 mt-1">{selectedCount}/{clips.length} selecionados</span>
+        <span className="text-xs text-prose mt-1">{selectedCount}/{clips.length} selecionados</span>
       </div>
 
       {/* Historical notice */}
       {isHistorical && (
-        <div className="rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-xs text-zinc-400">
+        <div className="rounded-md border border-border bg-card px-4 py-3 text-xs text-prose">
           Revisando submissão anterior. Re-submeter reinicia o pipeline a partir deste passo.
         </div>
       )}
 
       {/* Upload config summary */}
       {uploadOptions && (
-        <div className="rounded-md border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-xs space-y-1">
-          <p className="text-zinc-400 font-medium mb-1">Configuração de upload</p>
+        <div className="rounded-md border border-border bg-card/50 px-4 py-3 text-xs space-y-1">
+          <p className="text-prose font-medium mb-1">Configuração de upload</p>
           {channel && (
-            <p className="text-zinc-500">
-              Canal: <span className="text-zinc-300">{channel.ChannelTitle || channel.Name}</span>
+            <p className="text-subtle">
+              Canal: <span className="text-prose">{channel.ChannelTitle || channel.Name}</span>
             </p>
           )}
-          <p className="text-zinc-500">
-            Privacidade: <span className="text-zinc-300 capitalize">{uploadOptions.privacy}</span>
+          <p className="text-subtle">
+            Privacidade: <span className="text-prose capitalize">{uploadOptions.privacy}</span>
           </p>
           {uploadOptions.schedule_enabled && (
-            <p className="text-amber-400">Agendamento ativado</p>
+            <p className="text-warning">Agendamento ativado</p>
           )}
           {uploadOptions.auto_enabled && (
             <p className="text-brand">Upload automático</p>
           )}
           {uploadOptions.dry_run && (
-            <p className="text-yellow-500">Dry run — nenhum upload será feito</p>
+            <p className="text-warning">Dry run — nenhum upload será feito</p>
           )}
         </div>
       )}
@@ -213,15 +213,15 @@ export function StepReviewClips({ historical }: StepReviewClipsProps) {
         <button
           type="button"
           onClick={handleSelectAll}
-          className="text-zinc-400 hover:text-zinc-200 underline underline-offset-2"
+          className="text-prose hover:text-heading underline underline-offset-2"
         >
           Selecionar todos
         </button>
-        <span className="text-zinc-700">·</span>
+        <span className="text-border">·</span>
         <button
           type="button"
           onClick={handleDeselectAll}
-          className="text-zinc-400 hover:text-zinc-200 underline underline-offset-2"
+          className="text-prose hover:text-heading underline underline-offset-2"
         >
           Desmarcar todos
         </button>
@@ -229,7 +229,7 @@ export function StepReviewClips({ historical }: StepReviewClipsProps) {
 
       {/* Error banner */}
       {error && (
-        <div className="rounded-md border border-red-800 bg-red-950 px-4 py-3 text-xs text-red-400">
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-xs text-destructive">
           {error}
         </div>
       )}

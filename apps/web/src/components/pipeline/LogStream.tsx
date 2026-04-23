@@ -15,29 +15,29 @@ export function LogStream() {
   if (!run) return null;
 
   return (
-    <div className="rounded-lg border border-border bg-zinc-950 p-3 font-mono text-xs h-40 overflow-y-auto">
+    <div className="rounded-lg border border-border bg-surface-inset p-3 font-mono text-xs h-40 overflow-y-auto">
       {run.state && (
-        <p className="text-zinc-400">
-          <span className="text-zinc-600">[state] </span>
+        <p className="text-prose">
+          <span className="text-caption">[state] </span>
           {run.state}
         </p>
       )}
       {run.active_phase && (
-        <p className="text-zinc-400">
-          <span className="text-zinc-600">[phase] </span>
+        <p className="text-prose">
+          <span className="text-caption">[phase] </span>
           {run.active_phase}
         </p>
       )}
       {phaseProgress && (
         <p className="text-brand">
-          <span className="text-zinc-600">[progress] </span>
+          <span className="text-caption">[progress] </span>
           {phaseProgress.phase} {Math.round(phaseProgress.percentDone)}%
           {phaseProgress.speedKbs != null ? ` @ ${phaseProgress.speedKbs.toFixed(0)} KB/s` : ''}
         </p>
       )}
       {run.error && (
-        <p className="text-red-400">
-          <span className="text-zinc-600">[error] </span>
+        <p className="text-destructive">
+          <span className="text-caption">[error] </span>
           {run.error}
         </p>
       )}

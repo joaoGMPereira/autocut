@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { ReactNode } from 'react';
+import { Button } from '@/components/ui/button';
 import { StepRail } from './StepRail';
 import { ContextPanel } from './ContextPanel';
 import { BackConfirmDialog } from './BackConfirmDialog';
@@ -95,34 +96,25 @@ export function PipelineShell({ children }: PipelineShellProps) {
         <div className="flex-1 overflow-y-auto p-6">
           {isCompute && (
             <div className="mb-4 flex">
-              <button
-                onClick={handleComputeBack}
-                className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-              >
+              <Button variant="outline" size="xs" onClick={handleComputeBack}>
                 ← Cancel &amp; Go Back
-              </button>
+              </Button>
             </div>
           )}
           {children}
         </div>
         {canGateBack && (
           <div className="shrink-0 border-t border-border bg-background/80 backdrop-blur-sm px-6 py-3 flex items-center">
-            <button
-              onClick={handleGateBack}
-              className="rounded-md border border-border px-4 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-            >
+            <Button variant="outline" onClick={handleGateBack}>
               ← Back
-            </button>
+            </Button>
           </div>
         )}
         {canUrlStartOver && (
           <div className="shrink-0 border-t border-border bg-background/80 backdrop-blur-sm px-6 py-3 flex items-center">
-            <button
-              onClick={handleStartOver}
-              className="rounded-md border border-border px-4 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-            >
+            <Button variant="outline" onClick={handleStartOver}>
               ← Start Over
-            </button>
+            </Button>
           </div>
         )}
       </div>

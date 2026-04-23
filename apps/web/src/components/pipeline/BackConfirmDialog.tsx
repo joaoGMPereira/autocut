@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -50,18 +51,12 @@ export function BackConfirmDialog({ open, onOpenChange, variant, onConfirm }: Ba
           <DialogDescription>{body}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <button
-            onClick={() => onOpenChange(false)}
-            className="rounded-md border border-border px-4 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-          >
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Keep going
-          </button>
-          <button
-            onClick={handleConfirm}
-            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
-          >
+          </Button>
+          <Button variant="destructive" onClick={handleConfirm}>
             {confirmLabel}
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

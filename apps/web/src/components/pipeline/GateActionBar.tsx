@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { Button } from '@/components/ui/button';
 import { usePipelineStore, isGateState } from '@/store/pipelineStore';
 
 interface GateActionBarProps {
@@ -29,12 +30,9 @@ export function GateActionBar({ children }: GateActionBarProps) {
   return (
     <div className="sticky bottom-0 z-10 border-t border-border bg-background/80 backdrop-blur-sm px-6 py-3 flex items-center justify-end gap-3">
       {canGoBack && (
-        <button
-          onClick={handleBack}
-          className="rounded-md border border-border px-4 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-        >
+        <Button variant="outline" onClick={handleBack}>
           Back
-        </button>
+        </Button>
       )}
       {children}
     </div>

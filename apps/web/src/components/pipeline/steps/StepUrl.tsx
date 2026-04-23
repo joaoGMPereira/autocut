@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useAppStore } from '@/store/appStore';
 import { usePipelineStore } from '@/store/pipelineStore';
 import { useUrlHistoryStore } from '@/store/urlHistoryStore';
@@ -19,10 +20,10 @@ function UrlHistorySection({ goUrl, onSelect }: { goUrl: string; onSelect: (url:
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs text-zinc-500">Recent URLs</span>
+        <span className="text-xs text-subtle">Recent URLs</span>
         <button
           onClick={() => void clearAll(goUrl)}
-          className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+          className="text-xs text-caption hover:text-prose transition-colors"
         >
           Clear all
         </button>
@@ -32,16 +33,16 @@ function UrlHistorySection({ goUrl, onSelect }: { goUrl: string; onSelect: (url:
           <li key={entry.id} className="flex items-center gap-2 group">
             <button
               onClick={() => onSelect(entry.url)}
-              className="flex-1 min-w-0 text-left rounded px-2 py-1.5 hover:bg-zinc-800 transition-colors"
+              className="flex-1 min-w-0 text-left rounded px-2 py-1.5 hover:bg-surface transition-colors"
             >
               {entry.video_title && (
                 <p className="text-xs font-medium text-foreground truncate">{entry.video_title}</p>
               )}
-              <p className="text-xs text-zinc-500 truncate">{entry.url}</p>
+              <p className="text-xs text-subtle truncate">{entry.url}</p>
             </button>
             <button
               onClick={() => void removeEntry(goUrl, entry.id)}
-              className="shrink-0 text-zinc-700 hover:text-zinc-400 transition-colors opacity-0 group-hover:opacity-100 px-1"
+              className="shrink-0 text-caption hover:text-prose transition-colors opacity-0 group-hover:opacity-100 px-1"
               aria-label="Remove"
             >
               ×
@@ -126,11 +127,11 @@ export function StepUrl({ historical }: StepUrlProps) {
     <div className="space-y-6 max-w-lg">
       <div className="space-y-1">
         <h2 className="font-display text-2xl font-bold tracking-[-0.02em] text-heading">Video URL</h2>
-        <p className="text-sm text-zinc-500">Paste a YouTube or Twitch URL to start the pipeline.</p>
+        <p className="text-sm text-subtle">Paste a YouTube or Twitch URL to start the pipeline.</p>
       </div>
 
       {isHistorical && (
-        <div className="rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-xs text-zinc-400">
+        <div className="rounded-md border border-border bg-card px-4 py-3 text-xs text-prose">
           Reviewing previous submission. Re-submitting will restart the pipeline from this step.
         </div>
       )}
@@ -138,9 +139,9 @@ export function StepUrl({ historical }: StepUrlProps) {
       {/* Channel selection */}
       {!isHistorical && (
         <div className="space-y-2">
-          <p className="text-xs font-medium text-zinc-400">Canal</p>
+          <p className="text-xs font-medium text-subtle">Canal</p>
           {channels.length === 0 ? (
-            <p className="text-xs text-zinc-600">Nenhum canal configurado. Adicione um canal nas configurações.</p>
+            <p className="text-xs text-caption">Nenhum canal configurado. Adicione um canal nas configurações.</p>
           ) : (
             <div className="flex flex-col gap-2">
               {channels.map((ch) => (
@@ -159,7 +160,7 @@ export function StepUrl({ historical }: StepUrlProps) {
       )}
 
       <div className="space-y-3">
-        <input
+        <Input
           type="url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
@@ -167,7 +168,6 @@ export function StepUrl({ historical }: StepUrlProps) {
           placeholder="https://www.youtube.com/watch?v=..."
           disabled={isLoading}
           data-testid="step-url-input"
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand/50 focus:border-brand/50 disabled:opacity-50"
         />
 
         <Button
@@ -181,21 +181,21 @@ export function StepUrl({ historical }: StepUrlProps) {
         </Button>
 
         {!isHistorical && !canStart && channels.length > 0 && (
-          <p className="text-xs text-zinc-500 text-center">
+          <p className="text-xs text-subtle text-center">
             {!selectedChannelId ? 'Selecione um canal para continuar' : 'Autorize o canal para continuar'}
           </p>
         )}
 
         {error && (
-          <p className="text-xs text-red-400">{error}</p>
+          <p className="text-xs text-destructive">{error}</p>
         )}
 
         {!isHistorical && <UrlHistorySection goUrl={goUrl} onSelect={(u) => setUrl(u)} />}
       </div>
 
       {pendingReuse && videoReused && (
-        <div className="space-y-3 rounded-md border border-zinc-700 bg-zinc-900 p-4">
-          <p className="text-sm text-zinc-300">Video já baixado anteriormente</p>
+        <div className="space-y-3 rounded-md border border-border bg-card p-4">
+          <p className="text-sm text-prose">Video já baixado anteriormente</p>
           <div className="flex gap-2">
             <Button
               variant="brand"
@@ -204,7 +204,8 @@ export function StepUrl({ historical }: StepUrlProps) {
             >
               Reusar e continuar
             </Button>
-            <button
+            <Button
+              variant="outline"
               onClick={() => {
                 const runId = usePipelineStore.getState().activeRunId;
                 if (runId) {
@@ -212,10 +213,9 @@ export function StepUrl({ historical }: StepUrlProps) {
                 }
                 confirmReuse();
               }}
-              className="rounded-md border border-zinc-600 px-4 py-2 text-sm text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 transition-colors"
             >
               Re-baixar
-            </button>
+            </Button>
           </div>
         </div>
       )}

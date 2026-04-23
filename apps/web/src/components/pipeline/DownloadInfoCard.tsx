@@ -22,7 +22,7 @@ export function DownloadInfoCard() {
 
   return (
     <div className="rounded-lg border border-border bg-card p-3 text-sm space-y-2">
-      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Download</p>
+      <p className="text-xs font-semibold uppercase tracking-wider text-subtle">Download</p>
 
       {videoInfo && (
         <div className="flex items-center gap-3">
@@ -39,13 +39,13 @@ export function DownloadInfoCard() {
         </div>
       )}
 
-      <div className="w-full h-1.5 bg-zinc-700 rounded-full overflow-hidden">
+      <div className="w-full h-1.5 bg-brand/20 rounded-full overflow-hidden">
         <div
           className="h-full bg-brand rounded-full transition-all duration-300"
           style={{ width: `${pct}%` }}
         />
       </div>
-      <div className="flex items-center justify-between text-xs text-zinc-400">
+      <div className="flex items-center justify-between text-xs text-subtle">
         <span>{pct}%</span>
         <span>{speed ?? ''}</span>
         <span>{eta ? `ETA ${eta}` : ''}</span>

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import type { Clip } from '@/types/pipeline';
 
 interface ClipReviewCardProps {
@@ -71,16 +73,16 @@ export function ClipReviewCard({
       {/* Header: index, duration, selection */}
       <div className="flex items-center justify-between px-3 pt-3">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-zinc-400">Clip {index + 1}</span>
-          <span className="text-xs text-zinc-600">{formatDuration(clip.duration_sec)}</span>
+          <span className="text-xs font-medium text-prose">Clip {index + 1}</span>
+          <span className="text-xs text-caption">{formatDuration(clip.duration_sec)}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-zinc-500">{isSelected ? 'Selecionado' : 'Ignorar'}</span>
+          <span className="text-xs text-subtle">{isSelected ? 'Selecionado' : 'Ignorar'}</span>
           <button
             type="button"
             onClick={handleSelectToggle}
             className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-              isSelected ? 'border-brand bg-brand/20' : 'border-zinc-600 bg-zinc-800'
+              isSelected ? 'border-brand bg-brand/20' : 'border-caption bg-surface'
             }`}
             aria-label={isSelected ? 'Deselect clip' : 'Select clip'}
           >
@@ -90,11 +92,11 @@ export function ClipReviewCard({
       </div>
 
       {/* Thumbnail + play overlay */}
-      <div className="relative w-full aspect-video bg-zinc-900 mx-0 mt-2 overflow-hidden">
+      <div className="relative w-full aspect-video bg-background mx-0 mt-2 overflow-hidden">
         {thumbnailSrc ? (
           <img src={thumbnailSrc} alt={title || `Clip ${index + 1}`} className="w-full h-full object-cover" />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-zinc-600 text-xs">Sem thumbnail</div>
+          <div className="w-full h-full flex items-center justify-center text-caption text-xs">Sem thumbnail</div>
         )}
         {videoSrc && (
           <button
@@ -128,10 +130,10 @@ export function ClipReviewCard({
       <div className="p-3 space-y-2">
         <div>
           <div className="flex justify-between mb-0.5">
-            <label htmlFor={`clip-title-${clip.id}`} className="text-xs text-zinc-400">Título</label>
-            <span className="text-xs text-zinc-600">{title.length}/100</span>
+            <Label htmlFor={`clip-title-${clip.id}`} className="text-xs font-medium text-subtle">Título</Label>
+            <span className="text-xs text-caption">{title.length}/100</span>
           </div>
-          <input
+          <Input
             id={`clip-title-${clip.id}`}
             type="text"
             value={title}
@@ -139,15 +141,14 @@ export function ClipReviewCard({
             placeholder="Título do clip..."
             maxLength={100}
             disabled={!isSelected}
-            className="w-full text-sm bg-zinc-800 border border-border rounded px-2 py-1 text-foreground placeholder-zinc-600 focus:outline-none focus:border-brand disabled:opacity-40"
           />
         </div>
         <div>
           <div className="flex justify-between mb-0.5">
-            <label htmlFor={`clip-thumb-${clip.id}`} className="text-xs text-zinc-400">Texto do Thumbnail</label>
-            <span className="text-xs text-zinc-600">{thumbnailText.length}/30</span>
+            <Label htmlFor={`clip-thumb-${clip.id}`} className="text-xs font-medium text-subtle">Texto do Thumbnail</Label>
+            <span className="text-xs text-caption">{thumbnailText.length}/30</span>
           </div>
-          <input
+          <Input
             id={`clip-thumb-${clip.id}`}
             type="text"
             value={thumbnailText}
@@ -155,7 +156,7 @@ export function ClipReviewCard({
             placeholder="GANCHO CURTO"
             maxLength={30}
             disabled={!isSelected}
-            className="w-full text-xs bg-zinc-800 border border-border rounded px-2 py-1 text-foreground placeholder-zinc-600 focus:outline-none focus:border-brand uppercase disabled:opacity-40"
+            className="text-xs uppercase"
           />
         </div>
       </div>

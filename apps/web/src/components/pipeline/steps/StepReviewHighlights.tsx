@@ -9,13 +9,13 @@ export function StepReviewHighlights({ historical }: StepReviewHighlightsProps) 
 
   return (
     <div className="space-y-2 max-w-lg">
-      <h2 className="text-xl font-semibold text-foreground">Review Highlights</h2>
+      <h2 className="text-xl font-semibold text-heading">Review Highlights</h2>
       {isHistorical && (
-        <div className="rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-xs text-zinc-400">
+        <div className="rounded-md border border-border bg-card px-4 py-3 text-xs text-prose">
           Reviewing previous submission. Re-submitting will restart the pipeline from this step.
         </div>
       )}
-      <p className="text-sm text-zinc-500">TODO: FP-019–022 — highlight detection review and selection</p>
+      <p className="text-sm text-subtle">TODO: FP-019–022 — highlight detection review and selection</p>
     </div>
   );
 }

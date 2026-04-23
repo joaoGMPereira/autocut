@@ -8,15 +8,15 @@ export function ContextPanel() {
 
   return (
     <div className="sticky top-0 p-4 space-y-3">
-      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 pb-1">Info</p>
+      <p className="text-xs font-semibold uppercase tracking-wider text-subtle pb-1">Info</p>
 
       {run ? (
         <div className="rounded-lg border border-border bg-card p-3 text-xs space-y-1">
-          <p className="text-zinc-500">Run ID: <span className="text-foreground">{run.id}</span></p>
-          <p className="text-zinc-500">State: <span className="text-foreground">{run.state}</span></p>
+          <p className="text-subtle">Run ID: <span className="text-foreground">{run.id}</span></p>
+          <p className="text-subtle">State: <span className="text-foreground">{run.state}</span></p>
         </div>
       ) : (
-        <p className="text-xs text-zinc-600">No active run</p>
+        <p className="text-xs text-caption">No active run</p>
       )}
 
       <DownloadInfoCard />

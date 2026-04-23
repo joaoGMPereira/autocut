@@ -63,7 +63,7 @@ export function StepRail({ state, mode }: StepRailProps) {
 
   return (
     <div className="py-4">
-      <p className="px-4 pb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+      <p className="px-4 pb-2 text-xs font-semibold uppercase tracking-wider text-subtle">
         Pipeline
       </p>
       {entries.map((entry, i) => (

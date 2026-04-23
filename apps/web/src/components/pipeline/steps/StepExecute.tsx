@@ -25,7 +25,7 @@ export function StepExecute() {
 
   return (
     <div className="space-y-4 max-w-lg">
-      <h2 className="text-xl font-semibold text-foreground">Processing</h2>
+      <h2 className="text-xl font-semibold text-heading">Processing</h2>
       <SubStepProgress
         phase="transcript"
         label="Transcription"

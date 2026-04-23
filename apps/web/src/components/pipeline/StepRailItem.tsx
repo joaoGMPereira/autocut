@@ -9,27 +9,27 @@ interface StepRailItemProps {
 }
 
 const ringClass: Record<StepStatus, string> = {
-  idle: 'border-2 border-zinc-700 bg-transparent',
+  idle: 'border-2 border-border bg-transparent',
   running: 'border-2 border-brand bg-brand/10 animate-pulse',
   gate: 'border-2 border-brand bg-brand/10',
-  done: 'border-2 border-emerald-400 bg-emerald-400/20',
-  error: 'border-2 border-red-500 bg-red-500/20',
+  done: 'border-2 border-success bg-success/20',
+  error: 'border-2 border-destructive bg-destructive/20',
 };
 
 const dotClass: Record<StepStatus, string> = {
-  idle: 'bg-zinc-600',
+  idle: 'bg-caption',
   running: 'bg-brand',
   gate: 'bg-brand',
-  done: 'bg-emerald-400',
-  error: 'bg-red-500',
+  done: 'bg-success',
+  error: 'bg-destructive',
 };
 
 const labelClass: Record<StepStatus, string> = {
-  idle: 'text-zinc-500',
+  idle: 'text-subtle',
   running: 'text-brand font-medium',
   gate: 'text-brand font-medium',
-  done: 'text-emerald-400',
-  error: 'text-red-400',
+  done: 'text-success',
+  error: 'text-destructive',
 };
 
 export function StepRailItem({ label, status, isLast }: StepRailItemProps) {
@@ -45,7 +45,7 @@ export function StepRailItem({ label, status, isLast }: StepRailItemProps) {
       </div>
       {/* Connector line */}
       {!isLast && (
-        <div className="w-px h-4 bg-zinc-700 ml-[28px]" />
+        <div className="w-px h-4 bg-border ml-[28px]" />
       )}
     </div>
   );
