@@ -20,6 +20,7 @@ import { SettingRow } from '@/components/ui/setting-row';
 import { SliderRow } from '@/components/ui/slider-row';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { TextStyleEditorPanel } from '@/components/post-opt/TextStyleEditorPanel';
 import { DEFAULT_STYLE } from '@/types/text-overlay';
 
@@ -1034,12 +1035,11 @@ export function StepMode({ historical }: StepModeProps) {
                 ['zoom', 'Static zoom 3%'],
                 ['transitions', 'Transitions 2×'],
               ] as [keyof AntiDupEffects, string][]).map(([key, label]) => (
-                <label key={key} className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
+                <label key={key} htmlFor={`effect-${key}`} className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox
+                    id={`effect-${key}`}
                     checked={!!antiDupEffects[key]}
-                    onChange={(e) => setEffect(key, e.target.checked)}
-                    className="rounded border-border bg-surface text-prose focus:ring-brand/30"
+                    onCheckedChange={(checked) => setEffect(key, !!checked)}
                   />
                   <span className="text-xs text-prose">{label}</span>
                 </label>
@@ -1047,12 +1047,11 @@ export function StepMode({ historical }: StepModeProps) {
 
               {/* Noise with strength slider */}
               <div className="space-y-1">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
+                <label htmlFor="effect-noise" className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox
+                    id="effect-noise"
                     checked={!!antiDupEffects.noise}
-                    onChange={(e) => setEffect('noise', e.target.checked)}
-                    className="rounded border-border bg-surface text-prose focus:ring-brand/30"
+                    onCheckedChange={(checked) => setEffect('noise', !!checked)}
                   />
                   <span className="text-xs text-prose">Noise/Grain</span>
                 </label>
@@ -1071,12 +1070,11 @@ export function StepMode({ historical }: StepModeProps) {
 
               {/* Blur with edge % slider */}
               <div className="space-y-1">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
+                <label htmlFor="effect-blur" className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox
+                    id="effect-blur"
                     checked={!!antiDupEffects.blur}
-                    onChange={(e) => setEffect('blur', e.target.checked)}
-                    className="rounded border-border bg-surface text-prose focus:ring-brand/30"
+                    onCheckedChange={(checked) => setEffect('blur', !!checked)}
                   />
                   <span className="text-xs text-prose">Background Blur</span>
                 </label>
@@ -1147,12 +1145,11 @@ export function StepMode({ historical }: StepModeProps) {
                 )}
 
                 {/* Apply full video */}
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
+                <label htmlFor={`overlay-apply-full-${idx}`} className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox
+                    id={`overlay-apply-full-${idx}`}
                     checked={item.apply_full}
-                    onChange={(e) => updateTextOverlayItem(idx, { apply_full: e.target.checked })}
-                    className="rounded border-border bg-surface text-prose"
+                    onCheckedChange={(checked) => updateTextOverlayItem(idx, { apply_full: !!checked })}
                   />
                   <span className="text-xs text-prose">Aplicar no vídeo todo</span>
                 </label>
@@ -1556,24 +1553,22 @@ export function StepMode({ historical }: StepModeProps) {
                 <span className="text-xs text-subtle">{captionsTextColor}</span>
               </div>
 
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
+              <label htmlFor="captions-bg" className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  id="captions-bg"
                   checked={captionsBgEnabled}
-                  onChange={(e) => setCaptionsBgEnabled(e.target.checked)}
-                  className="rounded border-border bg-surface text-prose"
+                  onCheckedChange={(checked) => setCaptionsBgEnabled(!!checked)}
                 />
                 <span className="text-xs text-prose">Fundo</span>
               </label>
 
               {/* Outline */}
               <div className="space-y-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
+                <label htmlFor="captions-outline" className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox
+                    id="captions-outline"
                     checked={captionsOutlineEnabled}
-                    onChange={(e) => setCaptionsOutlineEnabled(e.target.checked)}
-                    className="rounded border-border bg-surface text-prose"
+                    onCheckedChange={(checked) => setCaptionsOutlineEnabled(!!checked)}
                   />
                   <span className="text-xs text-prose">Contorno</span>
                 </label>
@@ -1601,12 +1596,11 @@ export function StepMode({ historical }: StepModeProps) {
 
               {/* Shadow */}
               <div className="space-y-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
+                <label htmlFor="captions-shadow" className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox
+                    id="captions-shadow"
                     checked={captionsShadowEnabled}
-                    onChange={(e) => setCaptionsShadowEnabled(e.target.checked)}
-                    className="rounded border-border bg-surface text-prose"
+                    onCheckedChange={(checked) => setCaptionsShadowEnabled(!!checked)}
                   />
                   <span className="text-xs text-prose">Sombra</span>
                 </label>
