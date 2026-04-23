@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SectionPanel } from '@/components/ui/section-panel';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { ToggleGroup } from '@/components/ui/toggle-group';
 import { SettingRow } from '@/components/ui/setting-row';
 import { SliderRow } from '@/components/ui/slider-row';
 import { Switch } from '@/components/ui/switch';
@@ -1514,24 +1515,19 @@ export function StepMode({ historical }: StepModeProps) {
                 />
               </div>
 
-              <div className="flex gap-2">
-                {([
-                  ['bold', captionsBold, setCaptionsBold, 'Negrito'],
-                  ['italic', captionsItalic, setCaptionsItalic, 'Itálico'],
-                  ['uppercase', captionsUppercase, setCaptionsUppercase, 'Maiúsculas'],
-                ] as [string, boolean, (v: boolean) => void, string][]).map(([key, val, setter, label]) => (
-                  <button
-                    key={key}
-                    onClick={() => setter(!val)}
-                    className={[
-                      'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
-                      val ? 'bg-brand text-brand-foreground font-medium' : 'bg-surface text-subtle hover:bg-surface/80',
-                    ].join(' ')}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <ToggleGroup<'bold' | 'italic' | 'uppercase'>
+                options={[
+                  { key: 'bold',      label: 'Negrito' },
+                  { key: 'italic',    label: 'Itálico' },
+                  { key: 'uppercase', label: 'Maiúsculas' },
+                ]}
+                value={{ bold: captionsBold, italic: captionsItalic, uppercase: captionsUppercase }}
+                onChange={(k, next) => {
+                  if (k === 'bold') setCaptionsBold(next);
+                  else if (k === 'italic') setCaptionsItalic(next);
+                  else setCaptionsUppercase(next);
+                }}
+              />
 
               <SliderRow
                 label="Tamanho"
