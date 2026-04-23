@@ -10,6 +10,7 @@ import { PositionGrid } from '@/components/ui/PositionGrid';
 import { Button } from '@/components/ui/button';
 import { InfoBanner } from '@/components/ui/info-banner';
 import { Input } from '@/components/ui/input';
+import { InputWithAction } from '@/components/ui/input-with-action';
 import { Label } from '@/components/ui/label';
 import { SectionPanel } from '@/components/ui/section-panel';
 import { SegmentedControl } from '@/components/ui/segmented-control';
@@ -1679,28 +1680,19 @@ export function StepMode({ historical }: StepModeProps) {
       {(() => {
         const nameExists = presets.some((p) => p.name === presetName.trim());
         return (
-          <div className="flex gap-2">
-            <Input
-              type="text"
-              value={presetName}
-              onChange={(e) => {
-                setPresetName(e.target.value);
-                setActivePresetName(presets.find((p) => p.name === e.target.value.trim())?.name ?? null);
-              }}
-              onKeyDown={(e) => { if (e.key === 'Enter' && presetName.trim()) void handleSavePreset(); }}
-              placeholder="Nome do preset…"
-              className="flex-1 h-8 text-xs"
-            />
-            <Button
-              onClick={() => void handleSavePreset()}
-              disabled={!presetName.trim()}
-              variant="outline"
-              size="sm"
-              className="text-xs"
-            >
-              {nameExists ? 'Atualizar' : 'Criar'}
-            </Button>
-          </div>
+          <InputWithAction
+            value={presetName}
+            onValueChange={(v) => {
+              setPresetName(v);
+              setActivePresetName(presets.find((p) => p.name === v.trim())?.name ?? null);
+            }}
+            onSubmit={() => void handleSavePreset()}
+            actionDisabled={!presetName.trim()}
+            actionLabel={nameExists ? 'Atualizar' : 'Criar'}
+            placeholder="Nome do preset…"
+            inputClassName="h-8 text-xs"
+            actionClassName="text-xs"
+          />
         );
       })()}
 

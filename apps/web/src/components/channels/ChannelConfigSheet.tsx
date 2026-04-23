@@ -11,6 +11,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { InputWithAction } from '@/components/ui/input-with-action';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
@@ -314,23 +315,14 @@ function MusicTab({ channelId }: { channelId: number }) {
   return (
     <div className="flex flex-col gap-4 p-4">
       {/* Add new pattern */}
-      <div className="flex gap-2">
-        <Input
-          value={newPattern}
-          onChange={(e) => setNewPattern(e.target.value)}
-          placeholder="artist name or pattern…"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') void handleAdd();
-          }}
-        />
-        <Button
-          size="sm"
-          onClick={() => void handleAdd()}
-          disabled={adding || !newPattern.trim()}
-        >
-          {adding ? 'Adding…' : 'Add'}
-        </Button>
-      </div>
+      <InputWithAction
+        value={newPattern}
+        onValueChange={setNewPattern}
+        onSubmit={() => void handleAdd()}
+        actionDisabled={adding || !newPattern.trim()}
+        actionLabel={adding ? 'Adding…' : 'Add'}
+        placeholder="artist name or pattern…"
+      />
 
       {/* Pattern list */}
       {items.length === 0 ? (
