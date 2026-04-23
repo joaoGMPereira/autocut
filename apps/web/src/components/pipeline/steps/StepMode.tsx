@@ -8,8 +8,11 @@ import { AI_DEFAULTS, LONGFORM_DEFAULTS } from '@/types/pipeline';
 import type { AntiDupEffects, AntiDuplicateConfig, BackgroundMusicConfig, BrandingConfig, CaptionsConfig, GatePayload, ModeConfig, PriorClipsResponse, TextOverlayItem, TextOverlaysConfig, VideoOverlayConfig, WorkflowMode } from '@/types/pipeline';
 import { PositionGrid } from '@/components/ui/PositionGrid';
 import { Button } from '@/components/ui/button';
+import { InfoBanner } from '@/components/ui/info-banner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SectionPanel } from '@/components/ui/section-panel';
+import { Textarea } from '@/components/ui/textarea';
 import { TextStyleEditorPanel } from '@/components/post-opt/TextStyleEditorPanel';
 import { DEFAULT_STYLE } from '@/types/text-overlay';
 
@@ -692,9 +695,9 @@ export function StepMode({ historical }: StepModeProps) {
       </div>
 
       {isHistorical && (
-        <div className="rounded-md border border-border bg-card px-4 py-3 text-xs text-subtle">
+        <InfoBanner className="text-subtle">
           Reviewing previous submission. Re-submitting will restart the pipeline from this step.
-        </div>
+        </InfoBanner>
       )}
 
       {/* Video Info Card */}
@@ -761,7 +764,7 @@ export function StepMode({ historical }: StepModeProps) {
 
       {/* Reuse Existing Clips — only shown when prior run exists */}
       {priorRunId !== null && (
-        <div className="rounded-md border border-border bg-card px-4 py-3">
+        <InfoBanner>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-medium text-prose">Reuse Existing Clips</p>
@@ -774,7 +777,7 @@ export function StepMode({ historical }: StepModeProps) {
               }}
               className={[
                 'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-                skipRegenerate ? 'bg-brand/80' : 'bg-zinc-700',
+                skipRegenerate ? 'bg-brand/80' : 'bg-muted',
               ].join(' ')}
               role="switch"
               aria-checked={skipRegenerate}
@@ -787,7 +790,7 @@ export function StepMode({ historical }: StepModeProps) {
               />
             </button>
           </div>
-        </div>
+        </InfoBanner>
       )}
 
       {/* Mode cards */}
@@ -851,9 +854,7 @@ export function StepMode({ historical }: StepModeProps) {
 
       {/* AI configuration section */}
       {selectedMode === 'ai' && (
-        <div className="space-y-4 rounded-lg border border-border bg-card p-4">
-          <p className="text-xs font-medium text-prose uppercase tracking-wider">AI Configuration</p>
-
+        <SectionPanel title="AI Configuration">
           {/* Target Clip Duration — dynamic based on video length (min 1 min for AI, vs 8 min for Long Form) */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-subtle">Target Clip Duration</Label>
@@ -963,7 +964,7 @@ export function StepMode({ historical }: StepModeProps) {
               onClick={() => setForceRegenerate((v) => !v)}
               className={[
                 'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-                forceRegenerate ? 'bg-brand/80' : 'bg-zinc-700',
+                forceRegenerate ? 'bg-brand/80' : 'bg-muted',
               ].join(' ')}
               role="switch"
               aria-checked={forceRegenerate}
@@ -987,7 +988,7 @@ export function StepMode({ historical }: StepModeProps) {
               onClick={() => setSkipTranscription((v) => !v)}
               className={[
                 'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-                skipTranscription ? 'bg-brand/80' : 'bg-zinc-700',
+                skipTranscription ? 'bg-brand/80' : 'bg-muted',
               ].join(' ')}
               role="switch"
               aria-checked={skipTranscription}
@@ -1000,14 +1001,12 @@ export function StepMode({ historical }: StepModeProps) {
               />
             </button>
           </div>
-        </div>
+        </SectionPanel>
       )}
 
       {/* Long Form configuration section */}
       {selectedMode === 'longform' && (
-        <div className="space-y-4 rounded-lg border border-border bg-card p-4">
-          <p className="text-xs font-medium text-prose uppercase tracking-wider">Long Form Configuration</p>
-
+        <SectionPanel title="Long Form Configuration">
           {/* Segment duration presets — derived from video duration */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-subtle">Segment Duration</Label>
@@ -1076,16 +1075,14 @@ export function StepMode({ historical }: StepModeProps) {
               ))}
             </div>
           </div>
-        </div>
+        </SectionPanel>
       )}
 
       {/* Anti-Duplicate Protection */}
-      <div className="space-y-3 rounded-lg border border-border bg-card p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium text-prose uppercase tracking-wider">Anti-Duplicate Protection</p>
-            <p className="text-xs text-subtle">Prevent YouTube duplicate detection</p>
-          </div>
+      <SectionPanel
+        title="Anti-Duplicate Protection"
+        description="Prevent YouTube duplicate detection"
+        actions={
           <button
             onClick={() => {
               console.log('[StepMode] anti-dup toggled:', !antiDupEnabled);
@@ -1093,7 +1090,7 @@ export function StepMode({ historical }: StepModeProps) {
             }}
             className={[
               'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              antiDupEnabled ? 'bg-brand/80' : 'bg-zinc-700',
+              antiDupEnabled ? 'bg-brand/80' : 'bg-muted',
             ].join(' ')}
             role="switch"
             aria-checked={antiDupEnabled}
@@ -1105,8 +1102,8 @@ export function StepMode({ historical }: StepModeProps) {
               ].join(' ')}
             />
           </button>
-        </div>
-
+        }
+      >
         {antiDupEnabled && (
           <>
             <div className="grid grid-cols-2 gap-2">
@@ -1210,17 +1207,17 @@ export function StepMode({ historical }: StepModeProps) {
             </div>
           </>
         )}
-      </div>
+      </SectionPanel>
 
       {/* Text Overlays */}
-      <div className="space-y-4 rounded-lg border border-border bg-card p-4">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-prose uppercase tracking-wider">Overlays de Texto</p>
+      <SectionPanel
+        title="Overlays de Texto"
+        actions={
           <button
             onClick={() => setTextOverlaysEnabled((v) => !v)}
             className={[
               'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              textOverlaysEnabled ? 'bg-brand/80' : 'bg-zinc-700',
+              textOverlaysEnabled ? 'bg-brand/80' : 'bg-muted',
             ].join(' ')}
             role="switch"
             aria-checked={textOverlaysEnabled}
@@ -1232,8 +1229,8 @@ export function StepMode({ historical }: StepModeProps) {
               ].join(' ')}
             />
           </button>
-        </div>
-
+        }
+      >
         {textOverlaysEnabled && (
           <div className="space-y-4">
             {/* Item list */}
@@ -1260,12 +1257,12 @@ export function StepMode({ historical }: StepModeProps) {
                 </div>
 
                 {/* Text */}
-                <textarea
+                <Textarea
                   value={item.text}
                   onChange={(e) => updateTextOverlayItem(idx, { text: e.target.value })}
                   placeholder="Texto do overlay…"
                   rows={2}
-                  className="w-full rounded border border-border bg-surface px-3 py-1.5 text-xs text-foreground placeholder:text-subtle focus:outline-none focus:ring-1 focus:ring-brand/30 resize-none"
+                  className="px-3 py-1.5 text-xs resize-none"
                 />
 
                 {/* Style editor — collapsed by default */}
@@ -1335,17 +1332,17 @@ export function StepMode({ historical }: StepModeProps) {
             </button>
           </div>
         )}
-      </div>
+      </SectionPanel>
 
       {/* Video Overlay */}
-      <div className="space-y-4 rounded-lg border border-border bg-card p-4">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-prose uppercase tracking-wider">Overlay de Vídeo</p>
+      <SectionPanel
+        title="Overlay de Vídeo"
+        actions={
           <button
             onClick={() => setOverlayEnabled((v) => !v)}
             className={[
               'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              overlayEnabled ? 'bg-brand/80' : 'bg-zinc-700',
+              overlayEnabled ? 'bg-brand/80' : 'bg-muted',
             ].join(' ')}
             role="switch"
             aria-checked={overlayEnabled}
@@ -1357,8 +1354,8 @@ export function StepMode({ historical }: StepModeProps) {
               ].join(' ')}
             />
           </button>
-        </div>
-
+        }
+      >
         {overlayEnabled && (
           <div className="space-y-4">
             {/* File selector */}
@@ -1463,12 +1460,10 @@ export function StepMode({ historical }: StepModeProps) {
             </div>
           </div>
         )}
-      </div>
+      </SectionPanel>
 
       {/* Branding */}
-      <div className="space-y-4 rounded-lg border border-border bg-card p-4">
-        <p className="text-xs font-medium text-prose uppercase tracking-wider">Branding</p>
-
+      <SectionPanel title="Branding">
         {/* Watermark (Logo) */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -1477,7 +1472,7 @@ export function StepMode({ historical }: StepModeProps) {
               onClick={() => setBrandingLogoEnabled((v) => !v)}
               className={[
                 'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-                brandingLogoEnabled ? 'bg-brand/80' : 'bg-zinc-700',
+                brandingLogoEnabled ? 'bg-brand/80' : 'bg-muted',
               ].join(' ')}
               role="switch"
               aria-checked={brandingLogoEnabled}
@@ -1590,7 +1585,7 @@ export function StepMode({ historical }: StepModeProps) {
                   onClick={() => setBrandingLogoPulse((v) => !v)}
                   className={[
                     'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-                    brandingLogoPulse ? 'bg-brand/80' : 'bg-zinc-700',
+                    brandingLogoPulse ? 'bg-brand/80' : 'bg-muted',
                   ].join(' ')}
                   role="switch"
                   aria-checked={brandingLogoPulse}
@@ -1617,7 +1612,7 @@ export function StepMode({ historical }: StepModeProps) {
             onClick={() => setBrandingIntroEnabled((v) => !v)}
             className={[
               'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              brandingIntroEnabled ? 'bg-brand/80' : 'bg-zinc-700',
+              brandingIntroEnabled ? 'bg-brand/80' : 'bg-muted',
             ].join(' ')}
             role="switch"
             aria-checked={brandingIntroEnabled}
@@ -1638,7 +1633,7 @@ export function StepMode({ historical }: StepModeProps) {
             onClick={() => setBrandingOutroEnabled((v) => !v)}
             className={[
               'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              brandingOutroEnabled ? 'bg-brand/80' : 'bg-zinc-700',
+              brandingOutroEnabled ? 'bg-brand/80' : 'bg-muted',
             ].join(' ')}
             role="switch"
             aria-checked={brandingOutroEnabled}
@@ -1651,17 +1646,17 @@ export function StepMode({ historical }: StepModeProps) {
             />
           </button>
         </div>
-      </div>
+      </SectionPanel>
 
       {/* Música de Fundo */}
-      <div className="space-y-4 rounded-lg border border-border bg-card p-4">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-prose uppercase tracking-wider">Música de Fundo</p>
+      <SectionPanel
+        title="Música de Fundo"
+        actions={
           <button
             onClick={() => setMusicEnabled((v) => !v)}
             className={[
               'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              musicEnabled ? 'bg-brand/80' : 'bg-zinc-700',
+              musicEnabled ? 'bg-brand/80' : 'bg-muted',
             ].join(' ')}
             role="switch"
             aria-checked={musicEnabled}
@@ -1673,8 +1668,8 @@ export function StepMode({ historical }: StepModeProps) {
               ].join(' ')}
             />
           </button>
-        </div>
-
+        }
+      >
         {musicEnabled && (
           <div className="space-y-4">
             {/* Mode selector */}
@@ -1753,17 +1748,17 @@ export function StepMode({ historical }: StepModeProps) {
             <p className="text-xs text-caption">Recomendado: 5–10%</p>
           </div>
         )}
-      </div>
+      </SectionPanel>
 
       {/* Captions */}
-      <div className="space-y-4 rounded-lg border border-border bg-card p-4">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-prose uppercase tracking-wider">Legendas</p>
+      <SectionPanel
+        title="Legendas"
+        actions={
           <button
             onClick={() => setCaptionsEnabled((v) => !v)}
             className={[
               'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              captionsEnabled ? 'bg-brand/80' : 'bg-zinc-700',
+              captionsEnabled ? 'bg-brand/80' : 'bg-muted',
             ].join(' ')}
             role="switch"
             aria-checked={captionsEnabled}
@@ -1775,8 +1770,8 @@ export function StepMode({ historical }: StepModeProps) {
               ].join(' ')}
             />
           </button>
-        </div>
-
+        }
+      >
         {captionsEnabled && (
           <div className="space-y-4">
             {/* Preset selector */}
@@ -1969,12 +1964,10 @@ export function StepMode({ historical }: StepModeProps) {
             </div>
           </div>
         )}
-      </div>
+      </SectionPanel>
 
       {/* Upload Options */}
-      <div className="space-y-4 rounded-lg border border-border bg-card p-4">
-        <p className="text-xs font-medium text-prose uppercase tracking-wider">Upload Options</p>
-
+      <SectionPanel title="Upload Options">
         {/* Privacy pill selector */}
         <div className="space-y-1.5">
           <Label className="text-xs font-medium text-subtle">Privacy</Label>
@@ -2006,7 +1999,7 @@ export function StepMode({ historical }: StepModeProps) {
             onClick={() => setUploadScheduleEnabled((v) => !v)}
             className={[
               'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              uploadScheduleEnabled ? 'bg-brand/80' : 'bg-zinc-700',
+              uploadScheduleEnabled ? 'bg-brand/80' : 'bg-muted',
             ].join(' ')}
             role="switch"
             aria-checked={uploadScheduleEnabled}
@@ -2030,7 +2023,7 @@ export function StepMode({ historical }: StepModeProps) {
             onClick={() => setUploadAutoEnabled((v) => !v)}
             className={[
               'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              uploadAutoEnabled ? 'bg-brand/80' : 'bg-zinc-700',
+              uploadAutoEnabled ? 'bg-brand/80' : 'bg-muted',
             ].join(' ')}
             role="switch"
             aria-checked={uploadAutoEnabled}
@@ -2054,7 +2047,7 @@ export function StepMode({ historical }: StepModeProps) {
             onClick={() => setUploadDryRun((v) => !v)}
             className={[
               'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              uploadDryRun ? 'bg-brand/80' : 'bg-zinc-700',
+              uploadDryRun ? 'bg-brand/80' : 'bg-muted',
             ].join(' ')}
             role="switch"
             aria-checked={uploadDryRun}
@@ -2067,7 +2060,7 @@ export function StepMode({ historical }: StepModeProps) {
             />
           </button>
         </div>
-      </div>
+      </SectionPanel>
 
       {/* Save / Update Preset */}
       {(() => {
