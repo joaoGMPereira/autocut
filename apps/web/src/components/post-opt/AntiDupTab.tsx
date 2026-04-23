@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { useEffectsStore } from '@/store/effectsStore';
 
 export function AntiDupTab() {
@@ -37,13 +38,13 @@ export function AntiDupTab() {
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="ad-caption">Caption Text</Label>
-        <textarea
+        <Textarea
           id="ad-caption"
           placeholder="Enter caption text for duplicate detection…"
           value={captionText}
           onChange={(e) => setCaptionText(e.target.value)}
           rows={3}
-          className="flex w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-subtle focus-visible:outline-none focus-visible:border-brand/60 focus-visible:ring-[3px] focus-visible:ring-brand/30 resize-none"
+          className="resize-none"
         />
       </div>
 

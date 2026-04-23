@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 import type { Channel } from '@/store/channelStore';
 import {
   useChannelConfigStore,
@@ -200,13 +201,13 @@ function DefaultsTab({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="default-tags">Default Tags</Label>
-        <textarea
+        <Textarea
           id="default-tags"
           value={config.default_tags ?? ''}
           onChange={(e) => onChange({ default_tags: e.target.value })}
           placeholder="gaming, highlights, clips"
           rows={3}
-          className="w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-subtle focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
+          className="resize-none"
         />
         <p className="text-xs text-subtle">Comma-separated</p>
       </div>
