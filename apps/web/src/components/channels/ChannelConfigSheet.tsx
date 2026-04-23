@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createLogger } from '@/lib/logger';
 import {
   Sheet,
@@ -11,6 +11,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ColorField } from '@/components/ui/color-field';
+import { FileInputButton } from '@/components/ui/file-input-button';
 import { Input } from '@/components/ui/input';
 import { InputWithAction } from '@/components/ui/input-with-action';
 import { Label } from '@/components/ui/label';
@@ -42,12 +43,9 @@ function BrandingTab({
   onChange: (patch: Partial<ChannelConfig>) => void;
 }) {
   const { uploadLogo } = useChannelConfigStore();
-  const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleLogoUpload = async (file: File) => {
     setUploading(true);
     try {
       await uploadLogo(channelId, file);
@@ -114,24 +112,18 @@ function BrandingTab({
             </Button>
           </div>
         ) : (
-          <>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => void handleLogoUpload(e)}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-fit"
-              onClick={() => fileRef.current?.click()}
-              disabled={uploading}
-            >
-              {uploading ? 'Uploading…' : 'Choose Image'}
-            </Button>
-          </>
+          <FileInputButton
+            accept="image/*"
+            disabled={uploading}
+            size="sm"
+            className="w-fit"
+            onFilesSelected={(files) => {
+              const file = files[0]
+              if (file) void handleLogoUpload(file)
+            }}
+          >
+            {uploading ? 'Uploading…' : 'Choose Image'}
+          </FileInputButton>
         )}
       </div>
     </div>

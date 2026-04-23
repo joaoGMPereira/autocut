@@ -6,6 +6,7 @@ import { usePipelineStore } from '@/store/pipelineStore';
 import { createLogger } from '@/lib/logger';
 import { Button } from '@/components/ui/button';
 import { ColorField } from '@/components/ui/color-field';
+import { FileInputButton } from '@/components/ui/file-input-button';
 import { InfoBanner } from '@/components/ui/info-banner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -534,18 +535,18 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
                       className="text-xs h-7"
                     />
                     <div className="flex items-center gap-2">
-                      <label className="cursor-pointer text-[10px] text-info hover:text-info/80">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleUploadClipBaseImage(clip.id, file);
-                          }}
-                        />
+                      <FileInputButton
+                        accept="image/*"
+                        disabled={uploadingClipId === clip.id}
+                        variant="ghost"
+                        size="xs"
+                        onFilesSelected={(files) => {
+                          const file = files[0]
+                          if (file) handleUploadClipBaseImage(clip.id, file)
+                        }}
+                      >
                         {uploadingClipId === clip.id ? 'Uploading...' : 'Upload image'}
-                      </label>
+                      </FileInputButton>
                       {clipBaseImages[String(clip.id)] && (
                         <button
                           onClick={() => setClipBaseImages((prev) => {

@@ -1,8 +1,8 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Loader2, Trash2, Star } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { FileInputButton } from '@/components/ui/file-input-button';
 import { Input } from '@/components/ui/input';
 import { useThumbnailStore } from '@/store/thumbnailStore';
 
@@ -14,28 +14,10 @@ export function BackgroundsGallery({ channelId }: BackgroundsGalleryProps) {
   const { backgrounds, selectedBgId, loadingBackgrounds, uploadBackground, deleteBackground, selectBackground } =
     useThumbnailStore();
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadName, setUploadName] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const name = uploadName.trim() || file.name;
-    setUploading(true);
-    setUploadError(null);
-    try {
-      await uploadBackground(channelId, file, name);
-      setUploadName('');
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : 'Upload failed');
-    } finally {
-      setUploading(false);
-    }
-  };
 
   const handleDelete = async (bgId: number) => {
     setDeletingId(bgId);
@@ -56,11 +38,26 @@ export function BackgroundsGallery({ channelId }: BackgroundsGalleryProps) {
           placeholder="Background name (optional)"
           className="w-52"
         />
-        <Button
+        <FileInputButton
+          accept="image/*,video/*"
+          disabled={uploading}
           variant="outline"
           size="sm"
-          disabled={uploading}
-          onClick={() => fileInputRef.current?.click()}
+          onFilesSelected={async (files) => {
+            const file = files[0]
+            if (!file) return
+            const name = uploadName.trim() || file.name
+            setUploading(true)
+            setUploadError(null)
+            try {
+              await uploadBackground(channelId, file, name)
+              setUploadName('')
+            } catch (err) {
+              setUploadError(err instanceof Error ? err.message : 'Upload failed')
+            } finally {
+              setUploading(false)
+            }
+          }}
         >
           {uploading ? (
             <>
@@ -70,14 +67,7 @@ export function BackgroundsGallery({ channelId }: BackgroundsGalleryProps) {
           ) : (
             'Upload Background'
           )}
-        </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*,video/*"
-          className="hidden"
-          onChange={(e) => void handleFileChange(e)}
-        />
+        </FileInputButton>
         {uploadError && (
           <span className="text-xs text-destructive">{uploadError}</span>
         )}
