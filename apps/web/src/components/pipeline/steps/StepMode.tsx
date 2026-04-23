@@ -846,59 +846,48 @@ export function StepMode({ historical }: StepModeProps) {
           {/* Target Clip Duration — dynamic based on video length (min 1 min for AI, vs 8 min for Long Form) */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-subtle">Target Clip Duration</Label>
-            <div className="flex gap-2 flex-wrap">
-              {(() => {
-                const MIN_PART = 60; // 1 min (AI mode allows shorter clips than Long Form's 8 min)
-                const totalSec = videoInfo?.durationSec ?? 0;
-                const suggestions: [number, string][] = [];
-                for (const parts of [3, 2, 1]) {
-                  if (totalSec === 0) break;
-                  const partSec = Math.round(totalSec / parts / 60) * 60;
-                  if (partSec >= MIN_PART) {
-                    const mins = Math.round(partSec / 60);
-                    suggestions.push([partSec, `${mins} min`]);
-                  }
+            {(() => {
+              const MIN_PART = 60; // 1 min (AI mode allows shorter clips than Long Form's 8 min)
+              const totalSec = videoInfo?.durationSec ?? 0;
+              const suggestions: Array<[number, string]> = [];
+              for (const parts of [3, 2, 1]) {
+                if (totalSec === 0) break;
+                const partSec = Math.round(totalSec / parts / 60) * 60;
+                if (partSec >= MIN_PART) {
+                  const mins = Math.round(partSec / 60);
+                  suggestions.push([partSec, `${mins} min`]);
                 }
-                const options: [number, string][] = suggestions.length > 0
-                  ? suggestions
-                  : [[1020, '17 min'], [1560, '26 min'], [3120, '52 min']];
-                return options.map(([secs, label]) => (
-                  <button
-                    key={secs}
-                    onClick={() => setClipDurationSecs(secs)}
-                    className={[
-                      'rounded px-2 py-1.5 text-xs transition-colors',
-                      clipDurationSecs === secs
-                        ? 'bg-brand text-brand-foreground font-medium'
-                        : 'bg-surface text-subtle hover:bg-surface/80',
-                    ].join(' ')}
-                  >
-                    {label}
-                  </button>
-                ));
-              })()}
-            </div>
+              }
+              const raw: Array<[number, string]> = suggestions.length > 0
+                ? suggestions
+                : [[1020, '17 min'], [1560, '26 min'], [3120, '52 min']];
+              return (
+                <SegmentedControl<string>
+                  wrap
+                  value={String(clipDurationSecs)}
+                  onChange={(v) => setClipDurationSecs(Number(v))}
+                  options={raw.map(([secs, label]) => ({ value: String(secs), label }))}
+                />
+              );
+            })()}
           </div>
 
           {/* Minimum Clip Duration */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-subtle">Minimum Clip Duration</Label>
-            <div className="flex gap-2 flex-wrap">
-              {([60, 120, 300, 480, 600, 900] as const).map((secs) => (
-                <button
-                  key={secs}
-                  onClick={() => setMinDurationSecs(secs)}
-                  className={[
-                    'rounded px-2 py-1.5 text-xs transition-colors',
-                    minDurationSecs === secs
-                      ? 'bg-brand text-brand-foreground font-medium'
-                      : 'bg-surface text-subtle hover:bg-surface/80',
-                  ].join(' ')}
-                >
-                  {secs / 60} min
-                </button>
-              ))}
-            </div>
+            <SegmentedControl<string>
+              wrap
+              value={String(minDurationSecs)}
+              onChange={(v) => setMinDurationSecs(Number(v))}
+              options={[
+                { value: '60',  label: '1 min' },
+                { value: '120', label: '2 min' },
+                { value: '300', label: '5 min' },
+                { value: '480', label: '8 min' },
+                { value: '600', label: '10 min' },
+                { value: '900', label: '15 min' },
+              ]}
+            />
             {isMinDurationInvalid && (
               <p className="text-xs text-destructive">Min duration must be less than target duration</p>
             )}
@@ -952,38 +941,30 @@ export function StepMode({ historical }: StepModeProps) {
           {/* Segment duration presets — derived from video duration */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-subtle">Segment Duration</Label>
-            <div className="flex gap-2 flex-wrap">
-              {(() => {
-                const MIN_PART = 480; // 8 min
-                const totalSec = videoInfo?.durationSec ?? 0;
-                const suggestions: [number, string][] = [];
-                for (const parts of [3, 2, 1]) {
-                  if (totalSec === 0) break;
-                  const partSec = Math.round(totalSec / parts / 60) * 60;
-                  if (partSec >= MIN_PART) {
-                    const mins = Math.round(partSec / 60);
-                    suggestions.push([partSec, `${mins} min`]);
-                  }
+            {(() => {
+              const MIN_PART = 480; // 8 min
+              const totalSec = videoInfo?.durationSec ?? 0;
+              const suggestions: Array<[number, string]> = [];
+              for (const parts of [3, 2, 1]) {
+                if (totalSec === 0) break;
+                const partSec = Math.round(totalSec / parts / 60) * 60;
+                if (partSec >= MIN_PART) {
+                  const mins = Math.round(partSec / 60);
+                  suggestions.push([partSec, `${mins} min`]);
                 }
-                const options: [number, string][] = suggestions.length > 0
-                  ? suggestions
-                  : [[1020, '17 min'], [1560, '26 min'], [3120, '52 min']];
-                return options.map(([secs, label]) => (
-                  <button
-                    key={secs}
-                    onClick={() => setSegmentSecs(secs)}
-                    className={[
-                      'rounded px-2 py-1.5 text-xs transition-colors',
-                      segmentSecs === secs
-                        ? 'bg-brand text-brand-foreground font-medium'
-                        : 'bg-surface text-subtle hover:bg-surface/80',
-                    ].join(' ')}
-                  >
-                    {label}
-                  </button>
-                ));
-              })()}
-            </div>
+              }
+              const raw: Array<[number, string]> = suggestions.length > 0
+                ? suggestions
+                : [[1020, '17 min'], [1560, '26 min'], [3120, '52 min']];
+              return (
+                <SegmentedControl<string>
+                  wrap
+                  value={String(segmentSecs)}
+                  onChange={(v) => setSegmentSecs(Number(v))}
+                  options={raw.map(([secs, label]) => ({ value: String(secs), label }))}
+                />
+              );
+            })()}
           </div>
 
           {/* Min Part Duration */}
@@ -992,30 +973,20 @@ export function StepMode({ historical }: StepModeProps) {
               Min Part Duration{' '}
               <span className="text-caption">(ignore parts shorter than this)</span>
             </Label>
-            <div className="flex flex-wrap gap-2">
-              {([
-                [0, 'Off'],
-                [60, '1 min'],
-                [120, '2 min'],
-                [300, '5 min'],
-                [480, '8 min'],
-                [600, '10 min'],
-                [900, '15 min'],
-              ] as [number, string][]).map(([secs, label]) => (
-                <button
-                  key={secs}
-                  onClick={() => setMinPartSecs(secs)}
-                  className={[
-                    'rounded px-2 py-1.5 text-xs transition-colors',
-                    minPartSecs === secs
-                      ? 'bg-brand text-brand-foreground font-medium'
-                      : 'bg-surface text-subtle hover:bg-surface/80',
-                  ].join(' ')}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl<string>
+              wrap
+              value={String(minPartSecs)}
+              onChange={(v) => setMinPartSecs(Number(v))}
+              options={[
+                { value: '0',   label: 'Off' },
+                { value: '60',  label: '1 min' },
+                { value: '120', label: '2 min' },
+                { value: '300', label: '5 min' },
+                { value: '480', label: '8 min' },
+                { value: '600', label: '10 min' },
+                { value: '900', label: '15 min' },
+              ]}
+            />
           </div>
         </SectionPanel>
       )}
@@ -1309,22 +1280,18 @@ export function StepMode({ historical }: StepModeProps) {
             {/* Chroma key */}
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-subtle">Chroma Key</Label>
-              <div className="flex flex-wrap gap-2">
-                {(['none', 'green', 'black', 'white', 'blue'] as const).map((key) => (
-                  <button
-                    key={key}
-                    onClick={() => setOverlayChromaKey(key)}
-                    className={[
-                      'rounded px-3 py-1.5 text-xs capitalize transition-colors',
-                      overlayChromaKey === key
-                        ? 'bg-brand text-brand-foreground font-medium'
-                        : 'bg-surface text-subtle hover:bg-surface/80',
-                    ].join(' ')}
-                  >
-                    {key === 'none' ? 'Nenhum' : key}
-                  </button>
-                ))}
-              </div>
+              <SegmentedControl<'none' | 'green' | 'black' | 'white' | 'blue'>
+                wrap
+                value={overlayChromaKey}
+                onChange={setOverlayChromaKey}
+                options={[
+                  { value: 'none',  label: 'Nenhum' },
+                  { value: 'green', label: 'Green' },
+                  { value: 'black', label: 'Black' },
+                  { value: 'white', label: 'White' },
+                  { value: 'blue',  label: 'Blue' },
+                ]}
+              />
             </div>
           </div>
         )}
