@@ -1543,10 +1543,11 @@ export function StepMode({ historical }: StepModeProps) {
             <div className="space-y-3">
               <p className="text-xs text-subtle">Cores</p>
 
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-medium text-subtle">Texto</Label>
-                <ColorField value={captionsTextColor} onValueChange={(hex) => setCaptionsTextColor(hex)} />
-              </div>
+              <ColorField
+                label="Texto"
+                value={captionsTextColor}
+                onValueChange={(hex) => setCaptionsTextColor(hex)}
+              />
 
               <label htmlFor="captions-bg" className="flex items-center gap-2 cursor-pointer">
                 <Checkbox
@@ -1569,10 +1570,11 @@ export function StepMode({ historical }: StepModeProps) {
                 </label>
                 {captionsOutlineEnabled && (
                   <div className="ml-6 space-y-2">
-                    <div className="flex flex-col gap-1.5">
-                      <Label className="text-xs font-medium text-subtle">Cor</Label>
-                      <ColorField value={captionsOutlineColor} onValueChange={(hex) => setCaptionsOutlineColor(hex)} />
-                    </div>
+                    <ColorField
+                      label="Cor"
+                      value={captionsOutlineColor}
+                      onValueChange={(hex) => setCaptionsOutlineColor(hex)}
+                    />
                     <SliderRow
                       label="Espessura"
                       min={1}
@@ -1596,10 +1598,11 @@ export function StepMode({ historical }: StepModeProps) {
                 </label>
                 {captionsShadowEnabled && (
                   <div className="ml-6 space-y-2">
-                    <div className="flex flex-col gap-1.5">
-                      <Label className="text-xs font-medium text-subtle">Cor</Label>
-                      <ColorField value={captionsShadowColor} onValueChange={(hex) => setCaptionsShadowColor(hex)} />
-                    </div>
+                    <ColorField
+                      label="Cor"
+                      value={captionsShadowColor}
+                      onValueChange={(hex) => setCaptionsShadowColor(hex)}
+                    />
                     <SliderRow
                       label="Distância"
                       min={0}

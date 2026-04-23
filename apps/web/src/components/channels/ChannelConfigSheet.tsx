@@ -66,20 +66,16 @@ function BrandingTab({
     <div className="flex flex-col gap-5 p-4">
       {/* Gradient colors */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label>Gradient Start</Label>
-          <ColorField
-            value={config.gradient_color_start ?? '#000000'}
-            onValueChange={(hex) => onChange({ gradient_color_start: hex })}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label>Gradient End</Label>
-          <ColorField
-            value={config.gradient_color_end ?? '#000000'}
-            onValueChange={(hex) => onChange({ gradient_color_end: hex })}
-          />
-        </div>
+        <ColorField
+          label="Gradient Start"
+          value={config.gradient_color_start ?? '#000000'}
+          onValueChange={(hex) => onChange({ gradient_color_start: hex })}
+        />
+        <ColorField
+          label="Gradient End"
+          value={config.gradient_color_end ?? '#000000'}
+          onValueChange={(hex) => onChange({ gradient_color_end: hex })}
+        />
       </div>
 
       {/* Font family */}
@@ -94,13 +90,11 @@ function BrandingTab({
       </div>
 
       {/* Text color */}
-      <div className="flex flex-col gap-1.5">
-        <Label>Thumbnail Text Color</Label>
-        <ColorField
-          value={config.thumbnail_text_color_1 ?? '#ffffff'}
-          onValueChange={(hex) => onChange({ thumbnail_text_color_1: hex })}
-        />
-      </div>
+      <ColorField
+        label="Thumbnail Text Color"
+        value={config.thumbnail_text_color_1 ?? '#ffffff'}
+        onValueChange={(hex) => onChange({ thumbnail_text_color_1: hex })}
+      />
 
       {/* Logo upload */}
       <div className="flex flex-col gap-1.5">
