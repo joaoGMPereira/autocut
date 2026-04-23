@@ -20,7 +20,7 @@ const DEFAULT_TOKENS = Object.keys(COLOR_TOKENS) as ColorToken[]
 
 interface ColorFieldProps {
   value: string
-  onValueChange: (hex: string, token: ColorToken) => void
+  onValueChange: (hex: string, token?: ColorToken) => void
   tokens?: ColorToken[]
   label?: string
   id?: string
