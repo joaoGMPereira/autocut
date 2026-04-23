@@ -322,6 +322,7 @@ function MusicTab({ channelId }: { channelId: number }) {
         actionDisabled={adding || !newPattern.trim()}
         actionLabel={adding ? 'Adding…' : 'Add'}
         placeholder="artist name or pattern…"
+        actionVariant="default"
       />
 
       {/* Pattern list */}
