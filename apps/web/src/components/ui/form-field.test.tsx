@@ -72,4 +72,64 @@ describe('FormField', () => {
     expect(describedBy).toBeTruthy();
     expect(screen.getByText('bad value').id).toBe(describedBy);
   });
+
+  describe('counter slot', () => {
+    it('renders counter inline-right of label when provided', () => {
+      render(
+        <FormField label="Title" counter="12/60">
+          <Input data-testid="i" />
+        </FormField>,
+      );
+      const counter = screen.getByText('12/60');
+      expect(counter.tagName).toBe('SPAN');
+      expect(counter.className).toContain('text-xs');
+      expect(counter.className).toContain('text-caption');
+    });
+
+    it('wraps label + counter in a flex-between row when counter present', () => {
+      render(
+        <FormField label="Title" counter="5/30">
+          <Input data-testid="i" />
+        </FormField>,
+      );
+      const label = screen.getByText('Title').closest('label') as HTMLLabelElement;
+      const row = label.parentElement as HTMLDivElement;
+      expect(row.className).toContain('flex');
+      expect(row.className).toContain('justify-between');
+      expect(row).toContainElement(screen.getByText('5/30'));
+    });
+
+    it('omits counter when not provided (label is direct child of root)', () => {
+      render(
+        <FormField label="Title">
+          <Input data-testid="i" />
+        </FormField>,
+      );
+      const label = screen.getByText('Title').closest('label') as HTMLLabelElement;
+      const parent = label.parentElement as HTMLElement;
+      expect(parent.getAttribute('data-slot')).toBe('form-field');
+    });
+
+    it('coexists with description below the control', () => {
+      render(
+        <FormField label="Title" counter="3/30" description="hint">
+          <Input data-testid="i" />
+        </FormField>,
+      );
+      expect(screen.getByText('3/30')).toBeInTheDocument();
+      expect(screen.getByText('hint')).toBeInTheDocument();
+    });
+
+    it('still wires htmlFor when counter is present', () => {
+      render(
+        <FormField label="Title" counter="0/10">
+          <Input data-testid="i" />
+        </FormField>,
+      );
+      const label = screen.getByText('Title').closest('label') as HTMLLabelElement;
+      const input = screen.getByTestId('i');
+      expect(label.htmlFor).toBeTruthy();
+      expect(input.id).toBe(label.htmlFor);
+    });
+  });
 });

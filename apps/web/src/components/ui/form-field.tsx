@@ -9,6 +9,7 @@ interface FormFieldProps {
   label: React.ReactNode
   description?: React.ReactNode
   error?: React.ReactNode
+  counter?: React.ReactNode
   required?: boolean
   htmlFor?: string
   className?: string
@@ -23,6 +24,7 @@ function FormField({
   label,
   description,
   error,
+  counter,
   required,
   htmlFor,
   className,
@@ -45,18 +47,26 @@ function FormField({
       error != null ? true : children.props["aria-invalid"],
   })
 
+  const labelNode = (
+    <Label htmlFor={id} className="text-xs font-medium text-subtle">
+      {label}
+      {required && <span className="text-destructive ml-0.5">*</span>}
+    </Label>
+  )
+
   return (
     <div
       data-slot="form-field"
       className={cn("flex flex-col gap-1.5", className)}
     >
-      <Label
-        htmlFor={id}
-        className="text-xs font-medium text-subtle"
-      >
-        {label}
-        {required && <span className="text-destructive ml-0.5">*</span>}
-      </Label>
+      {counter != null ? (
+        <div className="flex items-center justify-between">
+          {labelNode}
+          <span className="text-xs text-caption">{counter}</span>
+        </div>
+      ) : (
+        labelNode
+      )}
       {child}
       {error != null ? (
         <p id={errorId} className="text-xs text-destructive">
