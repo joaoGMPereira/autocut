@@ -10,6 +10,7 @@ export function ContextPanel() {
     <div className="sticky top-0 p-4 space-y-3">
       <p className="text-xs font-semibold uppercase tracking-wider text-subtle pb-1">Info</p>
 
+      {/* Card has no eyebrow title of its own ("Info" belongs to the sticky sidebar header above) — SectionPanel migration deferred to Phase 4 */}
       {run ? (
         <div className="rounded-lg border border-border bg-card p-3 text-xs space-y-1">
           <p className="text-subtle">Run ID: <span className="text-foreground">{run.id}</span></p>

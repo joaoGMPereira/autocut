@@ -129,7 +129,7 @@ function SegmentedControl<T extends string>({
               "flex flex-col items-start rounded-lg border p-3 text-left transition-all",
               opt.value === value
                 ? "border-brand bg-surface ring-1 ring-brand"
-                : "border-border bg-surface hover:border-border/60",
+                : "border-border bg-card hover:border-border hover:bg-surface",
             )}
             aria-pressed={opt.value === value}
           >
@@ -279,7 +279,7 @@ One Sonnet subagent handles all three files in a single commit.
 
 From `apps/web/`:
 ```bash
-# Expect 0 hits outside section-panel.tsx and the 3 migrated files:
+# Expect 0 hits outside section-panel.tsx, ContextPanel.tsx, and StepMode.tsx:
 grep -rn 'rounded-lg border border-border bg-card p-3' src/ --include='*.tsx'
 
 # Expect 0 residual raw color tokens in touched files:
@@ -287,6 +287,10 @@ grep -rn 'bg-zinc-\|text-zinc-\|border-zinc-' src/components/pipeline/ContextPan
   src/components/pipeline/DownloadInfoCard.tsx \
   src/components/channels/ChannelInfoCard.tsx
 ```
+
+**Known exclusions from the grep:**
+- `ContextPanel.tsx:14` — inner run-info card has no eyebrow title; `"Info"` belongs to the sticky sidebar header at line 11, not to the card. SectionPanel requires a `title` prop; inventing one would change semantics. Deferred to Phase 4.
+- `StepMode.tsx:705` — horizontal-flex thumbnail card with unique layout, no eyebrow. Single instance. Explicitly deferred to Phase 4.
 
 ### Subagent prompt (D — Sonnet)
 
