@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { useStatsStore } from '@/store/statsStore';
 import { createLogger } from '@/lib/logger';
 import type { PipelineRunSummary } from '@/store/statsStore';
+import type { VariantProps } from 'class-variance-authority';
+import { badgeVariants } from '@/components/ui/badge';
 
 const log = createLogger('DashboardClient');
 
@@ -16,16 +18,16 @@ const quickActions = [
   { label: 'New Download', href: '/pipeline' },
 ] as const;
 
-function statusBadgeClass(status: string): string {
+function statusBadgeVariant(status: string): VariantProps<typeof badgeVariants>['variant'] {
   switch (status) {
     case 'done':
-      return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+      return 'success';
     case 'error':
-      return 'bg-red-500/10 text-red-400 border-red-500/20';
+      return 'destructive';
     case 'running':
-      return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+      return 'info';
     default:
-      return 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20';
+      return 'secondary';
   }
 }
 
@@ -66,7 +68,7 @@ export default function DashboardClient() {
           <CardContent className="flex items-center gap-4 p-5">
             <Download className="h-5 w-5 text-brand shrink-0" />
             <div className="min-w-0">
-              <p className="text-xs text-muted-foreground leading-none mb-1">Active Downloads</p>
+              <p className="text-xs text-subtle leading-none mb-1">Active Downloads</p>
               <p className="font-mono text-2xl font-semibold tabular-nums leading-none">
                 {loading && stats === null ? '…' : activeDownloads}
               </p>
@@ -80,31 +82,31 @@ export default function DashboardClient() {
         <h2 className="text-[16px] font-semibold">Recent Runs</h2>
         <div className="rounded-xl border border-border overflow-hidden">
           {recentRuns.length === 0 ? (
-            <p className="text-sm text-muted-foreground px-5 py-4">
+            <p className="text-sm text-subtle px-5 py-4">
               {loading && stats === null ? 'Loading…' : 'No pipeline runs yet.'}
             </p>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-card/50">
-                  <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">ID</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Mode</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Status</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Started</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Duration</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-subtle">ID</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-subtle">Mode</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-subtle">Status</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-subtle">Started</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-subtle">Duration</th>
                 </tr>
               </thead>
               <tbody>
                 {recentRuns.map((run) => (
                   <tr key={run.id} className="border-b border-border last:border-0 hover:bg-card/30 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">#{run.id}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-subtle">#{run.id}</td>
                     <td className="px-4 py-3 text-xs capitalize">{run.mode}</td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border ${statusBadgeClass(run.status)}`}>
+                      <Badge variant={statusBadgeVariant(run.status)}>
                         {run.status}
-                      </span>
+                      </Badge>
                     </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">{formatTimestamp(run.started_at)}</td>
+                    <td className="px-4 py-3 text-xs text-subtle">{formatTimestamp(run.started_at)}</td>
                     <td className="px-4 py-3 font-mono text-xs">{formatDuration(run)}</td>
                   </tr>
                 ))}
