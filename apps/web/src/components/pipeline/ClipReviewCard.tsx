@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { FormField } from '@/components/ui/form-field';
 import type { Clip } from '@/types/pipeline';
 
 interface ClipReviewCardProps {
@@ -128,11 +128,7 @@ export function ClipReviewCard({
 
       {/* Editable fields */}
       <div className="p-3 space-y-2">
-        <div>
-          <div className="flex justify-between mb-0.5">
-            <Label htmlFor={`clip-title-${clip.id}`} className="text-xs font-medium text-subtle">Título</Label>
-            <span className="text-xs text-caption">{title.length}/100</span>
-          </div>
+        <FormField label="Título" counter={`${title.length}/100`} htmlFor={`clip-title-${clip.id}`}>
           <Input
             id={`clip-title-${clip.id}`}
             type="text"
@@ -142,12 +138,8 @@ export function ClipReviewCard({
             maxLength={100}
             disabled={!isSelected}
           />
-        </div>
-        <div>
-          <div className="flex justify-between mb-0.5">
-            <Label htmlFor={`clip-thumb-${clip.id}`} className="text-xs font-medium text-subtle">Texto do Thumbnail</Label>
-            <span className="text-xs text-caption">{thumbnailText.length}/30</span>
-          </div>
+        </FormField>
+        <FormField label="Texto do Thumbnail" counter={`${thumbnailText.length}/30`} htmlFor={`clip-thumb-${clip.id}`}>
           <Input
             id={`clip-thumb-${clip.id}`}
             type="text"
@@ -158,7 +150,7 @@ export function ClipReviewCard({
             disabled={!isSelected}
             className="text-xs uppercase"
           />
-        </div>
+        </FormField>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import type { Clip } from '@/types/pipeline';
 
 type ClipCardVariant = 'metadata' | 'select';
@@ -82,12 +83,12 @@ export function ClipCard({ clip, variant, onMetadataChange, onSelectToggle }: Cl
             placeholder="Title"
             onChange={(e) => { setTitle(e.target.value); emitMetadata(e.target.value, description, tags); }}
           />
-          <textarea
+          <Textarea
             value={description}
             placeholder="Description"
             rows={2}
             onChange={(e) => { setDescription(e.target.value); emitMetadata(title, e.target.value, tags); }}
-            className="w-full text-xs bg-surface border border-border rounded px-2 py-1 text-foreground placeholder:text-subtle focus:outline-none focus-visible:border-brand/60 focus-visible:ring-brand/30 focus-visible:ring-[3px] resize-none"
+            className="text-xs resize-none"
           />
           <Input
             type="text"
