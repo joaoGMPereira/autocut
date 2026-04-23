@@ -46,7 +46,7 @@ function SegmentedControl<T extends string>({
               'flex flex-col items-start rounded-lg border p-3 text-left transition-all',
               opt.value === value
                 ? 'border-brand bg-surface ring-1 ring-brand'
-                : 'border-border bg-surface hover:border-border/60',
+                : 'border-border bg-card hover:border-border hover:bg-surface',
             )}
             aria-pressed={opt.value === value}
           >
