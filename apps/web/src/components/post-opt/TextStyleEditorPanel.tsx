@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
-import { ColorInputField } from './ColorInputField';
+import { ColorField } from '@/components/ui/color-field';
 import type { TextStyleConfig } from '@/types/text-overlay';
 
 interface Props {
@@ -105,7 +105,7 @@ export function TextStyleEditorPanel({
       <div className="rounded-lg border border-border bg-card/60 p-4 flex flex-col gap-4">
         <span className="text-xs font-medium text-subtle uppercase tracking-wide">Cores e Bordas</span>
 
-        <ColorInputField
+        <ColorField
           label="Cor do Texto"
           value={config.textColor}
           onValueChange={(v) => update({ textColor: v })}
@@ -123,7 +123,7 @@ export function TextStyleEditorPanel({
             />
             {hasBackground && (
               <div className="flex flex-col gap-3 pl-2 border-l border-border">
-                <ColorInputField
+                <ColorField
                   label="Cor do Fundo"
                   value={config.backgroundColor ?? '#000000AA'}
                   onValueChange={(v) => update({ backgroundColor: v })}
@@ -161,7 +161,7 @@ export function TextStyleEditorPanel({
         />
         {hasBorder && (
           <div className="flex flex-col gap-3 pl-2 border-l border-border">
-            <ColorInputField
+            <ColorField
               label="Cor da Borda"
               value={config.borderColor ?? '#000000'}
               onValueChange={(v) => update({ borderColor: v })}
@@ -189,7 +189,7 @@ export function TextStyleEditorPanel({
         />
         {hasShadow && (
           <div className="flex flex-col gap-3 pl-2 border-l border-border">
-            <ColorInputField
+            <ColorField
               label="Cor da Sombra"
               value={config.shadowColor ?? '#000000'}
               onValueChange={(v) => update({ shadowColor: v })}
