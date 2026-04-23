@@ -4,14 +4,15 @@ import { createLogger } from '@/lib/logger';
 import { useHistoryStore, calcDuration } from '@/store/historyStore';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 const log = createLogger('RunsTable');
 
-const STATUS_CLASSES: Record<string, string> = {
-  done: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/5',
-  error: 'text-red-400 border-red-400/30 bg-red-400/5',
-  running: 'text-blue-400 border-blue-500/30 bg-blue-500/5',
-  pending: 'text-zinc-400 border-zinc-600 bg-zinc-800/50',
+const STATUS_VARIANT: Record<string, 'success' | 'destructive' | 'info' | 'secondary'> = {
+  done: 'success',
+  error: 'destructive',
+  running: 'info',
+  pending: 'secondary',
 };
 
 function truncateUrl(url: string): string {
@@ -82,7 +83,7 @@ export function RunsTable() {
           size="sm"
           onClick={exportCSV}
           disabled={runs.length === 0}
-          className="text-zinc-400 hover:text-heading"
+          className="text-subtle hover:text-heading"
         >
           Export CSV
         </Button>
@@ -92,14 +93,14 @@ export function RunsTable() {
       <div className="overflow-x-auto rounded-xl border border-border">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-border bg-zinc-900/60">
-              <th className="px-3 py-2 text-left font-mono text-xs text-zinc-500">ID</th>
-              <th className="px-3 py-2 text-left text-xs text-zinc-500">URL</th>
-              <th className="px-3 py-2 text-left text-xs text-zinc-500">Mode</th>
-              <th className="px-3 py-2 text-left text-xs text-zinc-500">Status</th>
-              <th className="px-3 py-2 text-left text-xs text-zinc-500">Started</th>
-              <th className="px-3 py-2 text-left text-xs text-zinc-500">Duration</th>
-              <th className="px-3 py-2 text-right text-xs text-zinc-500">Actions</th>
+            <tr className="border-b border-border bg-background/60">
+              <th className="px-3 py-2 text-left font-mono text-xs text-subtle">ID</th>
+              <th className="px-3 py-2 text-left text-xs text-subtle">URL</th>
+              <th className="px-3 py-2 text-left text-xs text-subtle">Mode</th>
+              <th className="px-3 py-2 text-left text-xs text-subtle">Status</th>
+              <th className="px-3 py-2 text-left text-xs text-subtle">Started</th>
+              <th className="px-3 py-2 text-left text-xs text-subtle">Duration</th>
+              <th className="px-3 py-2 text-right text-xs text-subtle">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -109,7 +110,7 @@ export function RunsTable() {
                   <tr key={i} className="border-b border-border/50">
                     {[0, 1, 2, 3, 4, 5, 6].map((j) => (
                       <td key={j} className="px-3 py-3">
-                        <div className="h-3 rounded bg-zinc-800 animate-pulse w-full max-w-[120px]" />
+                        <div className="h-3 rounded bg-surface animate-pulse w-full max-w-[120px]" />
                       </td>
                     ))}
                   </tr>
@@ -117,62 +118,61 @@ export function RunsTable() {
               </>
             ) : runs.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-sm text-zinc-500">
+                <td colSpan={7} className="px-3 py-8 text-center text-sm text-subtle">
                   No pipeline runs found.
                 </td>
               </tr>
             ) : (
-              runs.map((run) => {
-                const statusClass = STATUS_CLASSES[run.status] ?? STATUS_CLASSES.pending;
-                return (
-                  <tr
-                    key={run.id}
-                    className="border-b border-border/50 hover:bg-zinc-900/40 transition-colors"
-                  >
-                    <td className="px-3 py-2.5 font-mono text-xs text-zinc-500">
-                      #{run.id}
-                    </td>
-                    <td className="px-3 py-2.5 max-w-[200px]">
-                      <span className="block truncate text-heading">
-                        {truncateUrl(run.url)}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 text-xs text-zinc-400">{run.mode}</td>
-                    <td className="px-3 py-2.5">
-                      <span
-                        className={`inline-block rounded-md border px-2 py-0.5 text-xs ${statusClass}`}
+              runs.map((run) => (
+                <tr
+                  key={run.id}
+                  className="border-b border-border/50 hover:bg-background/40 transition-colors"
+                >
+                  <td className="px-3 py-2.5 font-mono text-xs text-subtle">
+                    #{run.id}
+                  </td>
+                  <td className="px-3 py-2.5 max-w-[200px]">
+                    <span className="block truncate text-heading">
+                      {truncateUrl(run.url)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-xs text-subtle">{run.mode}</td>
+                  <td className="px-3 py-2.5">
+                    <Badge variant={STATUS_VARIANT[run.status] ?? STATUS_VARIANT.pending}>
+                      {run.status}
+                    </Badge>
+                  </td>
+                  <td className="px-3 py-2.5 text-xs text-subtle whitespace-nowrap">
+                    {formatDate(run.started_at)}
+                  </td>
+                  <td className="px-3 py-2.5 font-mono text-xs text-subtle">
+                    {calcDuration(run.started_at, run.finished_at)}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleView(run.id)}
+                        className="h-auto px-3 py-1 text-xs text-subtle hover:text-heading"
                       >
-                        {run.status}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 text-xs text-zinc-400 whitespace-nowrap">
-                      {formatDate(run.started_at)}
-                    </td>
-                    <td className="px-3 py-2.5 font-mono text-xs text-zinc-500">
-                      {calcDuration(run.started_at, run.finished_at)}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleView(run.id)}
-                          className="rounded-md border border-border bg-zinc-800 px-3 py-1 text-xs text-zinc-400 hover:border-zinc-500 hover:text-heading transition-colors"
-                        >
-                          View
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(run.id)}
-                          aria-label={`Delete run #${run.id}`}
-                          className="rounded-md border border-border bg-zinc-800 px-2 py-1 text-xs text-zinc-600 hover:border-red-400/40 hover:text-red-400 transition-colors"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
+                        View
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDelete(run.id)}
+                        aria-label={`Delete run #${run.id}`}
+                        className="h-auto px-2 py-1 text-xs text-caption hover:border-destructive/40 hover:text-destructive"
+                      >
+                        ✕
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))
             )}
           </tbody>
         </table>
@@ -185,11 +185,11 @@ export function RunsTable() {
           size="sm"
           onClick={handlePrev}
           disabled={page <= 1 || loading}
-          className="text-zinc-400"
+          className="text-subtle"
         >
           Previous
         </Button>
-        <span className="text-xs text-zinc-500">
+        <span className="text-xs text-subtle">
           Page {page} of {totalPages}
         </span>
         <Button
@@ -197,7 +197,7 @@ export function RunsTable() {
           size="sm"
           onClick={handleNext}
           disabled={page >= totalPages || loading}
-          className="text-zinc-400"
+          className="text-subtle"
         >
           Next
         </Button>
