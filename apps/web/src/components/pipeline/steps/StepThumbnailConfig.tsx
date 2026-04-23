@@ -5,6 +5,7 @@ import { useAppStore } from '@/store/appStore';
 import { usePipelineStore } from '@/store/pipelineStore';
 import { createLogger } from '@/lib/logger';
 import { Button } from '@/components/ui/button';
+import { InfoBanner } from '@/components/ui/info-banner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
@@ -279,9 +280,9 @@ export function StepThumbnailConfig({ historical }: StepThumbnailConfigProps) {
       <h2 className="text-xl font-semibold text-foreground">Thumbnail Configuration</h2>
 
       {isHistorical && (
-        <div className="rounded-md border border-border bg-card px-4 py-3 text-xs text-subtle">
+        <InfoBanner className="text-subtle">
           Reviewing previous submission. Re-submitting will restart the pipeline from this step.
-        </div>
+        </InfoBanner>
       )}
 
       {/* Config Panel — branch by mode */}

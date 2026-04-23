@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { InfoBanner } from '@/components/ui/info-banner';
 import { useAppStore } from '@/store/appStore';
 import { usePipelineStore } from '@/store/pipelineStore';
 import { useUrlHistoryStore } from '@/store/urlHistoryStore';
@@ -131,9 +132,9 @@ export function StepUrl({ historical }: StepUrlProps) {
       </div>
 
       {isHistorical && (
-        <div className="rounded-md border border-border bg-card px-4 py-3 text-xs text-prose">
+        <InfoBanner>
           Reviewing previous submission. Re-submitting will restart the pipeline from this step.
-        </div>
+        </InfoBanner>
       )}
 
       {/* Channel selection */}

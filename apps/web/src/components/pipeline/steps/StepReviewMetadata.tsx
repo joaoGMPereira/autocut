@@ -5,9 +5,11 @@ import { useAppStore } from '@/store/appStore';
 import { usePipelineStore } from '@/store/pipelineStore';
 import { createLogger } from '@/lib/logger';
 import { Button } from '@/components/ui/button';
+import { FormField } from '@/components/ui/form-field';
+import { InfoBanner } from '@/components/ui/info-banner';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import type { GatePayload, ClipMetadataUpdate } from '@/types/pipeline';
 
@@ -343,9 +345,9 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
       </div>
 
       {isHistorical && (
-        <div className="rounded-md border border-border bg-card px-4 py-3 text-xs text-subtle">
+        <InfoBanner className="text-subtle">
           Revisando submissão anterior. Re-submeter reinicia o pipeline a partir deste passo.
-        </div>
+        </InfoBanner>
       )}
 
       {/* Progress bar during manual re-generation */}
@@ -424,11 +426,10 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
               </div>
 
               {/* Thumbnail text */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs font-medium text-subtle">Thumbnail Text</Label>
-                  <span className="text-xs text-caption">{edit.thumbnail_text.length}/30</span>
-                </div>
+              <FormField
+                label="Thumbnail Text"
+                counter={`${edit.thumbnail_text.length}/30`}
+              >
                 <Input
                   value={edit.thumbnail_text}
                   onChange={(e) => updateEdit(clip.id, 'thumbnail_text', e.target.value)}
@@ -436,14 +437,10 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
                   maxLength={30}
                   className="text-sm uppercase"
                 />
-              </div>
+              </FormField>
 
               {/* Title */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs font-medium text-subtle">Título</Label>
-                  <span className="text-xs text-caption">{edit.title.length}/100</span>
-                </div>
+              <FormField label="Título" counter={`${edit.title.length}/100`}>
                 <Input
                   value={edit.title}
                   onChange={(e) => updateEdit(clip.id, 'title', e.target.value)}
@@ -451,30 +448,24 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
                   maxLength={100}
                   className="text-sm"
                 />
-              </div>
+              </FormField>
 
               {/* Description */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs font-medium text-subtle">Descrição</Label>
-                  <span className="text-xs text-caption">{edit.description.length}/5000</span>
-                </div>
-                <textarea
+              <FormField
+                label="Descrição"
+                counter={`${edit.description.length}/5000`}
+              >
+                <Textarea
                   value={edit.description}
                   onChange={(e) => updateEdit(clip.id, 'description', e.target.value)}
                   placeholder="Descrição do clip..."
                   maxLength={5000}
                   rows={3}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-caption focus:outline-none focus-visible:border-brand/60 focus-visible:ring-brand/30 focus-visible:ring-[3px]"
                 />
-              </div>
+              </FormField>
 
               {/* Tags */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs font-medium text-subtle">Tags</Label>
-                  <span className="text-xs text-caption">{edit.tags.length}/500</span>
-                </div>
+              <FormField label="Tags" counter={`${edit.tags.length}/500`}>
                 <Input
                   value={edit.tags}
                   onChange={(e) => updateEdit(clip.id, 'tags', e.target.value)}
@@ -482,7 +473,7 @@ export function StepReviewMetadata({ historical }: StepReviewMetadataProps) {
                   maxLength={500}
                   className="text-sm"
                 />
-              </div>
+              </FormField>
             </div>
           );
         })}

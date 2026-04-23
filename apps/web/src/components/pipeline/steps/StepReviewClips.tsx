@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
+import { InfoBanner } from '@/components/ui/info-banner';
 import { useAppStore } from '@/store/appStore';
 import { usePipelineStore } from '@/store/pipelineStore';
 import { useChannelStore } from '@/store/channelStore';
@@ -179,9 +180,9 @@ export function StepReviewClips({ historical }: StepReviewClipsProps) {
 
       {/* Historical notice */}
       {isHistorical && (
-        <div className="rounded-md border border-border bg-card px-4 py-3 text-xs text-prose">
+        <InfoBanner>
           Revisando submissão anterior. Re-submeter reinicia o pipeline a partir deste passo.
-        </div>
+        </InfoBanner>
       )}
 
       {/* Upload config summary */}
