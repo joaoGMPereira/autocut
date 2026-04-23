@@ -12,6 +12,7 @@ interface SegmentedControlProps<T extends string> {
   value: T
   onChange: (value: T) => void
   variant?: 'flat' | 'card'
+  wrap?: boolean
   className?: string
 }
 
@@ -27,6 +28,7 @@ function SegmentedControl<T extends string>({
   value,
   onChange,
   variant = 'flat',
+  wrap = false,
   className,
 }: SegmentedControlProps<T>) {
   if (variant === 'card') {
@@ -64,7 +66,7 @@ function SegmentedControl<T extends string>({
     <div
       data-slot="segmented-control"
       data-variant="flat"
-      className={cn('flex gap-2', className)}
+      className={cn('flex gap-2', wrap && 'flex-wrap', className)}
     >
       {options.map((opt) => (
         <button
@@ -72,7 +74,8 @@ function SegmentedControl<T extends string>({
           type="button"
           onClick={() => onChange(opt.value)}
           className={cn(
-            'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
+            !wrap && 'flex-1',
+            'rounded px-2 py-1.5 text-xs transition-colors',
             opt.value === value
               ? 'bg-brand text-brand-foreground font-medium'
               : 'bg-surface text-subtle hover:bg-surface/80',

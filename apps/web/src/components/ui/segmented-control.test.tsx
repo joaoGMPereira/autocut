@@ -157,3 +157,64 @@ describe('SegmentedControl — card variant', () => {
     ).toBeInTheDocument();
   });
 });
+
+// ── wrap prop ────────────────────────────────────────────────────────────────
+
+describe('SegmentedControl — flat with wrap=true', () => {
+  it('container carries flex-wrap class', () => {
+    render(
+      <SegmentedControl
+        options={flatOptions}
+        value="liberal"
+        onChange={() => {}}
+        wrap
+      />,
+    );
+    const el = document.querySelector('[data-slot="segmented-control"]')!;
+    expect(el.className).toContain('flex-wrap');
+  });
+
+  it('buttons do NOT carry flex-1 when wrap=true', () => {
+    render(
+      <SegmentedControl
+        options={flatOptions}
+        value="liberal"
+        onChange={() => {}}
+        wrap
+      />,
+    );
+    const btn = screen.getByText('Liberal').closest('button')!;
+    expect(btn.className).not.toContain('flex-1');
+  });
+
+  it('wrap=false (default) container does NOT carry flex-wrap', () => {
+    render(
+      <SegmentedControl options={flatOptions} value="liberal" onChange={() => {}} />,
+    );
+    const el = document.querySelector('[data-slot="segmented-control"]')!;
+    expect(el.className).not.toContain('flex-wrap');
+  });
+
+  it('wrap=false (default) buttons carry flex-1', () => {
+    render(
+      <SegmentedControl options={flatOptions} value="liberal" onChange={() => {}} />,
+    );
+    const btn = screen.getByText('Liberal').closest('button')!;
+    expect(btn.className).toContain('flex-1');
+  });
+
+  it('wrap prop has no effect on card variant (container stays grid)', () => {
+    render(
+      <SegmentedControl
+        variant="card"
+        options={cardOptions}
+        value="subtle"
+        onChange={() => {}}
+        wrap
+      />,
+    );
+    const el = document.querySelector('[data-slot="segmented-control"]')!;
+    expect(el.className).toContain('grid');
+    expect(el.className).not.toContain('flex-wrap');
+  });
+});
