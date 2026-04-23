@@ -12,6 +12,8 @@ import { InfoBanner } from '@/components/ui/info-banner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SectionPanel } from '@/components/ui/section-panel';
+import { SettingRow } from '@/components/ui/setting-row';
+import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { TextStyleEditorPanel } from '@/components/post-opt/TextStyleEditorPanel';
 import { DEFAULT_STYLE } from '@/types/text-overlay';
@@ -765,31 +767,15 @@ export function StepMode({ historical }: StepModeProps) {
       {/* Reuse Existing Clips — only shown when prior run exists */}
       {priorRunId !== null && (
         <InfoBanner>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-prose">Reuse Existing Clips</p>
-              <p className="text-xs text-subtle">From previous run #{priorRunId}</p>
-            </div>
-            <button
-              onClick={() => {
-                console.log('[StepMode] skip_regenerate toggled:', !skipRegenerate);
-                setSkipRegenerate((v) => !v);
+          <SettingRow label="Reuse Existing Clips" description={`From previous run #${priorRunId}`}>
+            <Switch
+              checked={skipRegenerate}
+              onCheckedChange={(checked) => {
+                console.log('[StepMode] skip_regenerate toggled:', checked);
+                setSkipRegenerate(checked);
               }}
-              className={[
-                'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-                skipRegenerate ? 'bg-brand/80' : 'bg-muted',
-              ].join(' ')}
-              role="switch"
-              aria-checked={skipRegenerate}
-            >
-              <span
-                className={[
-                  'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
-                  skipRegenerate ? 'translate-x-4' : 'translate-x-1',
-                ].join(' ')}
-              />
-            </button>
-          </div>
+            />
+          </SettingRow>
         </InfoBanner>
       )}
 
@@ -955,52 +941,14 @@ export function StepMode({ historical }: StepModeProps) {
           </div>
 
           {/* Force regenerate toggle */}
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-prose">Force Re-analyze</p>
-              <p className="text-xs text-caption">Ignore cached transcript and analysis</p>
-            </div>
-            <button
-              onClick={() => setForceRegenerate((v) => !v)}
-              className={[
-                'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-                forceRegenerate ? 'bg-brand/80' : 'bg-muted',
-              ].join(' ')}
-              role="switch"
-              aria-checked={forceRegenerate}
-            >
-              <span
-                className={[
-                  'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
-                  forceRegenerate ? 'translate-x-4' : 'translate-x-1',
-                ].join(' ')}
-              />
-            </button>
-          </div>
+          <SettingRow label="Force Re-analyze" description="Ignore cached transcript and analysis">
+            <Switch checked={forceRegenerate} onCheckedChange={setForceRegenerate} />
+          </SettingRow>
 
           {/* Skip transcription toggle */}
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-prose">Skip Transcription</p>
-              <p className="text-xs text-caption">Use existing transcript if available</p>
-            </div>
-            <button
-              onClick={() => setSkipTranscription((v) => !v)}
-              className={[
-                'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-                skipTranscription ? 'bg-brand/80' : 'bg-muted',
-              ].join(' ')}
-              role="switch"
-              aria-checked={skipTranscription}
-            >
-              <span
-                className={[
-                  'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
-                  skipTranscription ? 'translate-x-4' : 'translate-x-1',
-                ].join(' ')}
-              />
-            </button>
-          </div>
+          <SettingRow label="Skip Transcription" description="Use existing transcript if available">
+            <Switch checked={skipTranscription} onCheckedChange={setSkipTranscription} />
+          </SettingRow>
         </SectionPanel>
       )}
 
@@ -1083,25 +1031,13 @@ export function StepMode({ historical }: StepModeProps) {
         title="Anti-Duplicate Protection"
         description="Prevent YouTube duplicate detection"
         actions={
-          <button
-            onClick={() => {
-              console.log('[StepMode] anti-dup toggled:', !antiDupEnabled);
-              setAntiDupEnabled((v) => !v);
+          <Switch
+            checked={antiDupEnabled}
+            onCheckedChange={(checked) => {
+              console.log('[StepMode] anti-dup toggled:', checked);
+              setAntiDupEnabled(checked);
             }}
-            className={[
-              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              antiDupEnabled ? 'bg-brand/80' : 'bg-muted',
-            ].join(' ')}
-            role="switch"
-            aria-checked={antiDupEnabled}
-          >
-            <span
-              className={[
-                'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
-                antiDupEnabled ? 'translate-x-4' : 'translate-x-1',
-              ].join(' ')}
-            />
-          </button>
+          />
         }
       >
         {antiDupEnabled && (
@@ -1212,24 +1148,7 @@ export function StepMode({ historical }: StepModeProps) {
       {/* Text Overlays */}
       <SectionPanel
         title="Overlays de Texto"
-        actions={
-          <button
-            onClick={() => setTextOverlaysEnabled((v) => !v)}
-            className={[
-              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              textOverlaysEnabled ? 'bg-brand/80' : 'bg-muted',
-            ].join(' ')}
-            role="switch"
-            aria-checked={textOverlaysEnabled}
-          >
-            <span
-              className={[
-                'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
-                textOverlaysEnabled ? 'translate-x-4' : 'translate-x-1',
-              ].join(' ')}
-            />
-          </button>
-        }
+        actions={<Switch checked={textOverlaysEnabled} onCheckedChange={setTextOverlaysEnabled} />}
       >
         {textOverlaysEnabled && (
           <div className="space-y-4">
@@ -1337,24 +1256,7 @@ export function StepMode({ historical }: StepModeProps) {
       {/* Video Overlay */}
       <SectionPanel
         title="Overlay de Vídeo"
-        actions={
-          <button
-            onClick={() => setOverlayEnabled((v) => !v)}
-            className={[
-              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              overlayEnabled ? 'bg-brand/80' : 'bg-muted',
-            ].join(' ')}
-            role="switch"
-            aria-checked={overlayEnabled}
-          >
-            <span
-              className={[
-                'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
-                overlayEnabled ? 'translate-x-4' : 'translate-x-1',
-              ].join(' ')}
-            />
-          </button>
-        }
+        actions={<Switch checked={overlayEnabled} onCheckedChange={setOverlayEnabled} />}
       >
         {overlayEnabled && (
           <div className="space-y-4">
@@ -1466,25 +1368,9 @@ export function StepMode({ historical }: StepModeProps) {
       <SectionPanel title="Branding">
         {/* Watermark (Logo) */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-prose">Watermark (Logo)</p>
-            <button
-              onClick={() => setBrandingLogoEnabled((v) => !v)}
-              className={[
-                'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-                brandingLogoEnabled ? 'bg-brand/80' : 'bg-muted',
-              ].join(' ')}
-              role="switch"
-              aria-checked={brandingLogoEnabled}
-            >
-              <span
-                className={[
-                  'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
-                  brandingLogoEnabled ? 'translate-x-4' : 'translate-x-1',
-                ].join(' ')}
-              />
-            </button>
-          </div>
+          <SettingRow label="Watermark (Logo)">
+            <Switch checked={brandingLogoEnabled} onCheckedChange={setBrandingLogoEnabled} />
+          </SettingRow>
 
           {brandingLogoEnabled && (
             <div className="space-y-3 pl-1">
@@ -1579,96 +1465,28 @@ export function StepMode({ historical }: StepModeProps) {
               </div>
 
               {/* Pulse toggle */}
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-prose">Watermark pulsante</p>
-                <button
-                  onClick={() => setBrandingLogoPulse((v) => !v)}
-                  className={[
-                    'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-                    brandingLogoPulse ? 'bg-brand/80' : 'bg-muted',
-                  ].join(' ')}
-                  role="switch"
-                  aria-checked={brandingLogoPulse}
-                >
-                  <span
-                    className={[
-                      'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
-                      brandingLogoPulse ? 'translate-x-4' : 'translate-x-1',
-                    ].join(' ')}
-                  />
-                </button>
-              </div>
+              <SettingRow label="Watermark pulsante">
+                <Switch checked={brandingLogoPulse} onCheckedChange={setBrandingLogoPulse} />
+              </SettingRow>
             </div>
           )}
         </div>
 
         {/* Intro toggle */}
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs text-prose">Intro animado</p>
-            <p className="text-xs text-caption">3s a partir do logo do canal</p>
-          </div>
-          <button
-            onClick={() => setBrandingIntroEnabled((v) => !v)}
-            className={[
-              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              brandingIntroEnabled ? 'bg-brand/80' : 'bg-muted',
-            ].join(' ')}
-            role="switch"
-            aria-checked={brandingIntroEnabled}
-          >
-            <span
-              className={[
-                'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
-                brandingIntroEnabled ? 'translate-x-4' : 'translate-x-1',
-              ].join(' ')}
-            />
-          </button>
-        </div>
+        <SettingRow label="Intro animado" description="3s a partir do logo do canal">
+          <Switch checked={brandingIntroEnabled} onCheckedChange={setBrandingIntroEnabled} />
+        </SettingRow>
 
         {/* Outro toggle */}
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-prose">Outro (tela final)</p>
-          <button
-            onClick={() => setBrandingOutroEnabled((v) => !v)}
-            className={[
-              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              brandingOutroEnabled ? 'bg-brand/80' : 'bg-muted',
-            ].join(' ')}
-            role="switch"
-            aria-checked={brandingOutroEnabled}
-          >
-            <span
-              className={[
-                'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
-                brandingOutroEnabled ? 'translate-x-4' : 'translate-x-1',
-              ].join(' ')}
-            />
-          </button>
-        </div>
+        <SettingRow label="Outro (tela final)">
+          <Switch checked={brandingOutroEnabled} onCheckedChange={setBrandingOutroEnabled} />
+        </SettingRow>
       </SectionPanel>
 
       {/* Música de Fundo */}
       <SectionPanel
         title="Música de Fundo"
-        actions={
-          <button
-            onClick={() => setMusicEnabled((v) => !v)}
-            className={[
-              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              musicEnabled ? 'bg-brand/80' : 'bg-muted',
-            ].join(' ')}
-            role="switch"
-            aria-checked={musicEnabled}
-          >
-            <span
-              className={[
-                'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
-                musicEnabled ? 'translate-x-4' : 'translate-x-1',
-              ].join(' ')}
-            />
-          </button>
-        }
+        actions={<Switch checked={musicEnabled} onCheckedChange={setMusicEnabled} />}
       >
         {musicEnabled && (
           <div className="space-y-4">
@@ -1753,24 +1571,7 @@ export function StepMode({ historical }: StepModeProps) {
       {/* Captions */}
       <SectionPanel
         title="Legendas"
-        actions={
-          <button
-            onClick={() => setCaptionsEnabled((v) => !v)}
-            className={[
-              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              captionsEnabled ? 'bg-brand/80' : 'bg-muted',
-            ].join(' ')}
-            role="switch"
-            aria-checked={captionsEnabled}
-          >
-            <span
-              className={[
-                'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
-                captionsEnabled ? 'translate-x-4' : 'translate-x-1',
-              ].join(' ')}
-            />
-          </button>
-        }
+        actions={<Switch checked={captionsEnabled} onCheckedChange={setCaptionsEnabled} />}
       >
         {captionsEnabled && (
           <div className="space-y-4">
@@ -1990,76 +1791,19 @@ export function StepMode({ historical }: StepModeProps) {
         </div>
 
         {/* Schedule toggle */}
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs text-prose">Schedule Sequentially</p>
-            <p className="text-xs text-caption">2 uploads/day per type</p>
-          </div>
-          <button
-            onClick={() => setUploadScheduleEnabled((v) => !v)}
-            className={[
-              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              uploadScheduleEnabled ? 'bg-brand/80' : 'bg-muted',
-            ].join(' ')}
-            role="switch"
-            aria-checked={uploadScheduleEnabled}
-          >
-            <span
-              className={[
-                'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
-                uploadScheduleEnabled ? 'translate-x-4' : 'translate-x-1',
-              ].join(' ')}
-            />
-          </button>
-        </div>
+        <SettingRow label="Schedule Sequentially" description="2 uploads/day per type">
+          <Switch checked={uploadScheduleEnabled} onCheckedChange={setUploadScheduleEnabled} />
+        </SettingRow>
 
         {/* Auto upload toggle */}
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs text-prose">Auto Upload</p>
-            <p className="text-xs text-caption">Upload immediately vs. manual queue</p>
-          </div>
-          <button
-            onClick={() => setUploadAutoEnabled((v) => !v)}
-            className={[
-              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              uploadAutoEnabled ? 'bg-brand/80' : 'bg-muted',
-            ].join(' ')}
-            role="switch"
-            aria-checked={uploadAutoEnabled}
-          >
-            <span
-              className={[
-                'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
-                uploadAutoEnabled ? 'translate-x-4' : 'translate-x-1',
-              ].join(' ')}
-            />
-          </button>
-        </div>
+        <SettingRow label="Auto Upload" description="Upload immediately vs. manual queue">
+          <Switch checked={uploadAutoEnabled} onCheckedChange={setUploadAutoEnabled} />
+        </SettingRow>
 
         {/* Dry run toggle */}
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs text-prose">Dry Run</p>
-            <p className="text-xs text-caption">Generate thumbnails without uploading</p>
-          </div>
-          <button
-            onClick={() => setUploadDryRun((v) => !v)}
-            className={[
-              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              uploadDryRun ? 'bg-brand/80' : 'bg-muted',
-            ].join(' ')}
-            role="switch"
-            aria-checked={uploadDryRun}
-          >
-            <span
-              className={[
-                'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
-                uploadDryRun ? 'translate-x-4' : 'translate-x-1',
-              ].join(' ')}
-            />
-          </button>
-        </div>
+        <SettingRow label="Dry Run" description="Generate thumbnails without uploading">
+          <Switch checked={uploadDryRun} onCheckedChange={setUploadDryRun} />
+        </SettingRow>
       </SectionPanel>
 
       {/* Save / Update Preset */}
