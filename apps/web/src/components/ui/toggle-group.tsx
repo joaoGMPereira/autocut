@@ -25,7 +25,7 @@ function ToggleGroup<K extends string>({
       className={cn('flex gap-2', className)}
     >
       {options.map((opt) => {
-        const active = value[opt.key]
+        const active = value[opt.key] ?? false
         return (
           <button
             key={opt.key}
