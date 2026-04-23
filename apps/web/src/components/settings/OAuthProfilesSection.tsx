@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
@@ -13,9 +14,9 @@ const log = createLogger('OAuthProfilesSection');
 
 function DefaultBadge() {
   return (
-    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold bg-primary/20 text-primary">
+    <Badge variant="brand" className="text-[11px] font-semibold">
       Default
-    </span>
+    </Badge>
   );
 }
 
@@ -88,11 +89,11 @@ export function OAuthProfilesSection() {
 
       <div className="rounded-xl border border-border bg-card">
         {loading && profiles.length === 0 ? (
-          <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+          <div className="px-5 py-8 text-center text-sm text-subtle">
             Loading profiles…
           </div>
         ) : profiles.length === 0 ? (
-          <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+          <div className="px-5 py-8 text-center text-sm text-subtle">
             No OAuth profiles configured. Upload a client_secret.json file below.
           </div>
         ) : (
@@ -102,7 +103,7 @@ export function OAuthProfilesSection() {
               <div className="flex items-center gap-3 px-5 py-3.5">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-foreground truncate">{profile.name}</p>
-                  <p className="text-[11px] font-mono text-muted-foreground truncate">
+                  <p className="text-[11px] font-mono text-subtle truncate">
                     {profile.project_id || '—'}
                   </p>
                 </div>

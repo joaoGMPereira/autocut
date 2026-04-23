@@ -93,7 +93,7 @@ export function ToolsSection() {
             )}
             <div className="px-5 pb-2">
               <button
-                className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                className="text-xs text-subtle hover:text-foreground underline-offset-2 hover:underline"
                 onClick={() => setDialogTool(tool.name)}
               >
                 {tool.source === 'custom' ? 'Edit custom path' : 'Set custom path'}
@@ -102,7 +102,7 @@ export function ToolsSection() {
           </div>
         ))}
         {tools.length === 0 && !loading && (
-          <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+          <div className="px-5 py-8 text-center text-sm text-subtle">
             Could not fetch tool status. Is the backend running?
           </div>
         )}
@@ -121,12 +121,12 @@ export function ToolsSection() {
 
       {activeToolName && activeLogs.length > 0 && (
         <div className="rounded-xl border border-border bg-card px-4 py-3 space-y-2">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+          <p className="text-xs font-semibold text-subtle uppercase tracking-wide">
             Installing {activeToolName}…
           </p>
           <div className="max-h-32 overflow-y-auto flex flex-col gap-0.5">
             {activeLogs.map((line, i) => (
-              <span key={i} className="font-mono text-[11px] text-muted-foreground">
+              <span key={i} className="font-mono text-[11px] text-subtle">
                 {line}
               </span>
             ))}

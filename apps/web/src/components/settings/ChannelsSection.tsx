@@ -50,14 +50,14 @@ export function ChannelsSection() {
 
       <div className="rounded-xl border border-border bg-card">
         {loading && channels.length === 0 ? (
-          <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+          <div className="px-5 py-8 text-center text-sm text-subtle">
             Loading channels…
           </div>
         ) : channels.length === 0 ? (
-          <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+          <div className="px-5 py-8 text-center text-sm text-subtle">
             No channels configured.{' '}
             <button
-              className="text-primary underline underline-offset-2"
+              className="text-brand underline underline-offset-2"
               onClick={() => router.push('/channels')}
             >
               Add one
@@ -73,7 +73,7 @@ export function ChannelsSection() {
                     <p className="text-sm font-semibold text-foreground truncate">
                       {ch.ChannelTitle || ch.Name}
                     </p>
-                    <p className="text-[11px] font-mono text-muted-foreground truncate">
+                    <p className="text-[11px] font-mono text-subtle truncate">
                       {ch.ChannelID || ch.YouTubeChannelID}
                     </p>
                   </div>

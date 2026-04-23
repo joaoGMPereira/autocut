@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { Loader2, CheckCircle2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { useAppStore } from '@/store/appStore';
 import { useSettingsStore, SETTINGS_KEYS } from '@/store/settingsStore';
 import { createLogger } from '@/lib/logger';
@@ -76,56 +79,50 @@ export function AppSettingsSection() {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-foreground">App Settings</h2>
         {saveSuccess && (
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400">
+          <Badge variant="success" className="gap-1.5 text-[11px] font-semibold">
             <CheckCircle2 className="h-3.5 w-3.5" />
             Saved
-          </span>
+          </Badge>
         )}
       </div>
 
       <div className="rounded-xl border border-border bg-card p-5 space-y-5">
         {loading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+          <div className="flex items-center gap-2 text-sm text-subtle py-4">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading settings…
           </div>
         ) : (
           <>
             {/* Videos directory */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">
-                Videos directory
-              </label>
+            <FormField label="Videos directory">
               <Input
                 value={videosDir}
                 onChange={(e) => { setVideosDir(e.target.value); markDirty(); }}
                 placeholder="/Users/me/Videos"
                 className="font-mono text-sm"
               />
-            </div>
+            </FormField>
 
             {/* Cache directory */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">
-                Cache directory
-              </label>
+            <FormField label="Cache directory">
               <Input
                 value={cacheDir}
                 onChange={(e) => { setCacheDir(e.target.value); markDirty(); }}
                 placeholder="/tmp/autocut-cache"
                 className="font-mono text-sm"
               />
-            </div>
+            </FormField>
 
             {/* Default quality */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-medium text-subtle">
                 Default quality
-              </label>
+              </Label>
               <select
                 value={quality}
                 onChange={(e) => { setQuality(e.target.value); markDirty(); }}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               >
                 {QUALITY_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -136,14 +133,14 @@ export function AppSettingsSection() {
             </div>
 
             {/* Default language */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-medium text-subtle">
                 Default language
-              </label>
+              </Label>
               <select
                 value={language}
                 onChange={(e) => { setLanguage(e.target.value); markDirty(); }}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               >
                 {LANGUAGE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -160,26 +157,13 @@ export function AppSettingsSection() {
               {/* Strategy toggle */}
               <div className="flex items-center justify-between">
                 <Label>Parallel Uploads</Label>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={uploadStrategy === 'parallel'}
-                  onClick={() => {
-                    setUploadStrategy(uploadStrategy === 'parallel' ? 'sequential' : 'parallel');
+                <Switch
+                  checked={uploadStrategy === 'parallel'}
+                  onCheckedChange={(checked) => {
+                    setUploadStrategy(checked ? 'parallel' : 'sequential');
                     markDirty();
                   }}
-                  className={[
-                    'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    uploadStrategy === 'parallel' ? 'bg-primary' : 'bg-input',
-                  ].join(' ')}
-                >
-                  <span
-                    className={[
-                      'pointer-events-none block h-4 w-4 rounded-full bg-white shadow-lg ring-0 transition-transform',
-                      uploadStrategy === 'parallel' ? 'translate-x-4' : 'translate-x-0',
-                    ].join(' ')}
-                  />
-                </button>
+                />
               </div>
 
               {/* Parallel count slider — only visible when parallel is enabled */}

@@ -80,7 +80,7 @@ export function ModelsSection() {
         <h2 className="text-lg font-semibold text-foreground">Whisper Models</h2>
         <div className="rounded-xl border border-border bg-card">
           {whisperModels.length === 0 ? (
-            <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+            <div className="px-5 py-8 text-center text-sm text-subtle">
               Loading models…
             </div>
           ) : (
@@ -96,7 +96,7 @@ export function ModelsSection() {
                       <span className="text-sm font-medium text-foreground capitalize">
                         {model.name}
                       </span>
-                      <span className="text-xs text-muted-foreground">{model.size_mb} MB</span>
+                      <span className="text-xs text-subtle">{model.size_mb} MB</span>
                       {model.active && (
                         <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
                           Active
@@ -105,10 +105,7 @@ export function ModelsSection() {
                     </div>
                     <div className="flex items-center gap-2">
                       {model.downloaded ? (
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] h-5 px-2 border-emerald-500/40 text-emerald-400"
-                        >
+                        <Badge variant="success" className="text-[10px] h-5 px-2">
                           Downloaded
                         </Badge>
                       ) : (
@@ -141,12 +138,12 @@ export function ModelsSection() {
         {/* Download log */}
         {activeDownload && (whisperDownloadLogs[activeDownload] ?? []).length > 0 && (
           <div className="rounded-xl border border-border bg-card px-4 py-3 space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            <p className="text-xs font-semibold text-subtle uppercase tracking-wide">
               Downloading {activeDownload}…
             </p>
             <div className="max-h-32 overflow-y-auto flex flex-col gap-0.5">
               {(whisperDownloadLogs[activeDownload] ?? []).map((line, i) => (
-                <span key={i} className="font-mono text-[11px] text-muted-foreground">
+                <span key={i} className="font-mono text-[11px] text-subtle">
                   {line}
                 </span>
               ))}
@@ -160,20 +157,20 @@ export function ModelsSection() {
         <h2 className="text-lg font-semibold text-foreground">Ollama Models</h2>
         <div className="rounded-xl border border-border bg-card">
           {ollamaLoading ? (
-            <div className="flex items-center gap-2 px-5 py-8 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 px-5 py-8 text-sm text-subtle">
               <Loader2 className="h-4 w-4 animate-spin" />
               Connecting to Ollama…
             </div>
           ) : !ollamaStatus?.available ? (
             <div className="px-5 py-8 text-center space-y-1">
               <p className="text-sm font-medium text-foreground">Ollama not available</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-subtle">
                 Start Ollama or install it from{' '}
                 <span className="font-mono text-xs">ollama.ai</span>
               </p>
             </div>
           ) : ollamaStatus.models.length === 0 ? (
-            <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+            <div className="px-5 py-8 text-center text-sm text-subtle">
               No models installed. Run{' '}
               <span className="font-mono text-xs">ollama pull &lt;model&gt;</span> to add one.
             </div>

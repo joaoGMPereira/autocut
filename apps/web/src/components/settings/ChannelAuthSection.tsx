@@ -20,11 +20,11 @@ export function ChannelAuthSection() {
 
       <div className="rounded-xl border border-border bg-card divide-y divide-border">
         {loading && channels.length === 0 ? (
-          <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+          <div className="px-5 py-8 text-center text-sm text-subtle">
             Loading channels…
           </div>
         ) : channels.length === 0 ? (
-          <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+          <div className="px-5 py-8 text-center text-sm text-subtle">
             No channels configured.
           </div>
         ) : (
