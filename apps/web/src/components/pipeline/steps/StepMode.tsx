@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { SectionPanel } from '@/components/ui/section-panel';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { SettingRow } from '@/components/ui/setting-row';
+import { SliderRow } from '@/components/ui/slider-row';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { TextStyleEditorPanel } from '@/components/post-opt/TextStyleEditorPanel';
@@ -1082,17 +1083,14 @@ export function StepMode({ historical }: StepModeProps) {
                   <span className="text-xs text-prose">Noise/Grain</span>
                 </label>
                 {antiDupEffects.noise && (
-                  <div className="ml-6 flex items-center gap-2">
-                    <span className="text-xs text-subtle w-16">Strength</span>
-                    <input
-                      type="range"
+                  <div className="ml-6">
+                    <SliderRow
+                      label="Strength"
                       min={1}
                       max={10}
                       value={antiDupEffects.noise_strength ?? 3}
-                      onChange={(e) => setEffect('noise_strength', Number(e.target.value))}
-                      className="flex-1 accent-brand"
+                      onChange={(v) => setEffect('noise_strength', v)}
                     />
-                    <span className="text-xs text-subtle w-4">{antiDupEffects.noise_strength ?? 3}</span>
                   </div>
                 )}
               </div>
@@ -1109,17 +1107,15 @@ export function StepMode({ historical }: StepModeProps) {
                   <span className="text-xs text-prose">Background Blur</span>
                 </label>
                 {antiDupEffects.blur && (
-                  <div className="ml-6 flex items-center gap-2">
-                    <span className="text-xs text-subtle w-16">Edge %</span>
-                    <input
-                      type="range"
+                  <div className="ml-6">
+                    <SliderRow
+                      label="Edge %"
                       min={0}
                       max={100}
                       value={antiDupEffects.blur_edge_pct ?? 10}
-                      onChange={(e) => setEffect('blur_edge_pct', Number(e.target.value))}
-                      className="flex-1 accent-brand"
+                      onChange={(v) => setEffect('blur_edge_pct', v)}
+                      format={(v) => `${v}%`}
                     />
-                    <span className="text-xs text-subtle w-8">{antiDupEffects.blur_edge_pct ?? 10}%</span>
                   </div>
                 )}
               </div>
@@ -1269,18 +1265,14 @@ export function StepMode({ historical }: StepModeProps) {
             </div>
 
             {/* Scale slider */}
-            <div className="flex items-center gap-3">
-              <Label className="text-xs font-medium text-subtle w-20 flex-shrink-0">Escala</Label>
-              <input
-                type="range"
-                min={10}
-                max={200}
-                value={overlayScalePct}
-                onChange={(e) => setOverlayScalePct(Number(e.target.value))}
-                className="flex-1 accent-brand"
-              />
-              <span className="text-xs text-subtle w-10 text-right">{overlayScalePct}%</span>
-            </div>
+            <SliderRow
+              label="Escala"
+              min={10}
+              max={200}
+              value={overlayScalePct}
+              onChange={setOverlayScalePct}
+              format={(v) => `${v}%`}
+            />
 
             {/* Position grid */}
             <div className="space-y-1.5">
@@ -1305,18 +1297,14 @@ export function StepMode({ historical }: StepModeProps) {
             </div>
 
             {/* End offset */}
-            <div className="flex items-center gap-3">
-              <Label className="text-xs font-medium text-subtle w-20 flex-shrink-0">Offset Final</Label>
-              <input
-                type="range"
-                min={0}
-                max={10}
-                value={overlayEndOffsetSec}
-                onChange={(e) => setOverlayEndOffsetSec(Number(e.target.value))}
-                className="flex-1 accent-brand"
-              />
-              <span className="text-xs text-subtle w-6 text-right">{overlayEndOffsetSec}s</span>
-            </div>
+            <SliderRow
+              label="Offset Final"
+              min={0}
+              max={10}
+              value={overlayEndOffsetSec}
+              onChange={setOverlayEndOffsetSec}
+              format={(v) => `${v}s`}
+            />
 
             {/* Chroma key */}
             <div className="space-y-1.5">
@@ -1415,32 +1403,24 @@ export function StepMode({ historical }: StepModeProps) {
               </div>
 
               {/* Opacity slider */}
-              <div className="flex items-center gap-3">
-                <Label className="text-xs font-medium text-subtle w-20 flex-shrink-0">Opacidade</Label>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={brandingLogoOpacity}
-                  onChange={(e) => setBrandingLogoOpacity(Number(e.target.value))}
-                  className="flex-1 accent-brand"
-                />
-                <span className="text-xs text-subtle w-8 text-right">{brandingLogoOpacity}%</span>
-              </div>
+              <SliderRow
+                label="Opacidade"
+                min={0}
+                max={100}
+                value={brandingLogoOpacity}
+                onChange={setBrandingLogoOpacity}
+                format={(v) => `${v}%`}
+              />
 
               {/* Scale slider */}
-              <div className="flex items-center gap-3">
-                <Label className="text-xs font-medium text-subtle w-20 flex-shrink-0">Tamanho</Label>
-                <input
-                  type="range"
-                  min={5}
-                  max={30}
-                  value={brandingLogoScale}
-                  onChange={(e) => setBrandingLogoScale(Number(e.target.value))}
-                  className="flex-1 accent-brand"
-                />
-                <span className="text-xs text-subtle w-8 text-right">{brandingLogoScale}%</span>
-              </div>
+              <SliderRow
+                label="Tamanho"
+                min={5}
+                max={30}
+                value={brandingLogoScale}
+                onChange={setBrandingLogoScale}
+                format={(v) => `${v}%`}
+              />
 
               {/* Pulse toggle */}
               <SettingRow label="Watermark pulsante">
@@ -1518,18 +1498,14 @@ export function StepMode({ historical }: StepModeProps) {
             )}
 
             {/* Volume slider */}
-            <div className="flex items-center gap-3">
-              <Label className="text-xs font-medium text-subtle w-16 flex-shrink-0">Volume</Label>
-              <input
-                type="range"
-                min={0}
-                max={30}
-                value={musicVolumePct}
-                onChange={(e) => setMusicVolumePct(Number(e.target.value))}
-                className="flex-1 accent-brand"
-              />
-              <span className="text-xs text-subtle w-8 text-right">{musicVolumePct}%</span>
-            </div>
+            <SliderRow
+              label="Volume"
+              min={0}
+              max={30}
+              value={musicVolumePct}
+              onChange={setMusicVolumePct}
+              format={(v) => `${v}%`}
+            />
             <p className="text-xs text-caption">Recomendado: 5–10%</p>
           </div>
         )}
@@ -1590,18 +1566,14 @@ export function StepMode({ historical }: StepModeProps) {
                 ))}
               </div>
 
-              <div className="flex items-center gap-3">
-                <Label className="text-xs font-medium text-subtle w-20 flex-shrink-0">Tamanho</Label>
-                <input
-                  type="range"
-                  min={12}
-                  max={96}
-                  value={captionsFontSize}
-                  onChange={(e) => setCaptionsFontSize(Number(e.target.value))}
-                  className="flex-1 accent-brand"
-                />
-                <span className="text-xs text-subtle w-8 text-right">{captionsFontSize}px</span>
-              </div>
+              <SliderRow
+                label="Tamanho"
+                min={12}
+                max={96}
+                value={captionsFontSize}
+                onChange={setCaptionsFontSize}
+                format={(v) => `${v}px`}
+              />
             </div>
 
             {/* Colors */}
@@ -1651,18 +1623,13 @@ export function StepMode({ historical }: StepModeProps) {
                         className="h-7 w-12 cursor-pointer rounded border border-border bg-surface"
                       />
                     </div>
-                    <div className="flex items-center gap-3">
-                      <Label className="text-xs font-medium text-subtle w-16 flex-shrink-0">Espessura</Label>
-                      <input
-                        type="range"
-                        min={1}
-                        max={10}
-                        value={captionsOutlineWidth}
-                        onChange={(e) => setCaptionsOutlineWidth(Number(e.target.value))}
-                        className="flex-1 accent-brand"
-                      />
-                      <span className="text-xs text-subtle w-4">{captionsOutlineWidth}</span>
-                    </div>
+                    <SliderRow
+                      label="Espessura"
+                      min={1}
+                      max={10}
+                      value={captionsOutlineWidth}
+                      onChange={setCaptionsOutlineWidth}
+                    />
                   </div>
                 )}
               </div>
@@ -1689,36 +1656,26 @@ export function StepMode({ historical }: StepModeProps) {
                         className="h-7 w-12 cursor-pointer rounded border border-border bg-surface"
                       />
                     </div>
-                    <div className="flex items-center gap-3">
-                      <Label className="text-xs font-medium text-subtle w-16 flex-shrink-0">Distância</Label>
-                      <input
-                        type="range"
-                        min={0}
-                        max={20}
-                        value={captionsShadowDistance}
-                        onChange={(e) => setCaptionsShadowDistance(Number(e.target.value))}
-                        className="flex-1 accent-brand"
-                      />
-                      <span className="text-xs text-subtle w-4">{captionsShadowDistance}</span>
-                    </div>
+                    <SliderRow
+                      label="Distância"
+                      min={0}
+                      max={20}
+                      value={captionsShadowDistance}
+                      onChange={setCaptionsShadowDistance}
+                    />
                   </div>
                 )}
               </div>
             </div>
 
             {/* Vertical offset */}
-            <div className="flex items-center gap-3">
-              <Label className="text-xs font-medium text-subtle w-20 flex-shrink-0">Offset Vertical</Label>
-              <input
-                type="range"
-                min={-100}
-                max={100}
-                value={captionsVerticalOffset}
-                onChange={(e) => setCaptionsVerticalOffset(Number(e.target.value))}
-                className="flex-1 accent-brand"
-              />
-              <span className="text-xs text-subtle w-8 text-right">{captionsVerticalOffset}</span>
-            </div>
+            <SliderRow
+              label="Offset Vertical"
+              min={-100}
+              max={100}
+              value={captionsVerticalOffset}
+              onChange={setCaptionsVerticalOffset}
+            />
           </div>
         )}
       </SectionPanel>
