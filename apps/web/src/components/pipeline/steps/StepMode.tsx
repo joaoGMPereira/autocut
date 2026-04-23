@@ -12,6 +12,7 @@ import { InfoBanner } from '@/components/ui/info-banner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SectionPanel } from '@/components/ui/section-panel';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { SettingRow } from '@/components/ui/setting-row';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
@@ -905,23 +906,15 @@ export function StepMode({ historical }: StepModeProps) {
           {/* Sensitivity threshold presets */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-subtle">Highlight Threshold</Label>
-            <div className="flex gap-2">
-              {([50, 70, 90] as const).map((pct) => (
-                <button
-                  key={pct}
-                  onClick={() => setSensitivityPct(pct)}
-                  className={[
-                    'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
-                    sensitivityPct === pct
-                      ? 'bg-brand text-brand-foreground font-medium'
-                      : 'bg-surface text-subtle hover:bg-surface/80',
-                  ].join(' ')}
-                >
-                  {pct === 50 ? 'Liberal' : pct === 70 ? 'Balanced' : 'Selective'}
-                  <span className="ml-1 opacity-60">({pct})</span>
-                </button>
-              ))}
-            </div>
+            <SegmentedControl<'50' | '70' | '90'>
+              value={String(sensitivityPct) as '50' | '70' | '90'}
+              onChange={(v) => setSensitivityPct(Number(v) as 50 | 70 | 90)}
+              options={[
+                { value: '50', label: 'Liberal (50)' },
+                { value: '70', label: 'Balanced (70)' },
+                { value: '90', label: 'Selective (90)' },
+              ]}
+            />
           </div>
 
           {/* Skip music dropdown */}
@@ -1042,28 +1035,18 @@ export function StepMode({ historical }: StepModeProps) {
       >
         {antiDupEnabled && (
           <>
-            <div className="grid grid-cols-2 gap-2">
-              {(['subtle', 'aggressive'] as const).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => {
-                    console.log('[StepMode] anti-dup mode selected:', m);
-                    setAntiDupMode(m);
-                  }}
-                  className={[
-                    'flex flex-col items-start rounded-lg border p-3 text-left transition-all',
-                    antiDupMode === m
-                      ? 'border-brand bg-surface ring-1 ring-brand'
-                      : 'border-border bg-surface hover:border-border',
-                  ].join(' ')}
-                >
-                  <span className="text-xs font-medium text-prose capitalize">{m}</span>
-                  <span className="text-xs text-subtle">
-                    {m === 'subtle' ? '1–2% changes' : '5–10% changes'}
-                  </span>
-                </button>
-              ))}
-            </div>
+            <SegmentedControl<'subtle' | 'aggressive'>
+              variant="card"
+              value={antiDupMode}
+              onChange={(m) => {
+                console.log('[StepMode] anti-dup mode selected:', m);
+                setAntiDupMode(m);
+              }}
+              options={[
+                { value: 'subtle', label: 'Subtle', description: '1–2% changes' },
+                { value: 'aggressive', label: 'Aggressive', description: '5–10% changes' },
+              ]}
+            />
 
             <div className="space-y-2 pt-1">
               <p className="text-xs text-subtle">Visual Effects</p>
@@ -1308,22 +1291,17 @@ export function StepMode({ historical }: StepModeProps) {
             {/* Appearances */}
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-subtle">Nº de Aparições</Label>
-              <div className="flex gap-2">
-                {([1, 2, 3, 4, 5] as const).map((n) => (
-                  <button
-                    key={n}
-                    onClick={() => setOverlayAppearances(n)}
-                    className={[
-                      'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
-                      overlayAppearances === n
-                        ? 'bg-brand text-brand-foreground font-medium'
-                        : 'bg-surface text-subtle hover:bg-surface/80',
-                    ].join(' ')}
-                  >
-                    {n}×
-                  </button>
-                ))}
-              </div>
+              <SegmentedControl<'1' | '2' | '3' | '4' | '5'>
+                value={String(overlayAppearances) as '1' | '2' | '3' | '4' | '5'}
+                onChange={(v) => setOverlayAppearances(Number(v) as 1 | 2 | 3 | 4 | 5)}
+                options={[
+                  { value: '1', label: '1×' },
+                  { value: '2', label: '2×' },
+                  { value: '3', label: '3×' },
+                  { value: '4', label: '4×' },
+                  { value: '5', label: '5×' },
+                ]}
+              />
             </div>
 
             {/* End offset */}
@@ -1493,26 +1471,15 @@ export function StepMode({ historical }: StepModeProps) {
             {/* Mode selector */}
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-subtle">Seleção</Label>
-              <div className="flex gap-2">
-                {([
-                  ['random', 'Aleatório'],
-                  ['library', 'Biblioteca'],
-                  ['custom', 'Arquivo'],
-                ] as [BackgroundMusicConfig['mode'], string][]).map(([m, label]) => (
-                  <button
-                    key={m}
-                    onClick={() => setMusicMode(m)}
-                    className={[
-                      'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
-                      musicMode === m
-                        ? 'bg-brand text-brand-foreground font-medium'
-                        : 'bg-surface text-subtle hover:bg-surface/80',
-                    ].join(' ')}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <SegmentedControl<BackgroundMusicConfig['mode']>
+                value={musicMode}
+                onChange={setMusicMode}
+                options={[
+                  { value: 'random', label: 'Aleatório' },
+                  { value: 'library', label: 'Biblioteca' },
+                  { value: 'custom', label: 'Arquivo' },
+                ]}
+              />
             </div>
 
             {/* Library track list */}
@@ -1578,26 +1545,15 @@ export function StepMode({ historical }: StepModeProps) {
             {/* Preset selector */}
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-subtle">Preset</Label>
-              <div className="flex gap-2">
-                {([
-                  ['simple', 'Simples'],
-                  ['bold', 'Negrito'],
-                  ['word_by_word', 'Palavra a Palavra'],
-                ] as [CaptionsConfig['preset'], string][]).map(([p, label]) => (
-                  <button
-                    key={p}
-                    onClick={() => setCaptionsPreset(p)}
-                    className={[
-                      'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
-                      captionsPreset === p
-                        ? 'bg-brand text-brand-foreground font-medium'
-                        : 'bg-surface text-subtle hover:bg-surface/80',
-                    ].join(' ')}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <SegmentedControl<CaptionsConfig['preset']>
+                value={captionsPreset}
+                onChange={setCaptionsPreset}
+                options={[
+                  { value: 'simple', label: 'Simples' },
+                  { value: 'bold', label: 'Negrito' },
+                  { value: 'word_by_word', label: 'Palavra a Palavra' },
+                ]}
+              />
             </div>
 
             {/* Font customization */}
@@ -1772,22 +1728,15 @@ export function StepMode({ historical }: StepModeProps) {
         {/* Privacy pill selector */}
         <div className="space-y-1.5">
           <Label className="text-xs font-medium text-subtle">Privacy</Label>
-          <div className="flex gap-2">
-            {(['private', 'unlisted', 'public'] as const).map((p) => (
-              <button
-                key={p}
-                onClick={() => setUploadPrivacy(p)}
-                className={[
-                  'flex-1 rounded-full px-3 py-1.5 text-xs font-medium capitalize transition-colors',
-                  uploadPrivacy === p
-                    ? 'bg-brand text-brand-foreground'
-                    : 'bg-surface text-subtle hover:bg-surface/80',
-                ].join(' ')}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl<'private' | 'unlisted' | 'public'>
+            value={uploadPrivacy}
+            onChange={setUploadPrivacy}
+            options={[
+              { value: 'private', label: 'Private' },
+              { value: 'unlisted', label: 'Unlisted' },
+              { value: 'public', label: 'Public' },
+            ]}
+          />
         </div>
 
         {/* Schedule toggle */}
