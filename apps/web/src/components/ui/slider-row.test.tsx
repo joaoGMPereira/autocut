@@ -64,6 +64,13 @@ describe('SliderRow', () => {
     expect(screen.getByRole('slider').className).toContain('accent-brand');
   });
 
+  it('range input is accessible by label name', () => {
+    render(
+      <SliderRow label="Volume" min={0} max={100} value={50} onChange={() => {}} />,
+    );
+    expect(screen.getByRole('slider', { name: 'Volume' })).toBeInTheDocument();
+  });
+
   it('merges className on root', () => {
     render(
       <SliderRow

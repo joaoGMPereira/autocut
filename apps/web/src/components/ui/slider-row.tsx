@@ -31,6 +31,7 @@ function SliderRow({
       <span className="text-xs font-medium text-subtle shrink-0">{label}</span>
       <input
         type="range"
+        aria-label={label}
         min={min}
         max={max}
         step={step}
@@ -38,7 +39,7 @@ function SliderRow({
         onChange={(e) => onChange(Number(e.target.value))}
         className="flex-1 accent-brand"
       />
-      <span className="text-xs text-subtle text-right shrink-0 tabular-nums">
+      <span className="text-xs text-subtle shrink-0 tabular-nums min-w-[3ch]">
         {display}
       </span>
     </div>
