@@ -10,6 +10,10 @@ const defaultProps = {
 };
 
 describe('InputWithAction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('renders input with current value', () => {
     render(<InputWithAction {...defaultProps} />);
     expect(screen.getByRole('textbox')).toHaveValue('hello');

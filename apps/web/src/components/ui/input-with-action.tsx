@@ -13,6 +13,7 @@ interface InputWithActionProps {
   inputClassName?: string
   actionVariant?: React.ComponentProps<typeof Button>['variant']
   actionSize?: React.ComponentProps<typeof Button>['size']
+  actionClassName?: string
   className?: string
 }
 
@@ -26,6 +27,7 @@ function InputWithAction({
   inputClassName,
   actionVariant = 'outline',
   actionSize = 'sm',
+  actionClassName,
   className,
 }: InputWithActionProps) {
   return (
@@ -51,7 +53,7 @@ function InputWithAction({
         disabled={actionDisabled}
         variant={actionVariant}
         size={actionSize}
-        className="text-xs"
+        className={actionClassName}
       >
         {actionLabel}
       </Button>
