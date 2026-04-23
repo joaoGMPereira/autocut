@@ -1,6 +1,7 @@
 'use client';
 
 import { usePipelineStore } from '@/store/pipelineStore';
+import { SectionPanel } from '@/components/ui/section-panel';
 
 export function ChannelInfoCard() {
   const run = usePipelineStore((s) => s.run);
@@ -8,9 +9,8 @@ export function ChannelInfoCard() {
   if (!run?.channel_id) return null;
 
   return (
-    <div className="rounded-lg border border-border bg-card p-3 text-sm">
-      <p className="text-xs font-semibold uppercase tracking-wider text-subtle mb-1">Channel</p>
+    <SectionPanel size="sm" title="Channel">
       <p className="text-foreground font-medium">#{run.channel_id}</p>
-    </div>
+    </SectionPanel>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { usePipelineStore } from '@/store/pipelineStore';
+import { SectionPanel } from '@/components/ui/section-panel';
 
 export function DownloadInfoCard() {
   const phaseProgress = usePipelineStore((s) => s.phaseProgress);
@@ -21,9 +22,7 @@ export function DownloadInfoCard() {
     : null;
 
   return (
-    <div className="rounded-lg border border-border bg-card p-3 text-sm space-y-2">
-      <p className="text-xs font-semibold uppercase tracking-wider text-subtle">Download</p>
-
+    <SectionPanel size="sm" title="Download">
       {videoInfo && (
         <div className="flex items-center gap-3">
           {videoInfo.thumbnailUrl && (
@@ -50,6 +49,6 @@ export function DownloadInfoCard() {
         <span>{speed ?? ''}</span>
         <span>{eta ? `ETA ${eta}` : ''}</span>
       </div>
-    </div>
+    </SectionPanel>
   );
 }
