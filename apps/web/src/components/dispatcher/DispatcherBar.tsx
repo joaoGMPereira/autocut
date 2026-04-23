@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useDispatcherStore, type DispatcherTask } from '@/store/dispatcherStore';
 import { usePipelineStore } from '@/store/pipelineStore';
+import { Button } from '@/components/ui/button';
 
 // ─── Per-task pill ────────────────────────────────────────────────────────────
 
@@ -25,7 +26,7 @@ function DownloadPill({ task, onDone }: TaskPillProps) {
         task.status === 'done'
           ? 'border-success-alt/40 bg-success-alt/10 text-success-alt'
           : task.status === 'error'
-            ? 'border-red-500/40 bg-red-500/10 text-red-400'
+            ? 'border-destructive/40 bg-destructive/10 text-destructive'
             : 'border-brand/40 bg-brand/10 text-brand'
       }`}
     >
@@ -67,10 +68,10 @@ function UpdatePill({ task }: { task: DispatcherTask }) {
     <div
       className={`flex items-center gap-3 rounded-lg border px-4 py-2 text-xs font-medium ${
         task.status === 'done' && action === 'restart'
-          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+          ? 'border-success/40 bg-success/10 text-success'
           : task.status === 'error'
-            ? 'border-red-500/40 bg-red-500/10 text-red-400'
-            : 'border-violet-500/40 bg-violet-500/10 text-violet-300'
+            ? 'border-destructive/40 bg-destructive/10 text-destructive'
+            : 'border-violet/40 bg-violet/10 text-violet'
       }`}
     >
       {task.status === 'error' && <span>✗ Erro na atualização: {task.error}</span>}
@@ -78,26 +79,28 @@ function UpdatePill({ task }: { task: DispatcherTask }) {
       {task.status === 'done' && action === 'restart' && (
         <>
           <span>↑ {label}{version ? ` v${version}` : ''}</span>
-          <button
+          <Button
             onClick={handleRestart}
-            className="ml-1 rounded border border-emerald-500/40 bg-emerald-500/20 px-2 py-0.5 text-[11px] font-semibold text-emerald-400 hover:bg-emerald-500/30 transition-colors"
+            variant="outline"
+            size="xs"
+            className="ml-1 border-success/40 bg-success/20 text-success hover:bg-success/30"
           >
             Reiniciar
-          </button>
+          </Button>
         </>
       )}
 
       {task.status === 'running' && (
         <>
           <span>↑ {label}</span>
-          <div className="max-w-[120px] flex-1 overflow-hidden rounded-full bg-violet-500/20 h-1">
+          <div className="max-w-[120px] flex-1 overflow-hidden rounded-full bg-violet/20 h-1">
             {task.progress > 0 ? (
               <div
-                className="h-full rounded-full bg-violet-400 transition-all duration-300"
+                className="h-full rounded-full bg-violet transition-all duration-300"
                 style={{ width: `${task.progress}%` }}
               />
             ) : (
-              <div className="h-full w-full animate-pulse rounded-full bg-violet-400/60" />
+              <div className="h-full w-full animate-pulse rounded-full bg-violet/60" />
             )}
           </div>
           {task.progress > 0 && <span>{Math.round(task.progress)}%</span>}
@@ -122,20 +125,22 @@ function ToolErrorPill({ task, onRemove }: GenericPillProps) {
   const opLabel = op ? ` · ${op}` : '';
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-400">
+    <div className="flex items-center gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-2 text-xs font-medium text-destructive">
       <span className="shrink-0">✗</span>
       <span className="flex-1 truncate">
         <span className="font-semibold">{toolLabel}</span>
         {opLabel} falhou
         {task.error ? <span className="opacity-70">: {task.error}</span> : null}
       </span>
-      <button
+      <Button
         onClick={() => onRemove(task.key)}
-        className="ml-1 shrink-0 rounded px-1 py-0.5 text-[11px] text-red-400/60 transition-colors hover:bg-red-500/20 hover:text-red-400"
+        variant="ghost"
+        size="xs"
+        className="ml-1 shrink-0 text-destructive/60 hover:bg-destructive/20 hover:text-destructive"
         aria-label="Fechar"
       >
         ×
-      </button>
+      </Button>
     </div>
   );
 }
@@ -164,7 +169,7 @@ function TaskPill({ task, onRemove }: GenericPillProps) {
 
   // Generic fallback for future task types
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border/40 bg-muted/10 px-4 py-2 text-xs font-medium text-muted-foreground">
+    <div className="flex items-center gap-3 rounded-lg border border-border/40 bg-muted/10 px-4 py-2 text-xs font-medium text-subtle">
       {task.status === 'error' && <span>✗ {task.error}</span>}
       {task.status === 'done' && <span>✓ {String(task.data.label ?? task.key)}</span>}
       {task.status === 'running' && (
@@ -173,7 +178,7 @@ function TaskPill({ task, onRemove }: GenericPillProps) {
           {task.progress > 0 && (
             <div className="max-w-[80px] flex-1 overflow-hidden rounded-full bg-muted/40 h-1">
               <div
-                className="h-full rounded-full bg-muted-foreground/60 transition-all duration-300"
+                className="h-full rounded-full bg-subtle/60 transition-all duration-300"
                 style={{ width: `${task.progress}%` }}
               />
             </div>
