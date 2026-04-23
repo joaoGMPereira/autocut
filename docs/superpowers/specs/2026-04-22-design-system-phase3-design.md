@@ -98,6 +98,13 @@ interface SegmentedControlProps<T extends string> {
   className?: string
 }
 
+// Tailwind cannot purge dynamic class names — use a static lookup for grid-cols.
+const GRID_COLS: Record<number, string> = {
+  2: "grid-cols-2",
+  3: "grid-cols-3",
+  4: "grid-cols-4",
+}
+
 function SegmentedControl<T extends string>({
   options,
   value,
@@ -106,15 +113,12 @@ function SegmentedControl<T extends string>({
   className,
 }: SegmentedControlProps<T>) {
   if (variant === "card") {
+    const colClass = GRID_COLS[options.length] ?? "grid-cols-2"
     return (
       <div
         data-slot="segmented-control"
         data-variant="card"
-        className={cn(
-          "grid gap-2",
-          `grid-cols-${options.length}`,
-          className,
-        )}
+        className={cn("grid gap-2", colClass, className)}
       >
         {options.map((opt) => (
           <button
@@ -223,7 +227,7 @@ function SliderRow({
         onChange={(e) => onChange(Number(e.target.value))}
         className="flex-1 accent-brand"
       />
-      <span className="text-xs text-subtle text-right shrink-0 min-w-[2ch]">
+      <span className="text-xs text-subtle text-right shrink-0 tabular-nums">
         {display}
       </span>
     </div>
