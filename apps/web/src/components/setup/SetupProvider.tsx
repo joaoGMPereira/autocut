@@ -78,7 +78,7 @@ export function SetupProvider({ children }: SetupProviderProps) {
   if (isLoading && !timedOut) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <Loader2 className="h-8 w-8 animate-spin text-subtle" />
       </div>
     );
   }
@@ -88,8 +88,8 @@ export function SetupProvider({ children }: SetupProviderProps) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          <p className="text-xs text-muted-foreground">Backend is starting up…</p>
+          <Loader2 className="h-8 w-8 animate-spin text-subtle" />
+          <p className="text-xs text-subtle">Backend is starting up…</p>
         </div>
       </div>
     );
@@ -101,10 +101,10 @@ export function SetupProvider({ children }: SetupProviderProps) {
       <div className="flex h-full items-center justify-center">
         <div className="flex flex-col items-center gap-3 max-w-sm text-center">
           <p className="text-sm font-medium text-foreground">Backend offline</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-subtle">
             Could not reach the AutoCut backend. Restart the app to try again.
           </p>
-          <p className="text-xs text-muted-foreground/60">{error}</p>
+          <p className="text-xs text-subtle/60">{error}</p>
         </div>
       </div>
     );
@@ -123,7 +123,7 @@ export function SetupProvider({ children }: SetupProviderProps) {
 
   return (
     <div className="relative h-full">
-      <div className="sticky top-0 z-40 flex items-center gap-2 border-b border-amber-500/20 bg-amber-500/8 px-4 py-2 text-xs text-amber-400">
+      <div className="sticky top-0 z-40 flex items-center gap-2 border-b border-warning/20 bg-warning/8 px-4 py-2 text-xs text-warning">
         <ArrowUpCircle className="h-3.5 w-3.5 shrink-0" />
         <span>
           Update available:{' '}

@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { RefreshCw, Scissors, FolderSync } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useAppStore } from '@/store/appStore';
 import { useSetupStore } from '@/store/setupStore';
@@ -44,11 +45,11 @@ export function SetupGate({ tools, onComplete }: SetupGateProps) {
       <div className="flex flex-col items-center gap-8 w-full max-w-[600px] px-4">
         {/* Header */}
         <div className="flex flex-col items-center gap-4">
-          <Scissors className="h-14 w-14 text-blue-400" />
+          <Scissors className="h-14 w-14 text-brand" />
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">
             AutoCut Setup
           </h1>
-          <p className="text-sm text-muted-foreground text-center max-w-[480px]">
+          <p className="text-sm text-subtle text-center max-w-[480px]">
             Some required tools need to be installed before you can use AutoCut.
           </p>
         </div>
@@ -65,10 +66,8 @@ export function SetupGate({ tools, onComplete }: SetupGateProps) {
                   <ToolRow tool={tool} />
                   {tool.versionOk === false && (
                     <div className="px-5 pb-2 flex items-center gap-2">
-                      <span className="inline-flex items-center rounded-full border border-amber-500 px-2 py-0.5 text-xs font-medium text-amber-500">
-                        Version too old
-                      </span>
-                      <span className="text-xs text-muted-foreground">
+                      <Badge variant="warning">Version too old</Badge>
+                      <span className="text-xs text-subtle">
                         Update required for full compatibility
                       </span>
                     </div>
@@ -113,7 +112,7 @@ export function SetupGate({ tools, onComplete }: SetupGateProps) {
             </Button>
           </div>
           {!isReady && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-subtle">
               Install all required tools to continue
             </p>
           )}

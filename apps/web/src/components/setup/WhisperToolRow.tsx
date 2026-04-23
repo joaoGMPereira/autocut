@@ -2,12 +2,12 @@
 
 import { CheckCircle2, XCircle, AlertCircle, Loader2, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useAppStore } from '@/store/appStore';
 import { useSetupStore } from '@/store/setupStore';
 import type { ToolStatus } from '@/types/setup';
-import { cn } from '@/lib/utils';
 
 interface WhisperToolRowProps {
   tool: ToolStatus;
@@ -43,41 +43,40 @@ export function WhisperToolRow({ tool }: WhisperToolRowProps) {
       {/* ── Binary row ── */}
       <div className="flex items-center gap-3.5 px-5 py-3.5">
         {binaryInstalling ? (
-          <Loader2 className="h-5 w-5 text-blue-400 animate-spin shrink-0" />
+          <Loader2 className="h-5 w-5 text-info animate-spin shrink-0" />
         ) : hasModel ? (
-          <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+          <CheckCircle2 className="h-5 w-5 text-success shrink-0" />
         ) : binaryOnly ? (
-          <AlertCircle className="h-5 w-5 text-amber-400 shrink-0" />
+          <AlertCircle className="h-5 w-5 text-warning shrink-0" />
         ) : (
-          <XCircle className="h-5 w-5 text-red-400 shrink-0" />
+          <XCircle className="h-5 w-5 text-destructive shrink-0" />
         )}
 
         <div className="flex flex-col gap-0.5 flex-1 min-w-0">
           <span className="text-sm font-semibold text-foreground">whisper-cli</span>
           {binaryPresent && tool.path ? (
-            <span className="text-[11px] font-mono text-muted-foreground truncate">
+            <span className="text-[11px] font-mono text-subtle truncate">
               {tool.path}
               {tool.version ? ` · ${tool.version}` : ''}
             </span>
           ) : (
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-[11px] text-subtle">
               {binaryInstalling ? 'Installing…' : 'Not installed'}
             </span>
           )}
         </div>
 
-        <span
+        <Badge
           data-testid="tool-status-whisper-cli"
-          className={cn(
-            'inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold shrink-0',
+          variant={
             binaryInstalling
-              ? 'bg-blue-400/20 text-blue-400'
+              ? 'info'
               : hasModel
-                ? 'bg-emerald-400/20 text-emerald-400'
+                ? 'success'
                 : binaryOnly
-                  ? 'bg-amber-400/20 text-amber-400'
-                  : 'bg-red-400/20 text-red-400',
-          )}
+                  ? 'warning'
+                  : 'destructive'
+          }
         >
           {binaryInstalling
             ? 'Installing…'
@@ -86,7 +85,7 @@ export function WhisperToolRow({ tool }: WhisperToolRowProps) {
               : binaryOnly
                 ? 'Missing model'
                 : 'Missing'}
-        </span>
+        </Badge>
       </div>
 
       {/* install log for binary */}
@@ -95,7 +94,7 @@ export function WhisperToolRow({ tool }: WhisperToolRowProps) {
           <ScrollArea className="max-h-24 rounded-md bg-muted/50 p-2">
             <div className="flex flex-col gap-0.5">
               {installLog.map((line, i) => (
-                <span key={i} className="font-mono text-[11px] text-muted-foreground">
+                <span key={i} className="font-mono text-[11px] text-subtle">
                   {line}
                 </span>
               ))}
@@ -112,30 +111,23 @@ export function WhisperToolRow({ tool }: WhisperToolRowProps) {
             {/* Sub-section header */}
             <div className="flex items-center gap-2">
               {hasModel ? (
-                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
               ) : (
-                <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
+                <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
               )}
               <span className="text-xs font-semibold text-foreground">
                 Model
               </span>
-              <span
-                className={cn(
-                  'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold',
-                  hasModel
-                    ? 'bg-emerald-400/20 text-emerald-400'
-                    : 'bg-red-400/20 text-red-400',
-                )}
-              >
+              <Badge variant={hasModel ? 'success' : 'destructive'}>
                 {hasModel
                   ? `${downloadedModels.length} downloaded`
                   : 'Required — none downloaded'}
-              </span>
+              </Badge>
             </div>
 
             {/* Model list */}
             {whisperModels.length === 0 ? (
-              <div className="text-[11px] text-muted-foreground pl-6">
+              <div className="text-[11px] text-subtle pl-6">
                 Loading models…
               </div>
             ) : (
@@ -152,20 +144,16 @@ export function WhisperToolRow({ tool }: WhisperToolRowProps) {
                           <span className="text-[12px] font-medium text-foreground capitalize">
                             {model.name}
                           </span>
-                          <span className="text-[11px] text-muted-foreground">
+                          <span className="text-[11px] text-subtle">
                             {model.size_mb} MB
                           </span>
                           {model.active && (
-                            <span className="inline-flex items-center rounded-full bg-blue-400/20 px-1.5 py-0.5 text-[10px] font-semibold text-blue-400">
-                              Active
-                            </span>
+                            <Badge variant="info">Active</Badge>
                           )}
                         </div>
 
                         {model.downloaded ? (
-                          <span className="inline-flex items-center rounded-full border border-emerald-500/40 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
-                            Downloaded
-                          </span>
+                          <Badge variant="success">Downloaded</Badge>
                         ) : (
                           <Button
                             variant="outline"
@@ -188,7 +176,7 @@ export function WhisperToolRow({ tool }: WhisperToolRowProps) {
                         <ScrollArea className="max-h-16 rounded bg-muted/50 p-1.5">
                           <div className="flex flex-col gap-0.5">
                             {dlLogs.map((line, i) => (
-                              <span key={i} className="font-mono text-[10px] text-muted-foreground">
+                              <span key={i} className="font-mono text-[10px] text-subtle">
                                 {line}
                               </span>
                             ))}

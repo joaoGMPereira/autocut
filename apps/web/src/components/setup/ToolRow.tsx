@@ -9,6 +9,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAppStore } from '@/store/appStore';
 import { useSetupStore } from '@/store/setupStore';
@@ -17,7 +18,6 @@ import {
   MANUAL_INSTALL_URLS,
   type ToolStatus,
 } from '@/types/setup';
-import { cn } from '@/lib/utils';
 
 interface ToolRowProps {
   tool: ToolStatus;
@@ -34,15 +34,15 @@ export function ToolRow({ tool }: ToolRowProps) {
 
   const StatusIcon = () => {
     if (state === 'installing') {
-      return <Loader2 className="h-5 w-5 text-blue-400 animate-spin shrink-0" />;
+      return <Loader2 className="h-5 w-5 text-info animate-spin shrink-0" />;
     }
     if (tool.installed) {
-      return <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />;
+      return <CheckCircle2 className="h-5 w-5 text-success shrink-0" />;
     }
     if (tool.required) {
-      return <XCircle className="h-5 w-5 text-red-400 shrink-0" />;
+      return <XCircle className="h-5 w-5 text-destructive shrink-0" />;
     }
-    return <AlertCircle className="h-5 w-5 text-amber-400 shrink-0" />;
+    return <AlertCircle className="h-5 w-5 text-warning shrink-0" />;
   };
 
   const badgeLabel = () => {
@@ -54,13 +54,11 @@ export function ToolRow({ tool }: ToolRowProps) {
     return 'Optional';
   };
 
-  const badgeClass = () => {
-    if (state === 'installing') return 'bg-blue-400/20 text-blue-400';
-    if (state === 'done' || tool.installed)
-      return 'bg-emerald-400/20 text-emerald-400';
-    if (state === 'error') return 'bg-red-400/20 text-red-400';
-    if (tool.required) return 'bg-red-400/20 text-red-400';
-    return 'bg-amber-400/20 text-amber-400';
+  const badgeVariant = (): 'info' | 'success' | 'destructive' | 'warning' => {
+    if (state === 'installing') return 'info';
+    if (state === 'done' || tool.installed) return 'success';
+    if (state === 'error' || tool.required) return 'destructive';
+    return 'warning';
   };
 
   // All tools support Install() — auto-download (yt-dlp, Twitch) or copy from system PATH (others)
@@ -80,12 +78,12 @@ export function ToolRow({ tool }: ToolRowProps) {
             {tool.name}
           </span>
           {tool.installed && tool.path ? (
-            <span className="text-[11px] font-mono text-muted-foreground truncate">
+            <span className="text-[11px] font-mono text-subtle truncate">
               {tool.path}
               {tool.version ? ` \u00B7 ${tool.version}` : ''}
             </span>
           ) : (
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-[11px] text-subtle">
               {state === 'installing'
                 ? 'Installing...'
                 : state === 'error'
@@ -98,27 +96,23 @@ export function ToolRow({ tool }: ToolRowProps) {
         </div>
 
         {tool.updateAvailable && (
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400">
-            ↑ Update available
-          </span>
+          <Badge variant="warning">↑ Update available</Badge>
         )}
 
-        <span
+        <Badge
           data-testid={`tool-status-${tool.name}`}
-          className={cn(
-            'inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold shrink-0',
-            badgeClass(),
-          )}
+          variant={badgeVariant()}
         >
           {badgeLabel()}
-        </span>
+        </Badge>
 
         {/* Check button removed — updates are checked automatically on gate mount */}
 
         {tool.updateAvailable && (
           <Button
             size="sm"
-            className="h-7 text-xs bg-brand/10 border border-brand/25 text-brand hover:bg-brand/20"
+            variant="outline"
+            className="h-7 text-xs"
             onClick={() => startInstall(goUrl, tool.name)}
           >
             Update
@@ -142,7 +136,7 @@ export function ToolRow({ tool }: ToolRowProps) {
             href={manualUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-subtle hover:text-muted-foreground transition-colors shrink-0"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-subtle hover:text-foreground transition-colors shrink-0"
           >
             <ExternalLink className="h-3 w-3" />
             How to install
@@ -168,7 +162,7 @@ export function ToolRow({ tool }: ToolRowProps) {
               {logs.map((line, i) => (
                 <span
                   key={i}
-                  className="font-mono text-[11px] text-muted-foreground"
+                  className="font-mono text-[11px] text-subtle"
                 >
                   {line}
                 </span>

@@ -12,7 +12,7 @@ export function HardwareCard() {
   if (hardwareLoading) {
     return (
       <Card>
-        <CardContent className="py-4 text-sm text-muted-foreground">
+        <CardContent className="py-4 text-sm text-subtle">
           Detecting hardware...
         </CardContent>
       </Card>
@@ -30,7 +30,7 @@ export function HardwareCard() {
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         {/* Hardware summary */}
-        <div className="grid grid-cols-2 gap-1.5 text-muted-foreground">
+        <div className="grid grid-cols-2 gap-1.5 text-subtle">
           <span>RAM</span>
           <span className="text-foreground font-medium">{ramGB} GB</span>
           <span>CPU</span>
@@ -42,25 +42,23 @@ export function HardwareCard() {
         <div className="border-t border-border pt-3 space-y-2">
           {/* Whisper recommendation */}
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Whisper model</span>
+            <span className="text-subtle">Whisper model</span>
             <div className="flex items-center gap-2">
               <span className="font-medium">{recommendation.whisper_tier}</span>
-              <span className="text-xs text-muted-foreground">({recommendation.whisper_size_mb} MB)</span>
+              <span className="text-xs text-subtle">({recommendation.whisper_size_mb} MB)</span>
               {recommendation.upgrade_available && (
-                <Badge variant="outline" className="text-xs border-amber-500 text-amber-500">
-                  Upgrade available
-                </Badge>
+                <Badge variant="warning">Upgrade available</Badge>
               )}
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">{recommendation.whisper_reason}</p>
+          <p className="text-xs text-subtle">{recommendation.whisper_reason}</p>
 
           {/* Ollama recommendation */}
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Ollama model</span>
+            <span className="text-subtle">Ollama model</span>
             <span className="font-medium">{recommendation.ollama_model}</span>
           </div>
-          <p className="text-xs text-muted-foreground">{recommendation.ollama_reason}</p>
+          <p className="text-xs text-subtle">{recommendation.ollama_reason}</p>
         </div>
       </CardContent>
     </Card>
