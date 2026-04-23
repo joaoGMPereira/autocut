@@ -137,7 +137,7 @@ function BrandingTab({
         <Label>Branding Logo</Label>
         {config.branding_logo_path ? (
           <div className="flex items-center gap-3">
-            <span className="truncate text-sm text-muted-foreground">
+            <span className="truncate text-sm text-subtle">
               {config.branding_logo_path.split('/').pop()}
             </span>
             <Button
@@ -206,9 +206,9 @@ function DefaultsTab({
           onChange={(e) => onChange({ default_tags: e.target.value })}
           placeholder="gaming, highlights, clips"
           rows={3}
-          className="w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
+          className="w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-subtle focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
         />
-        <p className="text-xs text-muted-foreground">Comma-separated</p>
+        <p className="text-xs text-subtle">Comma-separated</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -249,7 +249,7 @@ function ProcessingTab({
         />
         <div className="flex flex-col gap-0.5">
           <Label htmlFor="anti-duplicate">Anti-Duplicate</Label>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-subtle">
             Skip clips that are too similar to existing uploads
           </p>
         </div>
@@ -265,7 +265,7 @@ function ProcessingTab({
         />
         <div className="flex flex-col gap-0.5">
           <Label htmlFor="branding-logo">Logo / Watermark</Label>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-subtle">
             Overlay channel logo on rendered clips
           </p>
         </div>
@@ -333,7 +333,7 @@ function MusicTab({ channelId }: { channelId: number }) {
 
       {/* Pattern list */}
       {items.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-4">
+        <p className="text-sm text-subtle text-center py-4">
           No blacklisted patterns
         </p>
       ) : (

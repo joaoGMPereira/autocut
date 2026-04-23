@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PageHeader } from '@/components/ui/page-header';
+import { FormField } from '@/components/ui/form-field';
 import { useAppStore } from '@/store/appStore';
 import { useChannelStore } from '@/store/channelStore';
 import { ChannelsSection } from '@/components/settings/ChannelsSection';
@@ -43,30 +45,28 @@ function AddChannelForm() {
     <form onSubmit={(e) => void handleSubmit(e)} className="rounded-xl border border-border bg-card p-5 space-y-4">
       <h2 className="text-base font-semibold text-foreground">Add Channel</h2>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <div className="flex-1 space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground" htmlFor="channel-name">
-            Name <span className="text-destructive">*</span>
-          </label>
-          <Input
-            id="channel-name"
-            placeholder="e.g. cortes_inerd"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="h-8 text-sm"
-            required
-          />
+        <div className="flex-1">
+          <FormField label="Name" required>
+            <Input
+              id="channel-name"
+              placeholder="e.g. cortes_inerd"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="h-8 text-sm"
+              required
+            />
+          </FormField>
         </div>
-        <div className="flex-1 space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground" htmlFor="yt-channel-id">
-            YouTube Channel ID
-          </label>
-          <Input
-            id="yt-channel-id"
-            placeholder="UCxxxxxxxxxxxxxxxxxx"
-            value={youtubeChannelId}
-            onChange={(e) => setYoutubeChannelId(e.target.value)}
-            className="h-8 text-sm font-mono"
-          />
+        <div className="flex-1">
+          <FormField label="YouTube Channel ID">
+            <Input
+              id="yt-channel-id"
+              placeholder="UCxxxxxxxxxxxxxxxxxx"
+              value={youtubeChannelId}
+              onChange={(e) => setYoutubeChannelId(e.target.value)}
+              className="h-8 text-sm font-mono"
+            />
+          </FormField>
         </div>
         <Button type="submit" size="sm" className="h-8 text-xs shrink-0" disabled={submitting || !name.trim()}>
           {submitting ? 'Adding…' : 'Add Channel'}
@@ -80,7 +80,7 @@ function AddChannelForm() {
 export default function ChannelsPage() {
   return (
     <div className="flex flex-col gap-6 p-6 max-w-3xl mx-auto w-full">
-      <h1 className="font-display text-[28px] font-bold tracking-[-0.02em] text-heading">Channels</h1>
+      <PageHeader title="Channels" />
       <AddChannelForm />
       <ChannelsSection />
       <ChannelAuthSection />

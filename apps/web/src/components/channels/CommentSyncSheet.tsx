@@ -222,7 +222,7 @@ export function CommentSyncSheet({ channel, open, onClose }: Props) {
                 {syncing ? 'Syncing…' : 'Sync Comments'}
               </Button>
               {syncStatus === 'done' && (
-                <span className="text-xs text-green-500">Sync complete</span>
+                <span className="text-xs text-success">Sync complete</span>
               )}
               {syncStatus === 'error' && syncError && (
                 <span className="text-xs text-destructive">{syncError}</span>

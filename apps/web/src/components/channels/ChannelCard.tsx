@@ -5,6 +5,8 @@ import { useChannelStore } from '@/store/channelStore';
 import type { Channel } from '@/store/channelStore';
 import { useOAuthStore } from '@/store/oauthStore';
 import { createLogger } from '@/lib/logger';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 const log = createLogger('ChannelCard');
 
@@ -27,24 +29,12 @@ export function isAuthenticated(ch: Channel): boolean {
 
 function AuthBadge({ status }: { status: AuthStatus }) {
   if (status === 'authorized') {
-    return (
-      <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-emerald-400/20 text-emerald-400 shrink-0">
-        Authorized
-      </span>
-    );
+    return <Badge variant="success" className="shrink-0">Authorized</Badge>;
   }
   if (status === 'expired') {
-    return (
-      <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-amber-400/20 text-amber-400 shrink-0">
-        Expirado
-      </span>
-    );
+    return <Badge variant="warning" className="shrink-0">Expirado</Badge>;
   }
-  return (
-    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-zinc-600/40 text-zinc-400 shrink-0">
-      Não conectado
-    </span>
-  );
+  return <Badge variant="secondary" className="shrink-0">Não conectado</Badge>;
 }
 
 interface ChannelAvatarProps {
@@ -169,19 +159,19 @@ export function ChannelCard({
         isPicker ? (canSelect ? 'cursor-pointer' : 'cursor-not-allowed opacity-50') : '',
         isPicker && selected
           ? 'border-brand/60 bg-brand/5 ring-1 ring-brand/30'
-          : 'border-zinc-700 bg-zinc-900',
-        isPicker && canSelect && !selected ? 'hover:border-zinc-500 hover:bg-zinc-800/50' : '',
+          : 'border-border bg-background',
+        isPicker && canSelect && !selected ? 'hover:border-border/70 hover:bg-surface/50' : '',
       ].join(' ')}
     >
       <div className="flex items-center gap-3">
         <ChannelAvatar channel={channel} goUrl={goUrl} size={isPicker ? 'sm' : 'md'} />
 
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-zinc-200 truncate">
+          <p className="text-xs font-semibold text-heading truncate">
             {channel.ChannelTitle || channel.Name}
           </p>
           {channel.ChannelID && (
-            <p className="text-[10px] font-mono text-zinc-500 truncate">{channel.ChannelID}</p>
+            <p className="text-[10px] font-mono text-subtle truncate">{channel.ChannelID}</p>
           )}
         </div>
 
@@ -190,21 +180,25 @@ export function ChannelCard({
         {showOAuth && (
           authorizing ? (
             <>
-              <span className="text-[10px] text-zinc-500 shrink-0">Aguardando…</span>
-              <button
+              <span className="text-[10px] text-subtle shrink-0">Aguardando…</span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 text-[10px] shrink-0"
                 onClick={(e) => { e.stopPropagation(); handleCancel(); }}
-                className="text-[10px] text-zinc-400 hover:text-zinc-200 shrink-0 border border-zinc-600 rounded px-2 py-0.5"
               >
                 Cancelar
-              </button>
+              </Button>
             </>
           ) : (
-            <button
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 text-[10px] shrink-0"
               onClick={(e) => { e.stopPropagation(); void handleAuthorize(); }}
-              className="text-[10px] text-zinc-300 hover:text-white shrink-0 border border-zinc-600 hover:border-zinc-400 rounded px-2 py-0.5 transition-colors"
             >
               {status === 'not-authorized' ? 'Autorizar' : 'Re-autorizar'}
-            </button>
+            </Button>
           )
         )}
 
@@ -216,7 +210,7 @@ export function ChannelCard({
       </div>
 
       {authError && (
-        <p className="text-[10px] text-red-400 pl-1">{authError}</p>
+        <p className="text-[10px] text-destructive pl-1">{authError}</p>
       )}
     </div>
   );
