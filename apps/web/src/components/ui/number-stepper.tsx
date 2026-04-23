@@ -84,7 +84,7 @@ function NumberStepper({
   }
 
   const isDecrementDisabled =
-    disabled || (value !== null && min !== undefined && value <= min)
+    disabled || value === null || (min !== undefined && value <= min)
   const isIncrementDisabled =
     disabled || (value !== null && max !== undefined && value >= max)
 
@@ -109,6 +109,8 @@ function NumberStepper({
         onChange={handleChange}
         placeholder={placeholder}
         disabled={disabled}
+        min={min}
+        max={max}
         className={cn('w-20 text-center [appearance:textfield]', inputClassName)}
       />
       <Button
