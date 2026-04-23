@@ -31,12 +31,12 @@ describe('ColorField', () => {
     expect(onValueChange).toHaveBeenCalledWith('#C6F24E', 'brand')
   })
 
-  it('selected token swatch has ring class', () => {
+  it('selected token swatch has aria-pressed true, others false', () => {
     render(<ColorField value="#C6F24E" onValueChange={vi.fn()} tokens={['brand', 'success']} />)
     const brandButton = screen.getByRole('button', { name: 'Brand' })
     const successButton = screen.getByRole('button', { name: 'Success' })
-    expect(brandButton.className).toContain('ring-2')
-    expect(successButton.className).not.toContain('ring-2')
+    expect(brandButton).toHaveAttribute('aria-pressed', 'true')
+    expect(successButton).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('renders label when label prop provided', () => {

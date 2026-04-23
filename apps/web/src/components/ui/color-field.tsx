@@ -2,7 +2,6 @@
 
 import * as React from 'react'
 import { cn } from '@/lib/utils'
-import { Label } from '@/components/ui/label'
 
 const COLOR_TOKENS = {
   brand:       { label: 'Brand',       hex: '#C6F24E', bgClass: 'bg-brand'       },
@@ -39,15 +38,18 @@ function ColorField({
   size = 'default',
 }: ColorFieldProps) {
   const sizeClass = size === 'sm' ? 'h-6 w-6' : 'h-8 w-8'
+  const labelId = React.useId()
 
   return (
     <div
       data-slot="color-field"
       id={id}
+      role={label ? 'group' : undefined}
+      aria-labelledby={label ? labelId : undefined}
       className={cn('flex flex-col gap-2', className)}
     >
       {label && (
-        <Label className="text-xs font-medium text-subtle">{label}</Label>
+        <span id={labelId} className="text-xs font-medium text-subtle">{label}</span>
       )}
       <div className="flex flex-wrap gap-2">
         {tokens.map((tokenKey) => {
@@ -59,12 +61,14 @@ function ColorField({
               key={tokenKey}
               type="button"
               aria-label={token.label}
+              aria-pressed={isSelected}
               title={token.label}
               onClick={() => onValueChange(token.hex, tokenKey)}
               className={cn(
                 token.bgClass,
                 sizeClass,
                 'rounded-md border border-border cursor-pointer shrink-0',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand',
                 isSelected && 'ring-2 ring-offset-1 ring-brand ring-offset-background',
               )}
             />
