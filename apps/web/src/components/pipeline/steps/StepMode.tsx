@@ -7,6 +7,9 @@ import { useChannelStore } from '@/store/channelStore';
 import { AI_DEFAULTS, LONGFORM_DEFAULTS } from '@/types/pipeline';
 import type { AntiDupEffects, AntiDuplicateConfig, BackgroundMusicConfig, BrandingConfig, CaptionsConfig, GatePayload, ModeConfig, PriorClipsResponse, TextOverlayItem, TextOverlaysConfig, VideoOverlayConfig, WorkflowMode } from '@/types/pipeline';
 import { PositionGrid } from '@/components/ui/PositionGrid';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { TextStyleEditorPanel } from '@/components/post-opt/TextStyleEditorPanel';
 import { DEFAULT_STYLE } from '@/types/text-overlay';
 
@@ -685,18 +688,18 @@ export function StepMode({ historical }: StepModeProps) {
     <div className="space-y-6 max-w-lg">
       <div className="space-y-1">
         <h2 className="text-xl font-semibold text-foreground">Workflow Mode</h2>
-        <p className="text-sm text-zinc-500">Choose how to process this video.</p>
+        <p className="text-sm text-subtle">Choose how to process this video.</p>
       </div>
 
       {isHistorical && (
-        <div className="rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-xs text-zinc-400">
+        <div className="rounded-md border border-border bg-card px-4 py-3 text-xs text-subtle">
           Reviewing previous submission. Re-submitting will restart the pipeline from this step.
         </div>
       )}
 
       {/* Video Info Card */}
       {videoInfo && (
-        <div className="flex items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-900 p-3">
+        <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
           {videoInfo.thumbnailUrl && (
             <img
               src={videoInfo.thumbnailUrl}
@@ -705,11 +708,11 @@ export function StepMode({ historical }: StepModeProps) {
             />
           )}
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium text-zinc-200 truncate">{videoInfo.title}</p>
+            <p className="text-xs font-medium text-heading truncate">{videoInfo.title}</p>
             {videoInfo.channelName && (
-              <p className="text-xs text-zinc-500 truncate">{videoInfo.channelName}</p>
+              <p className="text-xs text-subtle truncate">{videoInfo.channelName}</p>
             )}
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-subtle">
               {(() => {
                 const h = Math.floor(videoInfo.durationSec / 3600);
                 const m = Math.floor((videoInfo.durationSec % 3600) / 60);
@@ -726,7 +729,7 @@ export function StepMode({ historical }: StepModeProps) {
       {/* Preset Carousel */}
       {presets.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-medium text-zinc-400">Presets</p>
+          <p className="text-xs font-medium text-subtle">Presets</p>
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
             {presets.map((p) => (
               <div
@@ -738,14 +741,14 @@ export function StepMode({ historical }: StepModeProps) {
                   className={[
                     'relative rounded-lg border px-3 py-2 text-xs font-medium transition-colors',
                     activePresetName === p.name
-                      ? 'border-zinc-400 bg-zinc-800 text-zinc-100'
-                      : 'border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200',
+                      ? 'border-border bg-surface text-heading'
+                      : 'border-border bg-card text-subtle hover:border-border hover:text-foreground',
                   ].join(' ')}
                 >
                   <span className="pr-4">{p.name}</span>
                   <span
                     onClick={(e) => { e.stopPropagation(); void handleDeletePreset(p.name); }}
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-caption hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                   >
                     &times;
                   </span>
@@ -758,11 +761,11 @@ export function StepMode({ historical }: StepModeProps) {
 
       {/* Reuse Existing Clips — only shown when prior run exists */}
       {priorRunId !== null && (
-        <div className="rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3">
+        <div className="rounded-md border border-border bg-card px-4 py-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-zinc-300">Reuse Existing Clips</p>
-              <p className="text-xs text-zinc-500">From previous run #{priorRunId}</p>
+              <p className="text-xs font-medium text-prose">Reuse Existing Clips</p>
+              <p className="text-xs text-subtle">From previous run #{priorRunId}</p>
             </div>
             <button
               onClick={() => {
@@ -771,14 +774,14 @@ export function StepMode({ historical }: StepModeProps) {
               }}
               className={[
                 'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-                skipRegenerate ? 'bg-zinc-300' : 'bg-zinc-700',
+                skipRegenerate ? 'bg-brand/80' : 'bg-zinc-700',
               ].join(' ')}
               role="switch"
               aria-checked={skipRegenerate}
             >
               <span
                 className={[
-                  'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                  'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
                   skipRegenerate ? 'translate-x-4' : 'translate-x-1',
                 ].join(' ')}
               />
@@ -800,16 +803,16 @@ export function StepMode({ historical }: StepModeProps) {
           className={[
             'relative flex flex-col gap-2 rounded-lg border p-4 text-left transition-all',
             selectedMode === 'ai'
-              ? 'border-zinc-300 bg-zinc-800 ring-1 ring-zinc-300'
-              : 'border-zinc-700 bg-zinc-900 hover:border-zinc-500 hover:bg-zinc-800',
+              ? 'border-brand bg-surface ring-1 ring-brand'
+              : 'border-border bg-card hover:border-border hover:bg-surface',
           ].join(' ')}
         >
           {selectedMode === 'ai' && (
-            <span className="absolute top-3 right-3 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-300 text-zinc-900 text-[10px] font-bold">✓</span>
+            <span className="absolute top-3 right-3 flex h-4 w-4 items-center justify-center rounded-full bg-brand text-brand-foreground text-[10px] font-bold">✓</span>
           )}
           <span className="text-sm font-semibold text-foreground">AI Highlights</span>
-          <span className="text-xs text-zinc-400">Extract the best moments from your video automatically.</span>
-          <ul className="space-y-0.5 text-xs text-zinc-500">
+          <span className="text-xs text-subtle">Extract the best moments from your video automatically.</span>
+          <ul className="space-y-0.5 text-xs text-subtle">
             <li>• AI-powered highlight detection</li>
             <li>• Adjustable sensitivity threshold</li>
             <li>• Skip music intros</li>
@@ -828,16 +831,16 @@ export function StepMode({ historical }: StepModeProps) {
           className={[
             'relative flex flex-col gap-2 rounded-lg border p-4 text-left transition-all',
             selectedMode === 'longform'
-              ? 'border-zinc-300 bg-zinc-800 ring-1 ring-zinc-300'
-              : 'border-zinc-700 bg-zinc-900 hover:border-zinc-500 hover:bg-zinc-800',
+              ? 'border-brand bg-surface ring-1 ring-brand'
+              : 'border-border bg-card hover:border-border hover:bg-surface',
           ].join(' ')}
         >
           {selectedMode === 'longform' && (
-            <span className="absolute top-3 right-3 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-300 text-zinc-900 text-[10px] font-bold">✓</span>
+            <span className="absolute top-3 right-3 flex h-4 w-4 items-center justify-center rounded-full bg-brand text-brand-foreground text-[10px] font-bold">✓</span>
           )}
           <span className="text-sm font-semibold text-foreground">Long Form</span>
-          <span className="text-xs text-zinc-400">Split the full video into equal-length segments.</span>
-          <ul className="space-y-0.5 text-xs text-zinc-500">
+          <span className="text-xs text-subtle">Split the full video into equal-length segments.</span>
+          <ul className="space-y-0.5 text-xs text-subtle">
             <li>• Equal-length part splitting</li>
             <li>• Configurable segment duration</li>
             <li>• No content filtering</li>
@@ -848,12 +851,12 @@ export function StepMode({ historical }: StepModeProps) {
 
       {/* AI configuration section */}
       {selectedMode === 'ai' && (
-        <div className="space-y-4 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
-          <p className="text-xs font-medium text-zinc-300 uppercase tracking-wider">AI Configuration</p>
+        <div className="space-y-4 rounded-lg border border-border bg-card p-4">
+          <p className="text-xs font-medium text-prose uppercase tracking-wider">AI Configuration</p>
 
           {/* Target Clip Duration — dynamic based on video length (min 1 min for AI, vs 8 min for Long Form) */}
           <div className="space-y-1.5">
-            <label className="text-xs text-zinc-400">Target Clip Duration</label>
+            <Label className="text-xs font-medium text-subtle">Target Clip Duration</Label>
             <div className="flex gap-2 flex-wrap">
               {(() => {
                 const MIN_PART = 60; // 1 min (AI mode allows shorter clips than Long Form's 8 min)
@@ -877,8 +880,8 @@ export function StepMode({ historical }: StepModeProps) {
                     className={[
                       'rounded px-2 py-1.5 text-xs transition-colors',
                       clipDurationSecs === secs
-                        ? 'bg-zinc-300 text-zinc-900 font-medium'
-                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
+                        ? 'bg-brand text-brand-foreground font-medium'
+                        : 'bg-surface text-subtle hover:bg-surface/80',
                     ].join(' ')}
                   >
                     {label}
@@ -890,7 +893,7 @@ export function StepMode({ historical }: StepModeProps) {
 
           {/* Minimum Clip Duration */}
           <div className="space-y-1.5">
-            <label className="text-xs text-zinc-400">Minimum Clip Duration</label>
+            <Label className="text-xs font-medium text-subtle">Minimum Clip Duration</Label>
             <div className="flex gap-2 flex-wrap">
               {([60, 120, 300, 480, 600, 900] as const).map((secs) => (
                 <button
@@ -899,8 +902,8 @@ export function StepMode({ historical }: StepModeProps) {
                   className={[
                     'rounded px-2 py-1.5 text-xs transition-colors',
                     minDurationSecs === secs
-                      ? 'bg-zinc-300 text-zinc-900 font-medium'
-                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
+                      ? 'bg-brand text-brand-foreground font-medium'
+                      : 'bg-surface text-subtle hover:bg-surface/80',
                   ].join(' ')}
                 >
                   {secs / 60} min
@@ -908,13 +911,13 @@ export function StepMode({ historical }: StepModeProps) {
               ))}
             </div>
             {isMinDurationInvalid && (
-              <p className="text-xs text-red-400">Min duration must be less than target duration</p>
+              <p className="text-xs text-destructive">Min duration must be less than target duration</p>
             )}
           </div>
 
           {/* Sensitivity threshold presets */}
           <div className="space-y-1.5">
-            <label className="text-xs text-zinc-400">Highlight Threshold</label>
+            <Label className="text-xs font-medium text-subtle">Highlight Threshold</Label>
             <div className="flex gap-2">
               {([50, 70, 90] as const).map((pct) => (
                 <button
@@ -923,8 +926,8 @@ export function StepMode({ historical }: StepModeProps) {
                   className={[
                     'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
                     sensitivityPct === pct
-                      ? 'bg-zinc-300 text-zinc-900 font-medium'
-                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
+                      ? 'bg-brand text-brand-foreground font-medium'
+                      : 'bg-surface text-subtle hover:bg-surface/80',
                   ].join(' ')}
                 >
                   {pct === 50 ? 'Liberal' : pct === 70 ? 'Balanced' : 'Selective'}
@@ -936,11 +939,11 @@ export function StepMode({ historical }: StepModeProps) {
 
           {/* Skip music dropdown */}
           <div className="space-y-1.5">
-            <label className="text-xs text-zinc-400">Skip Music Intro</label>
+            <Label className="text-xs font-medium text-subtle">Skip Music Intro</Label>
             <select
               value={skipMusicMins ?? ''}
               onChange={(e) => setSkipMusicMins(e.target.value === '' ? null : Number(e.target.value))}
-              className="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-zinc-500"
+              className="w-full rounded border border-border bg-surface px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-brand/30"
             >
               <option value="">None</option>
               <option value="1">1 min</option>
@@ -953,21 +956,21 @@ export function StepMode({ historical }: StepModeProps) {
           {/* Force regenerate toggle */}
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-zinc-300">Force Re-analyze</p>
-              <p className="text-xs text-zinc-600">Ignore cached transcript and analysis</p>
+              <p className="text-xs text-prose">Force Re-analyze</p>
+              <p className="text-xs text-caption">Ignore cached transcript and analysis</p>
             </div>
             <button
               onClick={() => setForceRegenerate((v) => !v)}
               className={[
                 'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-                forceRegenerate ? 'bg-zinc-300' : 'bg-zinc-700',
+                forceRegenerate ? 'bg-brand/80' : 'bg-zinc-700',
               ].join(' ')}
               role="switch"
               aria-checked={forceRegenerate}
             >
               <span
                 className={[
-                  'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                  'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
                   forceRegenerate ? 'translate-x-4' : 'translate-x-1',
                 ].join(' ')}
               />
@@ -977,21 +980,21 @@ export function StepMode({ historical }: StepModeProps) {
           {/* Skip transcription toggle */}
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-zinc-300">Skip Transcription</p>
-              <p className="text-xs text-zinc-600">Use existing transcript if available</p>
+              <p className="text-xs text-prose">Skip Transcription</p>
+              <p className="text-xs text-caption">Use existing transcript if available</p>
             </div>
             <button
               onClick={() => setSkipTranscription((v) => !v)}
               className={[
                 'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-                skipTranscription ? 'bg-zinc-300' : 'bg-zinc-700',
+                skipTranscription ? 'bg-brand/80' : 'bg-zinc-700',
               ].join(' ')}
               role="switch"
               aria-checked={skipTranscription}
             >
               <span
                 className={[
-                  'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                  'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
                   skipTranscription ? 'translate-x-4' : 'translate-x-1',
                 ].join(' ')}
               />
@@ -1002,12 +1005,12 @@ export function StepMode({ historical }: StepModeProps) {
 
       {/* Long Form configuration section */}
       {selectedMode === 'longform' && (
-        <div className="space-y-4 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
-          <p className="text-xs font-medium text-zinc-300 uppercase tracking-wider">Long Form Configuration</p>
+        <div className="space-y-4 rounded-lg border border-border bg-card p-4">
+          <p className="text-xs font-medium text-prose uppercase tracking-wider">Long Form Configuration</p>
 
           {/* Segment duration presets — derived from video duration */}
           <div className="space-y-1.5">
-            <label className="text-xs text-zinc-400">Segment Duration</label>
+            <Label className="text-xs font-medium text-subtle">Segment Duration</Label>
             <div className="flex gap-2 flex-wrap">
               {(() => {
                 const MIN_PART = 480; // 8 min
@@ -1031,8 +1034,8 @@ export function StepMode({ historical }: StepModeProps) {
                     className={[
                       'rounded px-2 py-1.5 text-xs transition-colors',
                       segmentSecs === secs
-                        ? 'bg-zinc-300 text-zinc-900 font-medium'
-                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
+                        ? 'bg-brand text-brand-foreground font-medium'
+                        : 'bg-surface text-subtle hover:bg-surface/80',
                     ].join(' ')}
                   >
                     {label}
@@ -1044,10 +1047,10 @@ export function StepMode({ historical }: StepModeProps) {
 
           {/* Min Part Duration */}
           <div className="space-y-1.5">
-            <label className="text-xs text-zinc-400">
+            <Label className="text-xs font-medium text-subtle">
               Min Part Duration{' '}
-              <span className="text-zinc-600">(ignore parts shorter than this)</span>
-            </label>
+              <span className="text-caption">(ignore parts shorter than this)</span>
+            </Label>
             <div className="flex flex-wrap gap-2">
               {([
                 [0, 'Off'],
@@ -1064,8 +1067,8 @@ export function StepMode({ historical }: StepModeProps) {
                   className={[
                     'rounded px-2 py-1.5 text-xs transition-colors',
                     minPartSecs === secs
-                      ? 'bg-zinc-300 text-zinc-900 font-medium'
-                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
+                      ? 'bg-brand text-brand-foreground font-medium'
+                      : 'bg-surface text-subtle hover:bg-surface/80',
                   ].join(' ')}
                 >
                   {label}
@@ -1077,11 +1080,11 @@ export function StepMode({ historical }: StepModeProps) {
       )}
 
       {/* Anti-Duplicate Protection */}
-      <div className="space-y-3 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
+      <div className="space-y-3 rounded-lg border border-border bg-card p-4">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium text-zinc-300 uppercase tracking-wider">Anti-Duplicate Protection</p>
-            <p className="text-xs text-zinc-500">Prevent YouTube duplicate detection</p>
+            <p className="text-xs font-medium text-prose uppercase tracking-wider">Anti-Duplicate Protection</p>
+            <p className="text-xs text-subtle">Prevent YouTube duplicate detection</p>
           </div>
           <button
             onClick={() => {
@@ -1090,14 +1093,14 @@ export function StepMode({ historical }: StepModeProps) {
             }}
             className={[
               'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              antiDupEnabled ? 'bg-zinc-300' : 'bg-zinc-700',
+              antiDupEnabled ? 'bg-brand/80' : 'bg-zinc-700',
             ].join(' ')}
             role="switch"
             aria-checked={antiDupEnabled}
           >
             <span
               className={[
-                'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
                 antiDupEnabled ? 'translate-x-4' : 'translate-x-1',
               ].join(' ')}
             />
@@ -1117,12 +1120,12 @@ export function StepMode({ historical }: StepModeProps) {
                   className={[
                     'flex flex-col items-start rounded-lg border p-3 text-left transition-all',
                     antiDupMode === m
-                      ? 'border-zinc-300 bg-zinc-800 ring-1 ring-zinc-300'
-                      : 'border-zinc-700 bg-zinc-800 hover:border-zinc-500',
+                      ? 'border-brand bg-surface ring-1 ring-brand'
+                      : 'border-border bg-surface hover:border-border',
                   ].join(' ')}
                 >
-                  <span className="text-xs font-medium text-zinc-300 capitalize">{m}</span>
-                  <span className="text-xs text-zinc-500">
+                  <span className="text-xs font-medium text-prose capitalize">{m}</span>
+                  <span className="text-xs text-subtle">
                     {m === 'subtle' ? '1–2% changes' : '5–10% changes'}
                   </span>
                 </button>
@@ -1130,7 +1133,7 @@ export function StepMode({ historical }: StepModeProps) {
             </div>
 
             <div className="space-y-2 pt-1">
-              <p className="text-xs text-zinc-500">Visual Effects</p>
+              <p className="text-xs text-subtle">Visual Effects</p>
 
               {/* Simple checkboxes */}
               {([
@@ -1145,9 +1148,9 @@ export function StepMode({ historical }: StepModeProps) {
                     type="checkbox"
                     checked={!!antiDupEffects[key]}
                     onChange={(e) => setEffect(key, e.target.checked)}
-                    className="rounded border-zinc-600 bg-zinc-800 text-zinc-300 focus:ring-zinc-500"
+                    className="rounded border-border bg-surface text-prose focus:ring-brand/30"
                   />
-                  <span className="text-xs text-zinc-300">{label}</span>
+                  <span className="text-xs text-prose">{label}</span>
                 </label>
               ))}
 
@@ -1158,22 +1161,22 @@ export function StepMode({ historical }: StepModeProps) {
                     type="checkbox"
                     checked={!!antiDupEffects.noise}
                     onChange={(e) => setEffect('noise', e.target.checked)}
-                    className="rounded border-zinc-600 bg-zinc-800 text-zinc-300 focus:ring-zinc-500"
+                    className="rounded border-border bg-surface text-prose focus:ring-brand/30"
                   />
-                  <span className="text-xs text-zinc-300">Noise/Grain</span>
+                  <span className="text-xs text-prose">Noise/Grain</span>
                 </label>
                 {antiDupEffects.noise && (
                   <div className="ml-6 flex items-center gap-2">
-                    <span className="text-xs text-zinc-500 w-16">Strength</span>
+                    <span className="text-xs text-subtle w-16">Strength</span>
                     <input
                       type="range"
                       min={1}
                       max={10}
                       value={antiDupEffects.noise_strength ?? 3}
                       onChange={(e) => setEffect('noise_strength', Number(e.target.value))}
-                      className="flex-1 accent-zinc-300"
+                      className="flex-1 accent-brand"
                     />
-                    <span className="text-xs text-zinc-400 w-4">{antiDupEffects.noise_strength ?? 3}</span>
+                    <span className="text-xs text-subtle w-4">{antiDupEffects.noise_strength ?? 3}</span>
                   </div>
                 )}
               </div>
@@ -1185,22 +1188,22 @@ export function StepMode({ historical }: StepModeProps) {
                     type="checkbox"
                     checked={!!antiDupEffects.blur}
                     onChange={(e) => setEffect('blur', e.target.checked)}
-                    className="rounded border-zinc-600 bg-zinc-800 text-zinc-300 focus:ring-zinc-500"
+                    className="rounded border-border bg-surface text-prose focus:ring-brand/30"
                   />
-                  <span className="text-xs text-zinc-300">Background Blur</span>
+                  <span className="text-xs text-prose">Background Blur</span>
                 </label>
                 {antiDupEffects.blur && (
                   <div className="ml-6 flex items-center gap-2">
-                    <span className="text-xs text-zinc-500 w-16">Edge %</span>
+                    <span className="text-xs text-subtle w-16">Edge %</span>
                     <input
                       type="range"
                       min={0}
                       max={100}
                       value={antiDupEffects.blur_edge_pct ?? 10}
                       onChange={(e) => setEffect('blur_edge_pct', Number(e.target.value))}
-                      className="flex-1 accent-zinc-300"
+                      className="flex-1 accent-brand"
                     />
-                    <span className="text-xs text-zinc-400 w-8">{antiDupEffects.blur_edge_pct ?? 10}%</span>
+                    <span className="text-xs text-subtle w-8">{antiDupEffects.blur_edge_pct ?? 10}%</span>
                   </div>
                 )}
               </div>
@@ -1210,21 +1213,21 @@ export function StepMode({ historical }: StepModeProps) {
       </div>
 
       {/* Text Overlays */}
-      <div className="space-y-4 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
+      <div className="space-y-4 rounded-lg border border-border bg-card p-4">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-zinc-300 uppercase tracking-wider">Overlays de Texto</p>
+          <p className="text-xs font-medium text-prose uppercase tracking-wider">Overlays de Texto</p>
           <button
             onClick={() => setTextOverlaysEnabled((v) => !v)}
             className={[
               'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              textOverlaysEnabled ? 'bg-zinc-300' : 'bg-zinc-700',
+              textOverlaysEnabled ? 'bg-brand/80' : 'bg-zinc-700',
             ].join(' ')}
             role="switch"
             aria-checked={textOverlaysEnabled}
           >
             <span
               className={[
-                'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
                 textOverlaysEnabled ? 'translate-x-4' : 'translate-x-1',
               ].join(' ')}
             />
@@ -1237,19 +1240,19 @@ export function StepMode({ historical }: StepModeProps) {
             {textOverlayItems.map((item, idx) => {
               const isExpanded = expandedOverlayIdx === idx;
               return (
-              <div key={idx} className="space-y-3 rounded-md border border-zinc-700 p-3">
+              <div key={idx} className="space-y-3 rounded-md border border-border p-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-zinc-400">Overlay #{idx + 1}</span>
+                  <span className="text-xs text-subtle">Overlay #{idx + 1}</span>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setExpandedOverlayIdx(isExpanded ? null : idx)}
-                      className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                      className="text-xs text-subtle hover:text-prose transition-colors"
                     >
                       {isExpanded ? 'Recolher estilo ▲' : 'Editar estilo ▼'}
                     </button>
                     <button
                       onClick={() => removeTextOverlayItem(idx)}
-                      className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+                      className="text-xs text-caption hover:text-subtle transition-colors"
                     >
                       Remover
                     </button>
@@ -1262,7 +1265,7 @@ export function StepMode({ historical }: StepModeProps) {
                   onChange={(e) => updateTextOverlayItem(idx, { text: e.target.value })}
                   placeholder="Texto do overlay…"
                   rows={2}
-                  className="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-none"
+                  className="w-full rounded border border-border bg-surface px-3 py-1.5 text-xs text-foreground placeholder:text-subtle focus:outline-none focus:ring-1 focus:ring-brand/30 resize-none"
                 />
 
                 {/* Style editor — collapsed by default */}
@@ -1280,32 +1283,32 @@ export function StepMode({ historical }: StepModeProps) {
                     type="checkbox"
                     checked={item.apply_full}
                     onChange={(e) => updateTextOverlayItem(idx, { apply_full: e.target.checked })}
-                    className="rounded border-zinc-600 bg-zinc-800 text-zinc-300"
+                    className="rounded border-border bg-surface text-prose"
                   />
-                  <span className="text-xs text-zinc-300">Aplicar no vídeo todo</span>
+                  <span className="text-xs text-prose">Aplicar no vídeo todo</span>
                 </label>
 
                 {/* Time range — only when not apply_full */}
                 {!item.apply_full && (
                   <div className="flex items-center gap-3">
                     <div className="flex-1 space-y-1">
-                      <label className="text-xs text-zinc-400">Início (s)</label>
-                      <input
+                      <Label className="text-xs font-medium text-subtle">Início (s)</Label>
+                      <Input
                         type="number"
                         min={0}
                         value={item.start_sec}
                         onChange={(e) => updateTextOverlayItem(idx, { start_sec: Number(e.target.value) })}
-                        className="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                        className="h-8 text-xs"
                       />
                     </div>
                     <div className="flex-1 space-y-1">
-                      <label className="text-xs text-zinc-400">Fim (s)</label>
-                      <input
+                      <Label className="text-xs font-medium text-subtle">Fim (s)</Label>
+                      <Input
                         type="number"
                         min={0}
                         value={item.end_sec}
                         onChange={(e) => updateTextOverlayItem(idx, { end_sec: Number(e.target.value) })}
-                        className="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                        className="h-8 text-xs"
                       />
                     </div>
                   </div>
@@ -1313,7 +1316,7 @@ export function StepMode({ historical }: StepModeProps) {
 
                 {/* Position grid */}
                 <div className="space-y-1">
-                  <label className="text-xs text-zinc-400">Posição</label>
+                  <Label className="text-xs font-medium text-subtle">Posição</Label>
                   <PositionGrid
                     value={item.position}
                     onChange={(pos) => updateTextOverlayItem(idx, { position: pos })}
@@ -1326,7 +1329,7 @@ export function StepMode({ historical }: StepModeProps) {
             {/* Add button */}
             <button
               onClick={addTextOverlayItem}
-              className="w-full rounded border border-dashed border-zinc-600 px-3 py-2 text-xs text-zinc-500 hover:border-zinc-400 hover:text-zinc-300 transition-colors"
+              className="w-full rounded border border-dashed border-border px-3 py-2 text-xs text-subtle hover:border-border hover:text-prose transition-colors"
             >
               + Adicionar overlay de texto
             </button>
@@ -1335,21 +1338,21 @@ export function StepMode({ historical }: StepModeProps) {
       </div>
 
       {/* Video Overlay */}
-      <div className="space-y-4 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
+      <div className="space-y-4 rounded-lg border border-border bg-card p-4">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-zinc-300 uppercase tracking-wider">Overlay de Vídeo</p>
+          <p className="text-xs font-medium text-prose uppercase tracking-wider">Overlay de Vídeo</p>
           <button
             onClick={() => setOverlayEnabled((v) => !v)}
             className={[
               'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              overlayEnabled ? 'bg-zinc-300' : 'bg-zinc-700',
+              overlayEnabled ? 'bg-brand/80' : 'bg-zinc-700',
             ].join(' ')}
             role="switch"
             aria-checked={overlayEnabled}
           >
             <span
               className={[
-                'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
                 overlayEnabled ? 'translate-x-4' : 'translate-x-1',
               ].join(' ')}
             />
@@ -1360,12 +1363,12 @@ export function StepMode({ historical }: StepModeProps) {
           <div className="space-y-4">
             {/* File selector */}
             <div className="space-y-1.5">
-              <label className="text-xs text-zinc-400">Arquivo de Overlay</label>
+              <Label className="text-xs font-medium text-subtle">Arquivo de Overlay</Label>
               {overlayLibraryFiles.length > 0 ? (
                 <select
                   value={overlayVideoPath}
                   onChange={(e) => setOverlayVideoPath(e.target.value)}
-                  className="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                  className="w-full rounded border border-border bg-surface px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-brand/30"
                 >
                   <option value="">— escolha um arquivo —</option>
                   {overlayLibraryFiles.map((f) => (
@@ -1373,39 +1376,39 @@ export function StepMode({ historical }: StepModeProps) {
                   ))}
                 </select>
               ) : (
-                <input
+                <Input
                   type="text"
                   value={overlayVideoPath}
                   onChange={(e) => setOverlayVideoPath(e.target.value)}
                   placeholder="/caminho/para/overlay.mp4"
-                  className="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                  className="h-8 text-xs"
                 />
               )}
             </div>
 
             {/* Scale slider */}
             <div className="flex items-center gap-3">
-              <label className="text-xs text-zinc-400 w-20 flex-shrink-0">Escala</label>
+              <Label className="text-xs font-medium text-subtle w-20 flex-shrink-0">Escala</Label>
               <input
                 type="range"
                 min={10}
                 max={200}
                 value={overlayScalePct}
                 onChange={(e) => setOverlayScalePct(Number(e.target.value))}
-                className="flex-1 accent-zinc-300"
+                className="flex-1 accent-brand"
               />
-              <span className="text-xs text-zinc-400 w-10 text-right">{overlayScalePct}%</span>
+              <span className="text-xs text-subtle w-10 text-right">{overlayScalePct}%</span>
             </div>
 
             {/* Position grid */}
             <div className="space-y-1.5">
-              <label className="text-xs text-zinc-400">Posição</label>
+              <Label className="text-xs font-medium text-subtle">Posição</Label>
               <PositionGrid value={overlayPosition} onChange={setOverlayPosition} />
             </div>
 
             {/* Appearances */}
             <div className="space-y-1.5">
-              <label className="text-xs text-zinc-400">Nº de Aparições</label>
+              <Label className="text-xs font-medium text-subtle">Nº de Aparições</Label>
               <div className="flex gap-2">
                 {([1, 2, 3, 4, 5] as const).map((n) => (
                   <button
@@ -1414,8 +1417,8 @@ export function StepMode({ historical }: StepModeProps) {
                     className={[
                       'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
                       overlayAppearances === n
-                        ? 'bg-zinc-300 text-zinc-900 font-medium'
-                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
+                        ? 'bg-brand text-brand-foreground font-medium'
+                        : 'bg-surface text-subtle hover:bg-surface/80',
                     ].join(' ')}
                   >
                     {n}×
@@ -1426,21 +1429,21 @@ export function StepMode({ historical }: StepModeProps) {
 
             {/* End offset */}
             <div className="flex items-center gap-3">
-              <label className="text-xs text-zinc-400 w-20 flex-shrink-0">Offset Final</label>
+              <Label className="text-xs font-medium text-subtle w-20 flex-shrink-0">Offset Final</Label>
               <input
                 type="range"
                 min={0}
                 max={10}
                 value={overlayEndOffsetSec}
                 onChange={(e) => setOverlayEndOffsetSec(Number(e.target.value))}
-                className="flex-1 accent-zinc-300"
+                className="flex-1 accent-brand"
               />
-              <span className="text-xs text-zinc-400 w-6 text-right">{overlayEndOffsetSec}s</span>
+              <span className="text-xs text-subtle w-6 text-right">{overlayEndOffsetSec}s</span>
             </div>
 
             {/* Chroma key */}
             <div className="space-y-1.5">
-              <label className="text-xs text-zinc-400">Chroma Key</label>
+              <Label className="text-xs font-medium text-subtle">Chroma Key</Label>
               <div className="flex flex-wrap gap-2">
                 {(['none', 'green', 'black', 'white', 'blue'] as const).map((key) => (
                   <button
@@ -1449,8 +1452,8 @@ export function StepMode({ historical }: StepModeProps) {
                     className={[
                       'rounded px-3 py-1.5 text-xs capitalize transition-colors',
                       overlayChromaKey === key
-                        ? 'bg-zinc-300 text-zinc-900 font-medium'
-                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
+                        ? 'bg-brand text-brand-foreground font-medium'
+                        : 'bg-surface text-subtle hover:bg-surface/80',
                     ].join(' ')}
                   >
                     {key === 'none' ? 'Nenhum' : key}
@@ -1463,25 +1466,25 @@ export function StepMode({ historical }: StepModeProps) {
       </div>
 
       {/* Branding */}
-      <div className="space-y-4 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
-        <p className="text-xs font-medium text-zinc-300 uppercase tracking-wider">Branding</p>
+      <div className="space-y-4 rounded-lg border border-border bg-card p-4">
+        <p className="text-xs font-medium text-prose uppercase tracking-wider">Branding</p>
 
         {/* Watermark (Logo) */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-zinc-300">Watermark (Logo)</p>
+            <p className="text-xs text-prose">Watermark (Logo)</p>
             <button
               onClick={() => setBrandingLogoEnabled((v) => !v)}
               className={[
                 'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-                brandingLogoEnabled ? 'bg-zinc-300' : 'bg-zinc-700',
+                brandingLogoEnabled ? 'bg-brand/80' : 'bg-zinc-700',
               ].join(' ')}
               role="switch"
               aria-checked={brandingLogoEnabled}
             >
               <span
                 className={[
-                  'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                  'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
                   brandingLogoEnabled ? 'translate-x-4' : 'translate-x-1',
                 ].join(' ')}
               />
@@ -1492,11 +1495,11 @@ export function StepMode({ historical }: StepModeProps) {
             <div className="space-y-3 pl-1">
               {/* Logo source */}
               <div className="space-y-2">
-                <label className="text-xs text-zinc-400">Logo para watermark</label>
+                <Label className="text-xs font-medium text-subtle">Logo para watermark</Label>
 
                 {/* Auto — channel logo preview row */}
                 {!brandingLogoIsCustom && (
-                  <div className="flex items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2">
+                  <div className="flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2">
                     {activeChannel ? (
                       <img
                         src={`${goUrl}/api/channels/${activeChannel.ID}/avatar`}
@@ -1512,14 +1515,14 @@ export function StepMode({ historical }: StepModeProps) {
                       {activeChannel ? (activeChannel.ChannelTitle || activeChannel.Name).charAt(0).toUpperCase() : '?'}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-zinc-200 truncate">
+                      <p className="text-xs font-medium text-heading truncate">
                         {activeChannel?.ChannelTitle || activeChannel?.Name || 'Logo do canal (automático)'}
                       </p>
-                      <p className="text-xs text-zinc-500">Baixado do YouTube</p>
+                      <p className="text-xs text-subtle">Baixado do YouTube</p>
                     </div>
                     <button
                       onClick={() => setBrandingLogoIsCustom(true)}
-                      className="text-xs text-zinc-400 hover:text-zinc-200 flex-shrink-0 transition-colors"
+                      className="text-xs text-subtle hover:text-heading flex-shrink-0 transition-colors"
                     >
                       Trocar
                     </button>
@@ -1529,16 +1532,16 @@ export function StepMode({ historical }: StepModeProps) {
                 {/* Custom path input */}
                 {brandingLogoIsCustom && (
                   <div className="space-y-2">
-                    <input
+                    <Input
                       type="text"
                       value={brandingLogoPath}
                       onChange={(e) => setBrandingLogoPath(e.target.value)}
                       placeholder="/caminho/para/logo.png"
-                      className="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                      className="h-8 text-xs"
                     />
                     <button
                       onClick={() => { setBrandingLogoIsCustom(false); setBrandingLogoPath(''); }}
-                      className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                      className="text-xs text-subtle hover:text-prose transition-colors"
                     >
                       ← Usar logo do canal
                     </button>
@@ -1548,53 +1551,53 @@ export function StepMode({ historical }: StepModeProps) {
 
               {/* Position grid */}
               <div className="space-y-1.5">
-                <label className="text-xs text-zinc-400">Posição</label>
+                <Label className="text-xs font-medium text-subtle">Posição</Label>
                 <PositionGrid value={brandingLogoPosition} onChange={setBrandingLogoPosition} />
               </div>
 
               {/* Opacity slider */}
               <div className="flex items-center gap-3">
-                <label className="text-xs text-zinc-400 w-20 flex-shrink-0">Opacidade</label>
+                <Label className="text-xs font-medium text-subtle w-20 flex-shrink-0">Opacidade</Label>
                 <input
                   type="range"
                   min={0}
                   max={100}
                   value={brandingLogoOpacity}
                   onChange={(e) => setBrandingLogoOpacity(Number(e.target.value))}
-                  className="flex-1 accent-zinc-300"
+                  className="flex-1 accent-brand"
                 />
-                <span className="text-xs text-zinc-400 w-8 text-right">{brandingLogoOpacity}%</span>
+                <span className="text-xs text-subtle w-8 text-right">{brandingLogoOpacity}%</span>
               </div>
 
               {/* Scale slider */}
               <div className="flex items-center gap-3">
-                <label className="text-xs text-zinc-400 w-20 flex-shrink-0">Tamanho</label>
+                <Label className="text-xs font-medium text-subtle w-20 flex-shrink-0">Tamanho</Label>
                 <input
                   type="range"
                   min={5}
                   max={30}
                   value={brandingLogoScale}
                   onChange={(e) => setBrandingLogoScale(Number(e.target.value))}
-                  className="flex-1 accent-zinc-300"
+                  className="flex-1 accent-brand"
                 />
-                <span className="text-xs text-zinc-400 w-8 text-right">{brandingLogoScale}%</span>
+                <span className="text-xs text-subtle w-8 text-right">{brandingLogoScale}%</span>
               </div>
 
               {/* Pulse toggle */}
               <div className="flex items-center justify-between">
-                <p className="text-xs text-zinc-300">Watermark pulsante</p>
+                <p className="text-xs text-prose">Watermark pulsante</p>
                 <button
                   onClick={() => setBrandingLogoPulse((v) => !v)}
                   className={[
                     'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-                    brandingLogoPulse ? 'bg-zinc-300' : 'bg-zinc-700',
+                    brandingLogoPulse ? 'bg-brand/80' : 'bg-zinc-700',
                   ].join(' ')}
                   role="switch"
                   aria-checked={brandingLogoPulse}
                 >
                   <span
                     className={[
-                      'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                      'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
                       brandingLogoPulse ? 'translate-x-4' : 'translate-x-1',
                     ].join(' ')}
                   />
@@ -1607,21 +1610,21 @@ export function StepMode({ historical }: StepModeProps) {
         {/* Intro toggle */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs text-zinc-300">Intro animado</p>
-            <p className="text-xs text-zinc-600">3s a partir do logo do canal</p>
+            <p className="text-xs text-prose">Intro animado</p>
+            <p className="text-xs text-caption">3s a partir do logo do canal</p>
           </div>
           <button
             onClick={() => setBrandingIntroEnabled((v) => !v)}
             className={[
               'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              brandingIntroEnabled ? 'bg-zinc-300' : 'bg-zinc-700',
+              brandingIntroEnabled ? 'bg-brand/80' : 'bg-zinc-700',
             ].join(' ')}
             role="switch"
             aria-checked={brandingIntroEnabled}
           >
             <span
               className={[
-                'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
                 brandingIntroEnabled ? 'translate-x-4' : 'translate-x-1',
               ].join(' ')}
             />
@@ -1630,19 +1633,19 @@ export function StepMode({ historical }: StepModeProps) {
 
         {/* Outro toggle */}
         <div className="flex items-center justify-between">
-          <p className="text-xs text-zinc-300">Outro (tela final)</p>
+          <p className="text-xs text-prose">Outro (tela final)</p>
           <button
             onClick={() => setBrandingOutroEnabled((v) => !v)}
             className={[
               'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              brandingOutroEnabled ? 'bg-zinc-300' : 'bg-zinc-700',
+              brandingOutroEnabled ? 'bg-brand/80' : 'bg-zinc-700',
             ].join(' ')}
             role="switch"
             aria-checked={brandingOutroEnabled}
           >
             <span
               className={[
-                'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
                 brandingOutroEnabled ? 'translate-x-4' : 'translate-x-1',
               ].join(' ')}
             />
@@ -1651,21 +1654,21 @@ export function StepMode({ historical }: StepModeProps) {
       </div>
 
       {/* Música de Fundo */}
-      <div className="space-y-4 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
+      <div className="space-y-4 rounded-lg border border-border bg-card p-4">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-zinc-300 uppercase tracking-wider">Música de Fundo</p>
+          <p className="text-xs font-medium text-prose uppercase tracking-wider">Música de Fundo</p>
           <button
             onClick={() => setMusicEnabled((v) => !v)}
             className={[
               'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              musicEnabled ? 'bg-zinc-300' : 'bg-zinc-700',
+              musicEnabled ? 'bg-brand/80' : 'bg-zinc-700',
             ].join(' ')}
             role="switch"
             aria-checked={musicEnabled}
           >
             <span
               className={[
-                'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
                 musicEnabled ? 'translate-x-4' : 'translate-x-1',
               ].join(' ')}
             />
@@ -1676,7 +1679,7 @@ export function StepMode({ historical }: StepModeProps) {
           <div className="space-y-4">
             {/* Mode selector */}
             <div className="space-y-1.5">
-              <label className="text-xs text-zinc-400">Seleção</label>
+              <Label className="text-xs font-medium text-subtle">Seleção</Label>
               <div className="flex gap-2">
                 {([
                   ['random', 'Aleatório'],
@@ -1689,8 +1692,8 @@ export function StepMode({ historical }: StepModeProps) {
                     className={[
                       'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
                       musicMode === m
-                        ? 'bg-zinc-300 text-zinc-900 font-medium'
-                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
+                        ? 'bg-brand text-brand-foreground font-medium'
+                        : 'bg-surface text-subtle hover:bg-surface/80',
                     ].join(' ')}
                   >
                     {label}
@@ -1702,14 +1705,14 @@ export function StepMode({ historical }: StepModeProps) {
             {/* Library track list */}
             {musicMode === 'library' && (
               <div className="space-y-1.5">
-                <label className="text-xs text-zinc-400">Faixa</label>
+                <Label className="text-xs font-medium text-subtle">Faixa</Label>
                 {musicLibraryTracks.length === 0 ? (
-                  <p className="text-xs text-zinc-600">Nenhuma faixa encontrada. Configure o caminho da biblioteca nas configurações.</p>
+                  <p className="text-xs text-caption">Nenhuma faixa encontrada. Configure o caminho da biblioteca nas configurações.</p>
                 ) : (
                   <select
                     value={musicSelectedTrack}
                     onChange={(e) => setMusicSelectedTrack(e.target.value)}
-                    className="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                    className="w-full rounded border border-border bg-surface px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-brand/30"
                   >
                     <option value="">— escolha uma faixa —</option>
                     {musicLibraryTracks.map((t) => (
@@ -1723,51 +1726,51 @@ export function StepMode({ historical }: StepModeProps) {
             {/* Custom path input */}
             {musicMode === 'custom' && (
               <div className="space-y-1.5">
-                <label className="text-xs text-zinc-400">Caminho do arquivo</label>
-                <input
+                <Label className="text-xs font-medium text-subtle">Caminho do arquivo</Label>
+                <Input
                   type="text"
                   value={musicCustomPath}
                   onChange={(e) => setMusicCustomPath(e.target.value)}
                   placeholder="/caminho/para/musica.mp3"
-                  className="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                  className="h-8 text-xs"
                 />
               </div>
             )}
 
             {/* Volume slider */}
             <div className="flex items-center gap-3">
-              <label className="text-xs text-zinc-400 w-16 flex-shrink-0">Volume</label>
+              <Label className="text-xs font-medium text-subtle w-16 flex-shrink-0">Volume</Label>
               <input
                 type="range"
                 min={0}
                 max={30}
                 value={musicVolumePct}
                 onChange={(e) => setMusicVolumePct(Number(e.target.value))}
-                className="flex-1 accent-zinc-300"
+                className="flex-1 accent-brand"
               />
-              <span className="text-xs text-zinc-400 w-8 text-right">{musicVolumePct}%</span>
+              <span className="text-xs text-subtle w-8 text-right">{musicVolumePct}%</span>
             </div>
-            <p className="text-xs text-zinc-600">Recomendado: 5–10%</p>
+            <p className="text-xs text-caption">Recomendado: 5–10%</p>
           </div>
         )}
       </div>
 
       {/* Captions */}
-      <div className="space-y-4 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
+      <div className="space-y-4 rounded-lg border border-border bg-card p-4">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-zinc-300 uppercase tracking-wider">Legendas</p>
+          <p className="text-xs font-medium text-prose uppercase tracking-wider">Legendas</p>
           <button
             onClick={() => setCaptionsEnabled((v) => !v)}
             className={[
               'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              captionsEnabled ? 'bg-zinc-300' : 'bg-zinc-700',
+              captionsEnabled ? 'bg-brand/80' : 'bg-zinc-700',
             ].join(' ')}
             role="switch"
             aria-checked={captionsEnabled}
           >
             <span
               className={[
-                'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
                 captionsEnabled ? 'translate-x-4' : 'translate-x-1',
               ].join(' ')}
             />
@@ -1778,7 +1781,7 @@ export function StepMode({ historical }: StepModeProps) {
           <div className="space-y-4">
             {/* Preset selector */}
             <div className="space-y-1.5">
-              <label className="text-xs text-zinc-400">Preset</label>
+              <Label className="text-xs font-medium text-subtle">Preset</Label>
               <div className="flex gap-2">
                 {([
                   ['simple', 'Simples'],
@@ -1791,8 +1794,8 @@ export function StepMode({ historical }: StepModeProps) {
                     className={[
                       'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
                       captionsPreset === p
-                        ? 'bg-zinc-300 text-zinc-900 font-medium'
-                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
+                        ? 'bg-brand text-brand-foreground font-medium'
+                        : 'bg-surface text-subtle hover:bg-surface/80',
                     ].join(' ')}
                   >
                     {label}
@@ -1803,16 +1806,16 @@ export function StepMode({ historical }: StepModeProps) {
 
             {/* Font customization */}
             <div className="space-y-3">
-              <p className="text-xs text-zinc-500">Personalizar</p>
+              <p className="text-xs text-subtle">Personalizar</p>
 
               <div className="space-y-1.5">
-                <label className="text-xs text-zinc-400">Fonte</label>
-                <input
+                <Label className="text-xs font-medium text-subtle">Fonte</Label>
+                <Input
                   type="text"
                   value={captionsFontFamily}
                   onChange={(e) => setCaptionsFontFamily(e.target.value)}
                   placeholder="Arial, Roboto, …"
-                  className="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                  className="h-8 text-xs"
                 />
               </div>
 
@@ -1827,7 +1830,7 @@ export function StepMode({ historical }: StepModeProps) {
                     onClick={() => setter(!val)}
                     className={[
                       'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
-                      val ? 'bg-zinc-300 text-zinc-900 font-medium' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
+                      val ? 'bg-brand text-brand-foreground font-medium' : 'bg-surface text-subtle hover:bg-surface/80',
                     ].join(' ')}
                   >
                     {label}
@@ -1836,32 +1839,32 @@ export function StepMode({ historical }: StepModeProps) {
               </div>
 
               <div className="flex items-center gap-3">
-                <label className="text-xs text-zinc-400 w-20 flex-shrink-0">Tamanho</label>
+                <Label className="text-xs font-medium text-subtle w-20 flex-shrink-0">Tamanho</Label>
                 <input
                   type="range"
                   min={12}
                   max={96}
                   value={captionsFontSize}
                   onChange={(e) => setCaptionsFontSize(Number(e.target.value))}
-                  className="flex-1 accent-zinc-300"
+                  className="flex-1 accent-brand"
                 />
-                <span className="text-xs text-zinc-400 w-8 text-right">{captionsFontSize}px</span>
+                <span className="text-xs text-subtle w-8 text-right">{captionsFontSize}px</span>
               </div>
             </div>
 
             {/* Colors */}
             <div className="space-y-3">
-              <p className="text-xs text-zinc-500">Cores</p>
+              <p className="text-xs text-subtle">Cores</p>
 
               <div className="flex items-center gap-3">
-                <label className="text-xs text-zinc-400 w-20 flex-shrink-0">Texto</label>
+                <Label className="text-xs font-medium text-subtle w-20 flex-shrink-0">Texto</Label>
                 <input
                   type="color"
                   value={captionsTextColor}
                   onChange={(e) => setCaptionsTextColor(e.target.value)}
-                  className="h-7 w-12 cursor-pointer rounded border border-zinc-700 bg-zinc-800"
+                  className="h-7 w-12 cursor-pointer rounded border border-border bg-surface"
                 />
-                <span className="text-xs text-zinc-500">{captionsTextColor}</span>
+                <span className="text-xs text-subtle">{captionsTextColor}</span>
               </div>
 
               <label className="flex items-center gap-2 cursor-pointer">
@@ -1869,9 +1872,9 @@ export function StepMode({ historical }: StepModeProps) {
                   type="checkbox"
                   checked={captionsBgEnabled}
                   onChange={(e) => setCaptionsBgEnabled(e.target.checked)}
-                  className="rounded border-zinc-600 bg-zinc-800 text-zinc-300"
+                  className="rounded border-border bg-surface text-prose"
                 />
-                <span className="text-xs text-zinc-300">Fundo</span>
+                <span className="text-xs text-prose">Fundo</span>
               </label>
 
               {/* Outline */}
@@ -1881,32 +1884,32 @@ export function StepMode({ historical }: StepModeProps) {
                     type="checkbox"
                     checked={captionsOutlineEnabled}
                     onChange={(e) => setCaptionsOutlineEnabled(e.target.checked)}
-                    className="rounded border-zinc-600 bg-zinc-800 text-zinc-300"
+                    className="rounded border-border bg-surface text-prose"
                   />
-                  <span className="text-xs text-zinc-300">Contorno</span>
+                  <span className="text-xs text-prose">Contorno</span>
                 </label>
                 {captionsOutlineEnabled && (
                   <div className="ml-6 space-y-2">
                     <div className="flex items-center gap-3">
-                      <label className="text-xs text-zinc-400 w-16 flex-shrink-0">Cor</label>
+                      <Label className="text-xs font-medium text-subtle w-16 flex-shrink-0">Cor</Label>
                       <input
                         type="color"
                         value={captionsOutlineColor}
                         onChange={(e) => setCaptionsOutlineColor(e.target.value)}
-                        className="h-7 w-12 cursor-pointer rounded border border-zinc-700 bg-zinc-800"
+                        className="h-7 w-12 cursor-pointer rounded border border-border bg-surface"
                       />
                     </div>
                     <div className="flex items-center gap-3">
-                      <label className="text-xs text-zinc-400 w-16 flex-shrink-0">Espessura</label>
+                      <Label className="text-xs font-medium text-subtle w-16 flex-shrink-0">Espessura</Label>
                       <input
                         type="range"
                         min={1}
                         max={10}
                         value={captionsOutlineWidth}
                         onChange={(e) => setCaptionsOutlineWidth(Number(e.target.value))}
-                        className="flex-1 accent-zinc-300"
+                        className="flex-1 accent-brand"
                       />
-                      <span className="text-xs text-zinc-400 w-4">{captionsOutlineWidth}</span>
+                      <span className="text-xs text-subtle w-4">{captionsOutlineWidth}</span>
                     </div>
                   </div>
                 )}
@@ -1919,32 +1922,32 @@ export function StepMode({ historical }: StepModeProps) {
                     type="checkbox"
                     checked={captionsShadowEnabled}
                     onChange={(e) => setCaptionsShadowEnabled(e.target.checked)}
-                    className="rounded border-zinc-600 bg-zinc-800 text-zinc-300"
+                    className="rounded border-border bg-surface text-prose"
                   />
-                  <span className="text-xs text-zinc-300">Sombra</span>
+                  <span className="text-xs text-prose">Sombra</span>
                 </label>
                 {captionsShadowEnabled && (
                   <div className="ml-6 space-y-2">
                     <div className="flex items-center gap-3">
-                      <label className="text-xs text-zinc-400 w-16 flex-shrink-0">Cor</label>
+                      <Label className="text-xs font-medium text-subtle w-16 flex-shrink-0">Cor</Label>
                       <input
                         type="color"
                         value={captionsShadowColor}
                         onChange={(e) => setCaptionsShadowColor(e.target.value)}
-                        className="h-7 w-12 cursor-pointer rounded border border-zinc-700 bg-zinc-800"
+                        className="h-7 w-12 cursor-pointer rounded border border-border bg-surface"
                       />
                     </div>
                     <div className="flex items-center gap-3">
-                      <label className="text-xs text-zinc-400 w-16 flex-shrink-0">Distância</label>
+                      <Label className="text-xs font-medium text-subtle w-16 flex-shrink-0">Distância</Label>
                       <input
                         type="range"
                         min={0}
                         max={20}
                         value={captionsShadowDistance}
                         onChange={(e) => setCaptionsShadowDistance(Number(e.target.value))}
-                        className="flex-1 accent-zinc-300"
+                        className="flex-1 accent-brand"
                       />
-                      <span className="text-xs text-zinc-400 w-4">{captionsShadowDistance}</span>
+                      <span className="text-xs text-subtle w-4">{captionsShadowDistance}</span>
                     </div>
                   </div>
                 )}
@@ -1953,28 +1956,28 @@ export function StepMode({ historical }: StepModeProps) {
 
             {/* Vertical offset */}
             <div className="flex items-center gap-3">
-              <label className="text-xs text-zinc-400 w-20 flex-shrink-0">Offset Vertical</label>
+              <Label className="text-xs font-medium text-subtle w-20 flex-shrink-0">Offset Vertical</Label>
               <input
                 type="range"
                 min={-100}
                 max={100}
                 value={captionsVerticalOffset}
                 onChange={(e) => setCaptionsVerticalOffset(Number(e.target.value))}
-                className="flex-1 accent-zinc-300"
+                className="flex-1 accent-brand"
               />
-              <span className="text-xs text-zinc-400 w-8 text-right">{captionsVerticalOffset}</span>
+              <span className="text-xs text-subtle w-8 text-right">{captionsVerticalOffset}</span>
             </div>
           </div>
         )}
       </div>
 
       {/* Upload Options */}
-      <div className="space-y-4 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
-        <p className="text-xs font-medium text-zinc-300 uppercase tracking-wider">Upload Options</p>
+      <div className="space-y-4 rounded-lg border border-border bg-card p-4">
+        <p className="text-xs font-medium text-prose uppercase tracking-wider">Upload Options</p>
 
         {/* Privacy pill selector */}
         <div className="space-y-1.5">
-          <label className="text-xs text-zinc-400">Privacy</label>
+          <Label className="text-xs font-medium text-subtle">Privacy</Label>
           <div className="flex gap-2">
             {(['private', 'unlisted', 'public'] as const).map((p) => (
               <button
@@ -1983,8 +1986,8 @@ export function StepMode({ historical }: StepModeProps) {
                 className={[
                   'flex-1 rounded-full px-3 py-1.5 text-xs font-medium capitalize transition-colors',
                   uploadPrivacy === p
-                    ? 'bg-zinc-300 text-zinc-900'
-                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700',
+                    ? 'bg-brand text-brand-foreground'
+                    : 'bg-surface text-subtle hover:bg-surface/80',
                 ].join(' ')}
               >
                 {p}
@@ -1996,21 +1999,21 @@ export function StepMode({ historical }: StepModeProps) {
         {/* Schedule toggle */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs text-zinc-300">Schedule Sequentially</p>
-            <p className="text-xs text-zinc-600">2 uploads/day per type</p>
+            <p className="text-xs text-prose">Schedule Sequentially</p>
+            <p className="text-xs text-caption">2 uploads/day per type</p>
           </div>
           <button
             onClick={() => setUploadScheduleEnabled((v) => !v)}
             className={[
               'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              uploadScheduleEnabled ? 'bg-zinc-300' : 'bg-zinc-700',
+              uploadScheduleEnabled ? 'bg-brand/80' : 'bg-zinc-700',
             ].join(' ')}
             role="switch"
             aria-checked={uploadScheduleEnabled}
           >
             <span
               className={[
-                'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
                 uploadScheduleEnabled ? 'translate-x-4' : 'translate-x-1',
               ].join(' ')}
             />
@@ -2020,21 +2023,21 @@ export function StepMode({ historical }: StepModeProps) {
         {/* Auto upload toggle */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs text-zinc-300">Auto Upload</p>
-            <p className="text-xs text-zinc-600">Upload immediately vs. manual queue</p>
+            <p className="text-xs text-prose">Auto Upload</p>
+            <p className="text-xs text-caption">Upload immediately vs. manual queue</p>
           </div>
           <button
             onClick={() => setUploadAutoEnabled((v) => !v)}
             className={[
               'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              uploadAutoEnabled ? 'bg-zinc-300' : 'bg-zinc-700',
+              uploadAutoEnabled ? 'bg-brand/80' : 'bg-zinc-700',
             ].join(' ')}
             role="switch"
             aria-checked={uploadAutoEnabled}
           >
             <span
               className={[
-                'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
                 uploadAutoEnabled ? 'translate-x-4' : 'translate-x-1',
               ].join(' ')}
             />
@@ -2044,21 +2047,21 @@ export function StepMode({ historical }: StepModeProps) {
         {/* Dry run toggle */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs text-zinc-300">Dry Run</p>
-            <p className="text-xs text-zinc-600">Generate thumbnails without uploading</p>
+            <p className="text-xs text-prose">Dry Run</p>
+            <p className="text-xs text-caption">Generate thumbnails without uploading</p>
           </div>
           <button
             onClick={() => setUploadDryRun((v) => !v)}
             className={[
               'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              uploadDryRun ? 'bg-zinc-300' : 'bg-zinc-700',
+              uploadDryRun ? 'bg-brand/80' : 'bg-zinc-700',
             ].join(' ')}
             role="switch"
             aria-checked={uploadDryRun}
           >
             <span
               className={[
-                'inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-900 transition-transform',
+                'inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform',
                 uploadDryRun ? 'translate-x-4' : 'translate-x-1',
               ].join(' ')}
             />
@@ -2071,7 +2074,7 @@ export function StepMode({ historical }: StepModeProps) {
         const nameExists = presets.some((p) => p.name === presetName.trim());
         return (
           <div className="flex gap-2">
-            <input
+            <Input
               type="text"
               value={presetName}
               onChange={(e) => {
@@ -2080,46 +2083,48 @@ export function StepMode({ historical }: StepModeProps) {
               }}
               onKeyDown={(e) => { if (e.key === 'Enter' && presetName.trim()) void handleSavePreset(); }}
               placeholder="Nome do preset…"
-              className="flex-1 rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-foreground placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+              className="flex-1 h-8 text-xs"
             />
-            <button
+            <Button
               onClick={() => void handleSavePreset()}
               disabled={!presetName.trim()}
-              className="rounded border border-zinc-600 px-3 py-1.5 text-xs text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              variant="outline"
+              size="sm"
+              className="text-xs"
             >
               {nameExists ? 'Atualizar' : 'Criar'}
-            </button>
+            </Button>
           </div>
         );
       })()}
 
       {/* Preview section */}
       {!isLoadingPreference && (
-        <div className="space-y-3 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
+        <div className="space-y-3 rounded-lg border border-border bg-card p-4">
           {/* State: Downloading */}
           {!downloadComplete && (
             <>
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium text-zinc-300">Preview</h3>
-                <span className="text-xs text-zinc-500">Aguardando download...</span>
+                <h3 className="text-sm font-medium text-prose">Preview</h3>
+                <span className="text-xs text-subtle">Aguardando download...</span>
               </div>
               {phaseProgress?.phase === 'download' && (
                 <div className="space-y-1">
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800">
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-surface">
                     <div
-                      className="h-full rounded-full bg-zinc-500 transition-all duration-300"
+                      className="h-full rounded-full bg-brand transition-all duration-300"
                       style={{ width: `${Math.min(100, phaseProgress.percentDone)}%` }}
                     />
                   </div>
-                  <div className="flex justify-between text-xs text-zinc-500">
+                  <div className="flex justify-between text-xs text-subtle">
                     <span>Baixando video... {Math.round(phaseProgress.percentDone)}%</span>
                     {phaseProgress.etaSec != null && <span>ETA {phaseProgress.etaSec}s</span>}
                   </div>
                 </div>
               )}
               {!phaseProgress && (
-                <div className="flex items-center gap-2 text-xs text-zinc-500">
-                  <span className="inline-block h-3 w-3 rounded-full border-2 border-zinc-500 border-t-transparent animate-spin" />
+                <div className="flex items-center gap-2 text-xs text-subtle">
+                  <span className="inline-block h-3 w-3 rounded-full border-2 border-border border-t-transparent animate-spin" />
                   <span>Preparando download...</span>
                 </div>
               )}
@@ -2129,37 +2134,39 @@ export function StepMode({ historical }: StepModeProps) {
           {/* State: Ready (download complete) */}
           {downloadComplete && (
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium text-zinc-300">Preview</h3>
-              <button
+              <h3 className="text-sm font-medium text-prose">Preview</h3>
+              <Button
                 onClick={() => {
                   if (!activeRunId) return;
                   const cfg = buildModeConfig();
                   void generatePreview(goUrl, activeRunId, cfg);
                 }}
                 disabled={previewStatus === 'generating'}
-                className="rounded-md bg-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-40"
+                variant="secondary"
+                size="sm"
+                className="text-xs"
               >
                 {previewStatus === 'generating' ? 'Generating…' : previewStatus === 'ready' ? 'Regenerate Preview' : 'Generate Preview'}
-              </button>
+              </Button>
             </div>
           )}
 
           {/* Preview generation progress (shared across ready/reused states) */}
           {downloadComplete && previewStatus === 'generating' && (
             <div className="space-y-1">
-              <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-surface">
                 <div
-                  className="h-full rounded-full bg-blue-500 transition-all duration-300"
+                  className="h-full rounded-full bg-info transition-all duration-300"
                   style={{ width: `${Math.min(100, previewPercent)}%` }}
                 />
               </div>
-              <p className="text-xs text-zinc-500">{Math.round(previewPercent)}%</p>
+              <p className="text-xs text-subtle">{Math.round(previewPercent)}%</p>
             </div>
           )}
 
           {/* Error */}
           {downloadComplete && previewStatus === 'error' && previewError && (
-            <p className="text-xs text-red-400">{previewError}</p>
+            <p className="text-xs text-destructive">{previewError}</p>
           )}
 
           {/* Video player */}
@@ -2176,19 +2183,20 @@ export function StepMode({ historical }: StepModeProps) {
 
       {/* Submit button */}
       {!isLoadingPreference && (
-        <button
+        <Button
           data-testid="mode-submit-btn"
           onClick={() => void handleSubmit()}
           disabled={isSubmitDisabled}
-          className="w-full rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+          variant="brand"
+          className="w-full"
         >
           {isSubmitting ? 'Starting…' : 'Next'}
-        </button>
+        </Button>
       )}
 
       {isLoadingPreference && (
-        <div className="flex items-center gap-2 text-xs text-zinc-500">
-          <span className="inline-block h-3 w-3 rounded-full border-2 border-zinc-500 border-t-transparent animate-spin" />
+        <div className="flex items-center gap-2 text-xs text-subtle">
+          <span className="inline-block h-3 w-3 rounded-full border-2 border-border border-t-transparent animate-spin" />
           <span>Loading preference…</span>
         </div>
       )}
