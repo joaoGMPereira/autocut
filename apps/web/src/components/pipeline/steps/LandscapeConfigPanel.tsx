@@ -1,5 +1,6 @@
 'use client';
 
+import { ColorField } from '@/components/ui/color-field';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
@@ -33,30 +34,16 @@ export function LandscapeConfigPanel({
 
       {config.apply_gradient && (
         <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <Label className="text-xs font-medium text-subtle">Gradient Start</Label>
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={config.gradient_start}
-                onChange={(e) => set('gradient_start', e.target.value)}
-                className="h-8 w-8 cursor-pointer rounded border border-border"
-              />
-              <span className="text-xs text-subtle">{config.gradient_start}</span>
-            </div>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs font-medium text-subtle">Gradient End</Label>
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={config.gradient_end}
-                onChange={(e) => set('gradient_end', e.target.value)}
-                className="h-8 w-8 cursor-pointer rounded border border-border"
-              />
-              <span className="text-xs text-subtle">{config.gradient_end}</span>
-            </div>
-          </div>
+          <ColorField
+            label="Gradient Start"
+            value={config.gradient_start}
+            onValueChange={(hex) => set('gradient_start', hex)}
+          />
+          <ColorField
+            label="Gradient End"
+            value={config.gradient_end}
+            onValueChange={(hex) => set('gradient_end', hex)}
+          />
         </div>
       )}
 
@@ -132,30 +119,16 @@ export function LandscapeConfigPanel({
 
       {/* Text Color + Outline */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs font-medium text-subtle">Text Color</Label>
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              value={config.text_color}
-              onChange={(e) => set('text_color', e.target.value)}
-              className="h-8 w-8 cursor-pointer rounded border border-border"
-            />
-            <span className="text-xs text-subtle">{config.text_color}</span>
-          </div>
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs font-medium text-subtle">Outline Color</Label>
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              value={config.outline_color}
-              onChange={(e) => set('outline_color', e.target.value)}
-              className="h-8 w-8 cursor-pointer rounded border border-border"
-            />
-            <span className="text-xs text-subtle">{config.outline_color}</span>
-          </div>
-        </div>
+        <ColorField
+          label="Text Color"
+          value={config.text_color}
+          onValueChange={(hex) => set('text_color', hex)}
+        />
+        <ColorField
+          label="Outline Color"
+          value={config.outline_color}
+          onValueChange={(hex) => set('outline_color', hex)}
+        />
       </div>
 
       {/* Stroke Width */}

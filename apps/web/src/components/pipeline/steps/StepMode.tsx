@@ -6,6 +6,7 @@ import { usePipelineStore, type PreviewStatus } from '@/store/pipelineStore';
 import { useChannelStore } from '@/store/channelStore';
 import { AI_DEFAULTS, LONGFORM_DEFAULTS } from '@/types/pipeline';
 import type { AntiDupEffects, AntiDuplicateConfig, BackgroundMusicConfig, BrandingConfig, CaptionsConfig, GatePayload, ModeConfig, PriorClipsResponse, TextOverlayItem, TextOverlaysConfig, VideoOverlayConfig, WorkflowMode } from '@/types/pipeline';
+import { ColorField } from '@/components/ui/color-field';
 import { PositionGrid } from '@/components/ui/PositionGrid';
 import { Button } from '@/components/ui/button';
 import { InfoBanner } from '@/components/ui/info-banner';
@@ -1542,15 +1543,9 @@ export function StepMode({ historical }: StepModeProps) {
             <div className="space-y-3">
               <p className="text-xs text-subtle">Cores</p>
 
-              <div className="flex items-center gap-3">
-                <Label className="text-xs font-medium text-subtle w-20 flex-shrink-0">Texto</Label>
-                <input
-                  type="color"
-                  value={captionsTextColor}
-                  onChange={(e) => setCaptionsTextColor(e.target.value)}
-                  className="h-7 w-12 cursor-pointer rounded border border-border bg-surface"
-                />
-                <span className="text-xs text-subtle">{captionsTextColor}</span>
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-medium text-subtle">Texto</Label>
+                <ColorField value={captionsTextColor} onValueChange={(hex) => setCaptionsTextColor(hex)} />
               </div>
 
               <label htmlFor="captions-bg" className="flex items-center gap-2 cursor-pointer">
@@ -1574,14 +1569,9 @@ export function StepMode({ historical }: StepModeProps) {
                 </label>
                 {captionsOutlineEnabled && (
                   <div className="ml-6 space-y-2">
-                    <div className="flex items-center gap-3">
-                      <Label className="text-xs font-medium text-subtle w-16 flex-shrink-0">Cor</Label>
-                      <input
-                        type="color"
-                        value={captionsOutlineColor}
-                        onChange={(e) => setCaptionsOutlineColor(e.target.value)}
-                        className="h-7 w-12 cursor-pointer rounded border border-border bg-surface"
-                      />
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs font-medium text-subtle">Cor</Label>
+                      <ColorField value={captionsOutlineColor} onValueChange={(hex) => setCaptionsOutlineColor(hex)} />
                     </div>
                     <SliderRow
                       label="Espessura"
@@ -1606,14 +1596,9 @@ export function StepMode({ historical }: StepModeProps) {
                 </label>
                 {captionsShadowEnabled && (
                   <div className="ml-6 space-y-2">
-                    <div className="flex items-center gap-3">
-                      <Label className="text-xs font-medium text-subtle w-16 flex-shrink-0">Cor</Label>
-                      <input
-                        type="color"
-                        value={captionsShadowColor}
-                        onChange={(e) => setCaptionsShadowColor(e.target.value)}
-                        className="h-7 w-12 cursor-pointer rounded border border-border bg-surface"
-                      />
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs font-medium text-subtle">Cor</Label>
+                      <ColorField value={captionsShadowColor} onValueChange={(hex) => setCaptionsShadowColor(hex)} />
                     </div>
                     <SliderRow
                       label="Distância"

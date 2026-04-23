@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
+import { ColorField } from '@/components/ui/color-field';
 import { Input } from '@/components/ui/input';
 import { InputWithAction } from '@/components/ui/input-with-action';
 import { Label } from '@/components/ui/label';
@@ -66,40 +67,18 @@ function BrandingTab({
       {/* Gradient colors */}
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="grad-start">Gradient Start</Label>
-          <div className="flex items-center gap-2">
-            <input
-              id="grad-start"
-              type="color"
-              value={config.gradient_color_start ?? '#000000'}
-              onChange={(e) => onChange({ gradient_color_start: e.target.value })}
-              className="h-9 w-10 cursor-pointer rounded-md border border-input bg-transparent p-0.5"
-            />
-            <Input
-              value={config.gradient_color_start ?? '#000000'}
-              onChange={(e) => onChange({ gradient_color_start: e.target.value })}
-              className="font-mono text-xs"
-              maxLength={7}
-            />
-          </div>
+          <Label>Gradient Start</Label>
+          <ColorField
+            value={config.gradient_color_start ?? '#000000'}
+            onValueChange={(hex) => onChange({ gradient_color_start: hex })}
+          />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="grad-end">Gradient End</Label>
-          <div className="flex items-center gap-2">
-            <input
-              id="grad-end"
-              type="color"
-              value={config.gradient_color_end ?? '#000000'}
-              onChange={(e) => onChange({ gradient_color_end: e.target.value })}
-              className="h-9 w-10 cursor-pointer rounded-md border border-input bg-transparent p-0.5"
-            />
-            <Input
-              value={config.gradient_color_end ?? '#000000'}
-              onChange={(e) => onChange({ gradient_color_end: e.target.value })}
-              className="font-mono text-xs"
-              maxLength={7}
-            />
-          </div>
+          <Label>Gradient End</Label>
+          <ColorField
+            value={config.gradient_color_end ?? '#000000'}
+            onValueChange={(hex) => onChange({ gradient_color_end: hex })}
+          />
         </div>
       </div>
 
@@ -116,22 +95,11 @@ function BrandingTab({
 
       {/* Text color */}
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="text-color">Thumbnail Text Color</Label>
-        <div className="flex items-center gap-2">
-          <input
-            id="text-color"
-            type="color"
-            value={config.thumbnail_text_color_1 ?? '#ffffff'}
-            onChange={(e) => onChange({ thumbnail_text_color_1: e.target.value })}
-            className="h-9 w-10 cursor-pointer rounded-md border border-input bg-transparent p-0.5"
-          />
-          <Input
-            value={config.thumbnail_text_color_1 ?? '#ffffff'}
-            onChange={(e) => onChange({ thumbnail_text_color_1: e.target.value })}
-            className="font-mono text-xs"
-            maxLength={7}
-          />
-        </div>
+        <Label>Thumbnail Text Color</Label>
+        <ColorField
+          value={config.thumbnail_text_color_1 ?? '#ffffff'}
+          onValueChange={(hex) => onChange({ thumbnail_text_color_1: hex })}
+        />
       </div>
 
       {/* Logo upload */}
