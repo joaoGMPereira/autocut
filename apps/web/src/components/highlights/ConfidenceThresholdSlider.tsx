@@ -11,9 +11,9 @@ export function ConfidenceThresholdSlider({ value, onChange }: ConfidenceThresho
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-zinc-300">
+        <span className="text-xs font-medium text-prose">
           Confidence Threshold:{' '}
-          <span className="font-mono text-blue-400">{value.toFixed(2)}</span>
+          <span className="font-mono text-info">{value.toFixed(2)}</span>
         </span>
       </div>
       <Slider
@@ -24,7 +24,7 @@ export function ConfidenceThresholdSlider({ value, onChange }: ConfidenceThresho
         onValueChange={(vals) => onChange(vals[0] ?? value)}
         className="w-full"
       />
-      <p className="text-[11px] text-zinc-500">
+      <p className="text-[11px] text-subtle">
         Highlights abaixo deste valor serão descartados
       </p>
     </div>

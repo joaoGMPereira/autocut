@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { HighlightStrategySelector } from '@/components/highlights/HighlightStrategySelector';
 import { ConfidenceThresholdSlider } from '@/components/highlights/ConfidenceThresholdSlider';
 import { HighlightList } from '@/components/highlights/HighlightList';
@@ -60,21 +62,20 @@ export function HighlightsClient() {
     <div className="flex flex-col gap-6 lg:flex-row lg:gap-8 lg:items-start">
       {/* Left panel: form */}
       <div className="flex flex-col gap-5 lg:w-[380px] shrink-0">
-        <div className="rounded-xl border border-zinc-800 bg-card p-5 flex flex-col gap-5">
+        <div className="rounded-xl border border-border bg-card p-5 flex flex-col gap-5">
           {/* Video path */}
-          <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-zinc-400">Caminho do Vídeo</span>
-            <input
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs font-medium text-subtle">Caminho do Vídeo</Label>
+            <Input
               type="text"
               value={videoPath}
               onChange={(e) => setVideoPath(e.target.value)}
               placeholder="/path/to/video.mp4"
               disabled={isRunning}
-              className="w-full rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm focus:outline-none focus:border-blue-500/60 placeholder:text-zinc-600 text-zinc-200 disabled:opacity-50"
             />
-          </label>
+          </div>
 
-          <Separator className="bg-zinc-800" />
+          <Separator />
 
           {/* Strategy selector */}
           <HighlightStrategySelector
@@ -84,22 +85,23 @@ export function HighlightsClient() {
             onChatJsonPathChange={setChatJsonPath}
           />
 
-          <Separator className="bg-zinc-800" />
+          <Separator />
 
           {/* Threshold slider */}
           <ConfidenceThresholdSlider value={threshold} onChange={setThreshold} />
 
           {/* Error */}
           {error && (
-            <p className="text-xs text-red-400">{error}</p>
+            <p className="text-xs text-destructive">{error}</p>
           )}
 
           {/* Actions */}
           <div className="flex gap-2">
             <Button
+              variant="brand"
               onClick={handleRun}
               disabled={isRunning || !videoPath.trim() || strategies.length === 0}
-              className="flex-1 bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50"
+              className="flex-1 disabled:opacity-50"
             >
               {isRunning ? 'Detectando…' : 'Detect Highlights'}
             </Button>
@@ -107,7 +109,6 @@ export function HighlightsClient() {
               <Button
                 variant="outline"
                 onClick={handleReset}
-                className="border-zinc-700 text-zinc-400 hover:text-zinc-200"
               >
                 Reset
               </Button>

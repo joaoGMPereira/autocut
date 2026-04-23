@@ -6,9 +6,9 @@ export interface EngagementScoreBarProps {
 }
 
 function getScoreColor(score: number): { bar: string; text: string } {
-  if (score < 40) return { bar: 'bg-red-500', text: 'text-red-400' };
-  if (score <= 70) return { bar: 'bg-yellow-500', text: 'text-yellow-400' };
-  return { bar: 'bg-emerald-500', text: 'text-emerald-400' };
+  if (score < 40) return { bar: 'bg-destructive', text: 'text-destructive' };
+  if (score <= 70) return { bar: 'bg-warning', text: 'text-warning' };
+  return { bar: 'bg-success', text: 'text-success' };
 }
 
 export function EngagementScoreBar({ score, factors }: EngagementScoreBarProps) {
@@ -18,7 +18,7 @@ export function EngagementScoreBar({ score, factors }: EngagementScoreBarProps) 
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">Engagement</span>
+        <span className="text-xs text-subtle">Engagement</span>
         <span className={`text-xs font-mono font-medium ${text}`}>{clamped.toFixed(1)}</span>
       </div>
       <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">

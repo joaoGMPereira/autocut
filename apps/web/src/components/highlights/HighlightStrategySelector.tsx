@@ -1,6 +1,8 @@
 'use client';
 
 import { Brain, Volume2, Eye, MessageSquare } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
 interface Strategy {
@@ -54,7 +56,7 @@ export function HighlightStrategySelector({
 
   return (
     <div className="flex flex-col gap-3">
-      <span className="text-xs text-zinc-400 font-medium">Strategies de Detecção</span>
+      <span className="text-xs text-subtle font-medium">Strategies de Detecção</span>
       <div className="grid grid-cols-2 gap-2">
         {STRATEGIES.map((s) => {
           const isSelected = selected.includes(s.id);
@@ -65,16 +67,16 @@ export function HighlightStrategySelector({
               onClick={() => onToggle(s.id)}
               className={cn(
                 'flex items-start gap-2 rounded-lg border p-3 text-left transition-colors',
-                'hover:border-blue-500/60 hover:bg-blue-500/5',
+                'hover:border-info/60 hover:bg-info/5',
                 isSelected
-                  ? 'border-blue-500 bg-blue-500/10'
-                  : 'border-zinc-700 bg-transparent',
+                  ? 'border-info bg-info/10'
+                  : 'border-border bg-transparent',
               )}
             >
               <span
                 className={cn(
                   'mt-0.5 shrink-0',
-                  isSelected ? 'text-blue-400' : 'text-zinc-500',
+                  isSelected ? 'text-info' : 'text-subtle',
                 )}
               >
                 {s.icon}
@@ -83,12 +85,12 @@ export function HighlightStrategySelector({
                 <span
                   className={cn(
                     'text-xs font-medium',
-                    isSelected ? 'text-blue-300' : 'text-zinc-300',
+                    isSelected ? 'text-info' : 'text-prose',
                   )}
                 >
                   {s.label}
                 </span>
-                <span className="text-[11px] text-zinc-500 leading-snug">{s.description}</span>
+                <span className="text-[11px] text-subtle leading-snug">{s.description}</span>
               </div>
             </button>
           );
@@ -96,16 +98,15 @@ export function HighlightStrategySelector({
       </div>
 
       {showChatInput && (
-        <label className="flex flex-col gap-1.5">
-          <span className="text-xs text-zinc-400">Chat JSON Path</span>
-          <input
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs font-medium text-subtle">Chat JSON Path</Label>
+          <Input
             type="text"
             value={chatJsonPath}
             onChange={(e) => onChatJsonPathChange(e.target.value)}
             placeholder="/path/to/chat_export.json"
-            className="w-full rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm focus:outline-none focus:border-blue-500/60 placeholder:text-zinc-600 text-zinc-200"
           />
-        </label>
+        </div>
       )}
     </div>
   );

@@ -24,7 +24,7 @@ export function ShortCard({ result, language }: ShortCardProps) {
       )}
 
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="font-mono text-xs text-muted-foreground truncate max-w-[200px]">
+        <span className="font-mono text-xs text-subtle truncate max-w-[200px]">
           {basename(result.output)}
         </span>
         {result.duration_sec !== undefined && (
@@ -32,7 +32,7 @@ export function ShortCard({ result, language }: ShortCardProps) {
             {result.duration_sec.toFixed(1)}s
           </Badge>
         )}
-        <Badge className="text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-400 border-blue-500/20">
+        <Badge variant="info" className="text-[10px] px-1.5 py-0">
           {language.toUpperCase()}
         </Badge>
       </div>
