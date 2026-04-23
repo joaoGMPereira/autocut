@@ -88,4 +88,9 @@ describe('InputWithAction', () => {
     render(<InputWithAction {...defaultProps} inputClassName="h-8" />);
     expect(screen.getByRole('textbox').className).toContain('h-8');
   });
+
+  it('actionClassName merges on button', () => {
+    render(<InputWithAction {...defaultProps} actionClassName="my-btn-class" />);
+    expect(screen.getByRole('button').className).toContain('my-btn-class');
+  });
 });
