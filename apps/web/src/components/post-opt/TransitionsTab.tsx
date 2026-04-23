@@ -49,7 +49,7 @@ export function TransitionsTab() {
         </div>
         {clipPaths.map((path, idx) => (
           <div key={idx} className="flex items-center gap-2">
-            <span className="text-xs text-zinc-500 w-4">{idx + 1}</span>
+            <span className="text-xs text-subtle w-4">{idx + 1}</span>
             <Input
               placeholder={`/path/to/clip${idx + 1}.mp4`}
               value={path}
@@ -60,7 +60,7 @@ export function TransitionsTab() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 w-8 p-0 text-zinc-500 hover:text-red-400"
+                className="h-8 w-8 p-0 text-subtle hover:text-destructive"
                 onClick={() => setClipPaths((p) => p.filter((_, i) => i !== idx))}
               >
                 ×

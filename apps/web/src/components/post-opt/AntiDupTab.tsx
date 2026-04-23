@@ -43,7 +43,7 @@ export function AntiDupTab() {
           value={captionText}
           onChange={(e) => setCaptionText(e.target.value)}
           rows={3}
-          className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+          className="flex w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-subtle focus-visible:outline-none focus-visible:border-brand/60 focus-visible:ring-[3px] focus-visible:ring-brand/30 resize-none"
         />
       </div>
 

@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { Loader2, Trash2, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useThumbnailStore } from '@/store/thumbnailStore';
 
 interface BackgroundsGalleryProps {
@@ -49,12 +50,11 @@ export function BackgroundsGallery({ channelId }: BackgroundsGalleryProps) {
     <div className="flex flex-col gap-4">
       {/* Upload row */}
       <div className="flex items-center gap-2 flex-wrap">
-        <input
-          type="text"
+        <Input
           value={uploadName}
           onChange={(e) => setUploadName(e.target.value)}
           placeholder="Background name (optional)"
-          className="rounded-lg bg-surface border border-border px-3 py-2 text-sm focus:outline-none focus:border-brand/60 w-52"
+          className="w-52"
         />
         <Button
           variant="outline"
@@ -85,7 +85,7 @@ export function BackgroundsGallery({ channelId }: BackgroundsGalleryProps) {
 
       {/* Gallery grid */}
       {loadingBackgrounds ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+        <div className="flex items-center gap-2 text-sm text-subtle py-4">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading backgrounds…
         </div>
@@ -120,7 +120,7 @@ export function BackgroundsGallery({ channelId }: BackgroundsGalleryProps) {
                 {/* Filename + default badge */}
                 <div className="px-2 py-1 bg-surface-deep flex items-center gap-1 min-w-0">
                   {bg.is_default && (
-                    <Star className="h-3 w-3 shrink-0 text-amber-400 fill-amber-400" />
+                    <Star className="h-3 w-3 shrink-0 text-warning fill-warning" />
                   )}
                   <span className="text-xs text-caption truncate">{bg.name}</span>
                 </div>

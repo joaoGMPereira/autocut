@@ -29,8 +29,8 @@ function SettingSwitch({
   return (
     <div className="flex items-center justify-between gap-4">
       <div className="flex flex-col gap-0.5 min-w-0">
-        <span className="text-sm text-zinc-200">{title}</span>
-        {description && <span className="text-xs text-zinc-500">{description}</span>}
+        <span className="text-sm text-foreground">{title}</span>
+        {description && <span className="text-xs text-subtle">{description}</span>}
       </div>
       <Switch
         checked={checked}
@@ -56,11 +56,11 @@ export function TextStyleEditorPanel({
   return (
     <div className="flex flex-col gap-4">
       {/* ── Tipografia ── */}
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
-        <span className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Tipografia</span>
+      <div className="rounded-lg border border-border bg-card/60 p-4 flex flex-col gap-3">
+        <span className="text-xs font-medium text-subtle uppercase tracking-wide">Tipografia</span>
 
         <div className="flex flex-col gap-1">
-          <Label className="text-xs text-zinc-400">Família da Fonte</Label>
+          <Label className="text-xs font-medium text-subtle">Família da Fonte</Label>
           <Input
             value={config.fontFamily}
             onChange={(e) => update({ fontFamily: e.target.value })}
@@ -90,7 +90,7 @@ export function TextStyleEditorPanel({
         />
 
         <div className="flex flex-col gap-2">
-          <Label className="text-xs text-zinc-400">Tamanho: {config.fontSize}px</Label>
+          <Label className="text-xs font-medium text-subtle">Tamanho: {config.fontSize}px</Label>
           <Slider
             min={12}
             max={200}
@@ -102,8 +102,8 @@ export function TextStyleEditorPanel({
       </div>
 
       {/* ── Cores e Bordas ── */}
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-4">
-        <span className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Cores e Bordas</span>
+      <div className="rounded-lg border border-border bg-card/60 p-4 flex flex-col gap-4">
+        <span className="text-xs font-medium text-subtle uppercase tracking-wide">Cores e Bordas</span>
 
         <ColorInputField
           label="Cor do Texto"
@@ -122,14 +122,14 @@ export function TextStyleEditorPanel({
               }
             />
             {hasBackground && (
-              <div className="flex flex-col gap-3 pl-2 border-l border-zinc-700">
+              <div className="flex flex-col gap-3 pl-2 border-l border-border">
                 <ColorInputField
                   label="Cor do Fundo"
                   value={config.backgroundColor ?? '#000000AA'}
                   onValueChange={(v) => update({ backgroundColor: v })}
                 />
                 <div className="flex flex-col gap-1.5">
-                  <Label className="text-xs text-zinc-400">Padding: {config.padding}px</Label>
+                  <Label className="text-xs font-medium text-subtle">Padding: {config.padding}px</Label>
                   <Slider
                     min={0} max={100} step={1}
                     value={[config.padding]}
@@ -137,7 +137,7 @@ export function TextStyleEditorPanel({
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label className="text-xs text-zinc-400">Arredondamento: {config.cornerRadius}px</Label>
+                  <Label className="text-xs font-medium text-subtle">Arredondamento: {config.cornerRadius}px</Label>
                   <Slider
                     min={0} max={100} step={1}
                     value={[config.cornerRadius]}
@@ -160,14 +160,14 @@ export function TextStyleEditorPanel({
           }
         />
         {hasBorder && (
-          <div className="flex flex-col gap-3 pl-2 border-l border-zinc-700">
+          <div className="flex flex-col gap-3 pl-2 border-l border-border">
             <ColorInputField
               label="Cor da Borda"
               value={config.borderColor ?? '#000000'}
               onValueChange={(v) => update({ borderColor: v })}
             />
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-zinc-400">Espessura: {config.borderWidth}px</Label>
+              <Label className="text-xs font-medium text-subtle">Espessura: {config.borderWidth}px</Label>
               <Slider
                 min={1} max={20} step={1}
                 value={[config.borderWidth]}
@@ -188,14 +188,14 @@ export function TextStyleEditorPanel({
           }
         />
         {hasShadow && (
-          <div className="flex flex-col gap-3 pl-2 border-l border-zinc-700">
+          <div className="flex flex-col gap-3 pl-2 border-l border-border">
             <ColorInputField
               label="Cor da Sombra"
               value={config.shadowColor ?? '#000000'}
               onValueChange={(v) => update({ shadowColor: v })}
             />
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-zinc-400">Distância: {config.shadowOffset}px</Label>
+              <Label className="text-xs font-medium text-subtle">Distância: {config.shadowOffset}px</Label>
               <Slider
                 min={1} max={50} step={1}
                 value={[config.shadowOffset]}
@@ -207,15 +207,15 @@ export function TextStyleEditorPanel({
       </div>
 
       {/* ── Ajuste Fino de Posição ── */}
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
-        <span className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Ajuste Fino de Posição</span>
+      <div className="rounded-lg border border-border bg-card/60 p-4 flex flex-col gap-3">
+        <span className="text-xs font-medium text-subtle uppercase tracking-wide">Ajuste Fino de Posição</span>
         <div className="flex items-center justify-between gap-3">
-          <Label className="text-sm text-zinc-300">Offset Vertical (Y):</Label>
+          <Label className="text-sm text-prose">Offset Vertical (Y):</Label>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => update({ verticalOffset: Math.max(-1000, config.verticalOffset - 1) })}
-              className="h-8 w-8 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-lg font-bold flex items-center justify-center"
+              className="h-8 w-8 rounded bg-surface hover:bg-surface/80 text-prose text-lg font-bold flex items-center justify-center"
             >
               −
             </button>
@@ -225,12 +225,12 @@ export function TextStyleEditorPanel({
               max={1000}
               value={config.verticalOffset}
               onChange={(e) => update({ verticalOffset: parseInt(e.target.value, 10) || 0 })}
-              className="w-16 h-8 rounded border border-zinc-700 bg-zinc-900 text-center text-sm text-zinc-200 [appearance:textfield]"
+              className="w-16 h-8 rounded border border-border bg-background text-center text-sm text-foreground [appearance:textfield]"
             />
             <button
               type="button"
               onClick={() => update({ verticalOffset: Math.min(1000, config.verticalOffset + 1) })}
-              className="h-8 w-8 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-lg font-bold flex items-center justify-center"
+              className="h-8 w-8 rounded bg-surface hover:bg-surface/80 text-prose text-lg font-bold flex items-center justify-center"
             >
               +
             </button>

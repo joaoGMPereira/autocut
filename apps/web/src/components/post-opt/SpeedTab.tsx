@@ -69,10 +69,10 @@ export function SpeedTab() {
           {segments.map((seg, idx) => (
             <div
               key={idx}
-              className="flex items-center gap-2 rounded-md border border-border bg-zinc-900/40 px-3 py-2"
+              className="flex items-center gap-2 rounded-md border border-border bg-background/40 px-3 py-2"
               onClick={() => setActiveSegIdx(idx)}
             >
-              <span className="text-xs text-zinc-500 w-4">{idx + 1}</span>
+              <span className="text-xs text-subtle w-4">{idx + 1}</span>
               <div className="flex items-center gap-1">
                 <Input
                   type="number"
@@ -81,7 +81,7 @@ export function SpeedTab() {
                   value={seg.start_sec || ''}
                   onChange={(e) => updateSegment(idx, { start_sec: parseFloat(e.target.value) || 0 })}
                 />
-                <span className="text-zinc-500 text-xs">→</span>
+                <span className="text-subtle text-xs">→</span>
                 <Input
                   type="number"
                   className="h-7 w-20 text-xs"
@@ -91,7 +91,7 @@ export function SpeedTab() {
                 />
               </div>
               <div className="flex items-center gap-1 ml-2">
-                <span className="text-xs text-zinc-500">Speed:</span>
+                <span className="text-xs text-subtle">Speed:</span>
                 <Input
                   type="number"
                   className="h-7 w-16 text-xs"
@@ -99,13 +99,13 @@ export function SpeedTab() {
                   value={seg.speed}
                   onChange={(e) => updateSegment(idx, { speed: parseFloat(e.target.value) || 1 })}
                 />
-                <span className="text-xs text-zinc-500">x</span>
+                <span className="text-xs text-subtle">x</span>
               </div>
               {segments.length > 1 && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-6 w-6 p-0 ml-auto text-zinc-500 hover:text-red-400"
+                  className="h-6 w-6 p-0 ml-auto text-subtle hover:text-destructive"
                   onClick={(e) => { e.stopPropagation(); setSegments((p) => p.filter((_, i) => i !== idx)); }}
                 >
                   ×
@@ -116,7 +116,7 @@ export function SpeedTab() {
         </div>
 
         <div className="flex items-center gap-2 mt-1">
-          <span className="text-xs text-zinc-500">Presets:</span>
+          <span className="text-xs text-subtle">Presets:</span>
           {SPEED_PRESETS.map((preset) => (
             <Button
               key={preset}

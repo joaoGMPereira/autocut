@@ -54,10 +54,10 @@ export function TextOverlayTab() {
   return (
     <div className="flex flex-col gap-4">
       {/* Master toggle */}
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4 flex items-center justify-between gap-4">
+      <div className="rounded-lg border border-border bg-card/60 p-4 flex items-center justify-between gap-4">
         <div className="flex flex-col gap-0.5">
-          <span className="text-sm font-medium text-zinc-200">Adicionar Overlays de Texto</span>
-          <span className="text-xs text-zinc-500">Textos permanentes ou temporários sobre o vídeo</span>
+          <span className="text-sm font-medium text-foreground">Adicionar Overlays de Texto</span>
+          <span className="text-xs text-subtle">Textos permanentes ou temporários sobre o vídeo</span>
         </div>
         <Switch
           checked={config.enabled}
@@ -74,7 +74,7 @@ export function TextOverlayTab() {
             return (
               <div
                 key={index}
-                className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 flex flex-col gap-3"
+                className="rounded-lg border border-border bg-card/40 p-3 flex flex-col gap-3"
               >
                 {/* Header row */}
                 <div className="flex items-center gap-2">
@@ -87,7 +87,7 @@ export function TextOverlayTab() {
                   <button
                     type="button"
                     onClick={() => setExpandedIndex(isExpanded ? null : index)}
-                    className="h-9 w-9 rounded border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-zinc-400"
+                    className="h-9 w-9 rounded border border-border bg-surface hover:bg-surface/80 flex items-center justify-center text-subtle"
                     aria-label={isExpanded ? 'Recolher overlay' : 'Expandir overlay'}
                   >
                     {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -95,7 +95,7 @@ export function TextOverlayTab() {
                   <button
                     type="button"
                     onClick={() => removeOverlay(index)}
-                    className="h-9 w-9 rounded border border-red-900/40 bg-red-950/30 hover:bg-red-900/50 flex items-center justify-center text-red-400"
+                    className="h-9 w-9 rounded border border-destructive/40 bg-destructive/10 hover:bg-destructive/30 flex items-center justify-center text-destructive"
                     aria-label="Remover overlay"
                   >
                     <Trash2 size={14} />
@@ -122,7 +122,7 @@ export function TextOverlayTab() {
                       />
                       <label
                         htmlFor={`whole-${index}`}
-                        className="text-sm text-zinc-300 cursor-pointer select-none"
+                        className="text-sm text-prose cursor-pointer select-none"
                       >
                         Aplicar no vídeo todo
                       </label>
@@ -132,7 +132,7 @@ export function TextOverlayTab() {
                     {!overlay.applyToWholeVideo && (
                       <div className="flex gap-3">
                         <div className="flex flex-col gap-1.5 flex-1">
-                          <Label className="text-xs text-zinc-400">Início (s)</Label>
+                          <Label className="text-xs font-medium text-subtle">Início (s)</Label>
                           <Input
                             type="number"
                             min={0}
@@ -144,7 +144,7 @@ export function TextOverlayTab() {
                           />
                         </div>
                         <div className="flex flex-col gap-1.5 flex-1">
-                          <Label className="text-xs text-zinc-400">Fim (s)</Label>
+                          <Label className="text-xs font-medium text-subtle">Fim (s)</Label>
                           <Input
                             type="number"
                             min={0}
@@ -163,7 +163,7 @@ export function TextOverlayTab() {
 
                     {/* Position */}
                     <div className="flex flex-col gap-2">
-                      <Label className="text-xs text-zinc-400">Posição:</Label>
+                      <Label className="text-xs font-medium text-subtle">Posição:</Label>
                       <PositionGrid
                         value={overlay.position}
                         onChange={(pos) => updateOverlay(index, { position: pos as TimedTextOverlay['position'] })}
@@ -179,7 +179,7 @@ export function TextOverlayTab() {
           <button
             type="button"
             onClick={addOverlay}
-            className="w-full h-11 rounded-lg border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-sm font-medium transition-colors"
+            className="w-full h-11 rounded-lg border border-border bg-background hover:bg-surface text-prose text-sm font-medium transition-colors"
           >
             + Adicionar Texto
           </button>
@@ -189,7 +189,7 @@ export function TextOverlayTab() {
             <Button disabled className="opacity-40 cursor-not-allowed">
               Apply Text Overlay
             </Button>
-            <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 hidden group-hover:block bg-zinc-800 text-zinc-300 text-xs rounded px-2 py-1 whitespace-nowrap pointer-events-none">
+            <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 hidden group-hover:block bg-surface text-prose text-xs rounded px-2 py-1 whitespace-nowrap pointer-events-none">
               Backend em desenvolvimento
             </div>
           </div>

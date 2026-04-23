@@ -15,14 +15,14 @@ export function ColorInputField({ label, value, onValueChange }: ColorInputField
 
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={`color-hex-${label}`} className="text-xs text-zinc-400">{label}</Label>
+      <Label htmlFor={`color-hex-${label}`} className="text-xs font-medium text-subtle">{label}</Label>
       <div className="flex items-center gap-2">
         {/* Swatch — clicking opens native color picker */}
         <button
           type="button"
           aria-label={`Escolher ${label}`}
           onClick={() => colorRef.current?.click()}
-          className="h-8 w-8 rounded border border-zinc-700 shrink-0 cursor-pointer"
+          className="h-8 w-8 rounded border border-border shrink-0 cursor-pointer"
           style={{ backgroundColor: value }}
         />
         {/* Hidden native color input — syncs with hex text */}
