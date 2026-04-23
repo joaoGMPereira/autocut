@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 interface FileInputButtonProps {
   onFilesSelected: (files: FileList) => void
@@ -37,7 +38,7 @@ function FileInputButton({
   }
 
   return (
-    <div data-slot="file-input-button" className={className}>
+    <div data-slot="file-input-button" className={cn(className)}>
       <Button
         type="button"
         variant={variant}
@@ -52,6 +53,7 @@ function FileInputButton({
         type="file"
         accept={accept}
         multiple={multiple}
+        disabled={disabled}
         className="hidden"
         onChange={handleChange}
         aria-hidden
