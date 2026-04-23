@@ -3,6 +3,7 @@
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
+import { NumberStepper } from '@/components/ui/number-stepper';
 import { Switch } from '@/components/ui/switch';
 import { ColorField } from '@/components/ui/color-field';
 import type { TextStyleConfig } from '@/types/text-overlay';
@@ -211,30 +212,12 @@ export function TextStyleEditorPanel({
         <span className="text-xs font-medium text-subtle uppercase tracking-wide">Ajuste Fino de Posição</span>
         <div className="flex items-center justify-between gap-3">
           <Label className="text-sm text-prose">Offset Vertical (Y):</Label>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => update({ verticalOffset: Math.max(-1000, config.verticalOffset - 1) })}
-              className="h-8 w-8 rounded bg-surface hover:bg-surface/80 text-prose text-lg font-bold flex items-center justify-center"
-            >
-              −
-            </button>
-            <input
-              type="number"
-              min={-1000}
-              max={1000}
-              value={config.verticalOffset}
-              onChange={(e) => update({ verticalOffset: parseInt(e.target.value, 10) || 0 })}
-              className="w-16 h-8 rounded border border-border bg-background text-center text-sm text-foreground [appearance:textfield]"
-            />
-            <button
-              type="button"
-              onClick={() => update({ verticalOffset: Math.min(1000, config.verticalOffset + 1) })}
-              className="h-8 w-8 rounded bg-surface hover:bg-surface/80 text-prose text-lg font-bold flex items-center justify-center"
-            >
-              +
-            </button>
-          </div>
+          <NumberStepper
+            value={config.verticalOffset}
+            onValueChange={(v) => update({ verticalOffset: v })}
+            min={-1000}
+            max={1000}
+          />
         </div>
       </div>
     </div>

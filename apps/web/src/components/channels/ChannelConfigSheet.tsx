@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { ColorField } from '@/components/ui/color-field';
 import { FileInputButton } from '@/components/ui/file-input-button';
 import { Input } from '@/components/ui/input';
+import { NumberStepper } from '@/components/ui/number-stepper';
 import { InputWithAction } from '@/components/ui/input-with-action';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -143,14 +144,11 @@ function DefaultsTab({
     <div className="flex flex-col gap-5 p-4">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="default-category">Default Category ID</Label>
-        <Input
-          id="default-category"
-          type="number"
+        <NumberStepper
           value={config.default_category_id ?? 22}
-          onChange={(e) =>
-            onChange({ default_category_id: parseInt(e.target.value, 10) || 22 })
-          }
-          placeholder="22"
+          onValueChange={(v) => onChange({ default_category_id: v })}
+          min={1}
+          ariaLabel="Default Category ID"
         />
       </div>
 
@@ -169,15 +167,13 @@ function DefaultsTab({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="max-highlights">Max Highlights</Label>
-        <Input
-          id="max-highlights"
-          type="number"
-          value={config.max_highlights ?? ''}
-          onChange={(e) => {
-            const val = e.target.value;
-            onChange({ max_highlights: val === '' ? undefined : parseInt(val, 10) });
-          }}
+        <NumberStepper
+          allowEmpty
+          value={config.max_highlights ?? null}
+          onValueChange={(v) => onChange({ max_highlights: v ?? undefined })}
+          min={1}
           placeholder="unlimited"
+          ariaLabel="Max Highlights"
         />
       </div>
     </div>
