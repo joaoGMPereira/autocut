@@ -19,16 +19,26 @@ type SSEEvent struct {
 
 // SSEHub manages per-job SSE listener channels.
 // Multiple listeners per job are supported (e.g. two browser tabs).
+//
+// Replay buffer: events published before any listener registers are buffered
+// (up to maxHistory per job) and replayed to the first listener that joins.
+// This prevents the race where a fast-completing job (e.g. manual-install
+// validators that return an error immediately) publishes its terminal event
+// before the browser EventSource has finished opening the stream.
 type SSEHub struct {
-	mu      sync.RWMutex
+	mu      sync.Mutex
 	clients map[string][]chan SSEEvent
+	history map[string][]SSEEvent
 	log     *slog.Logger
 }
+
+const maxHistory = 128
 
 // New creates an initialised SSEHub.
 func New() *SSEHub {
 	return &SSEHub{
 		clients: make(map[string][]chan SSEEvent),
+		history: make(map[string][]SSEEvent),
 		log:     slog.With("component", "hub.sse"),
 	}
 }
@@ -37,12 +47,22 @@ func New() *SSEHub {
 //   - the receive-only channel the caller reads events from
 //   - a cancel function that must be called when the listener disconnects
 //
-// The channel is buffered (32) so a slow consumer does not block Publish.
+// The channel is buffered (128) so a slow consumer does not block Publish.
+// Any events already in the replay buffer are drained into the channel
+// immediately so late-joining listeners receive the full history.
 func (h *SSEHub) Register(jobID string) (<-chan SSEEvent, func()) {
-	ch := make(chan SSEEvent, 32)
+	ch := make(chan SSEEvent, 128)
 
 	h.mu.Lock()
 	h.clients[jobID] = append(h.clients[jobID], ch)
+	// Replay buffered events so a listener that arrives after Publish still
+	// receives all prior events (including terminal 'done'/'error').
+	for _, event := range h.history[jobID] {
+		select {
+		case ch <- event:
+		default:
+		}
+	}
 	h.mu.Unlock()
 
 	h.log.Debug("SSE listener registered", "jobID", jobID)
@@ -61,6 +81,7 @@ func (h *SSEHub) Register(jobID string) (<-chan SSEEvent, func()) {
 		}
 		if len(h.clients[jobID]) == 0 {
 			delete(h.clients, jobID)
+			delete(h.history, jobID)
 		}
 		h.log.Debug("SSE listener cancelled", "jobID", jobID)
 	}
@@ -68,13 +89,17 @@ func (h *SSEHub) Register(jobID string) (<-chan SSEEvent, func()) {
 	return ch, cancel
 }
 
-// Publish sends event to every registered listener for jobID.
+// Publish sends event to every registered listener for jobID and appends it
+// to the replay buffer so listeners that join later receive the full history.
 // Non-blocking: slow/full channels are skipped.
 func (h *SSEHub) Publish(jobID string, event SSEEvent) {
-	h.mu.RLock()
+	h.mu.Lock()
+	if len(h.history[jobID]) < maxHistory {
+		h.history[jobID] = append(h.history[jobID], event)
+	}
 	listeners := make([]chan SSEEvent, len(h.clients[jobID]))
 	copy(listeners, h.clients[jobID])
-	h.mu.RUnlock()
+	h.mu.Unlock()
 
 	for _, ch := range listeners {
 		select {
