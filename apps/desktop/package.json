@@ -1,6 +1,6 @@
 {
   "name": "@autocut/desktop",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "private": true,
   "main": "compiled/main.js",
   "scripts": {
