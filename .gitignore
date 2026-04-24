@@ -37,6 +37,8 @@ pnpm-debug.log*
 
 # Electron build
 apps/desktop/release/
+apps/desktop/release-*/
+apps/desktop/build/*.bak
 
 # Go build artifacts
 server/bin/
