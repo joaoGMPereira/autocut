@@ -6,6 +6,16 @@ import { registerIpcHandlers } from './ipc-handlers';
 import { setupAutoUpdater } from './auto-updater';
 import type { UpdateProgress } from '@autocut/shared';
 
+// ─── Single-instance lock ────────────────────────────────────────────────────
+
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+}
+
+// Suppress Chromium's verbose cert-parsing log spam (malformed macOS Keychain
+// entries with empty policy qualifier sequences — harmless, not our code).
+app.commandLine.appendSwitch('log-level', '3');
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const IS_DEV = !app.isPackaged;
