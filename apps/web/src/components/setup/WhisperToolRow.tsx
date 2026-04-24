@@ -22,6 +22,8 @@ export function WhisperToolRow({ tool }: WhisperToolRowProps) {
   const whisperDownloadLogs = useSetupStore((s) => s.whisperDownloadLogs);
   const downloadWhisperModel = useSetupStore((s) => s.downloadWhisperModel);
 
+  const startInstall = useSetupStore((s) => s.startInstall);
+
   const installState = installStates[tool.name] ?? 'idle';
   const installLog = installLogs[tool.name] ?? [];
 
@@ -75,7 +77,9 @@ export function WhisperToolRow({ tool }: WhisperToolRowProps) {
                 ? 'success'
                 : binaryOnly
                   ? 'warning'
-                  : 'destructive'
+                  : installState === 'error'
+                    ? 'destructive'
+                    : 'destructive'
           }
         >
           {binaryInstalling
@@ -84,22 +88,45 @@ export function WhisperToolRow({ tool }: WhisperToolRowProps) {
               ? 'Installed'
               : binaryOnly
                 ? 'Missing model'
-                : 'Missing'}
+                : installState === 'error'
+                  ? 'Error'
+                  : 'Missing'}
         </Badge>
+
+        {!binaryPresent && installState === 'idle' && (
+          <Button
+            size="sm"
+            data-testid="tool-install-btn-whisper-cli"
+            className="h-7 gap-1.5 text-xs"
+            onClick={() => startInstall(goUrl, tool.name)}
+          >
+            <Download className="h-3.5 w-3.5" />
+            Install
+          </Button>
+        )}
+
+        {!binaryPresent && installState === 'error' && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs"
+            onClick={() => startInstall(goUrl, tool.name)}
+          >
+            Retry
+          </Button>
+        )}
       </div>
 
       {/* install log for binary */}
-      {binaryInstalling && installLog.length > 0 && (
+      {(binaryInstalling || installState === 'error') && installLog.length > 0 && (
         <div className="px-5 pb-3.5">
-          <ScrollArea className="max-h-24 rounded-md bg-muted/50 p-2">
-            <div className="flex flex-col gap-0.5">
-              {installLog.map((line, i) => (
-                <span key={i} className="font-mono text-[11px] text-subtle">
-                  {line}
-                </span>
-              ))}
-            </div>
-          </ScrollArea>
+          <div className="max-h-24 overflow-y-auto rounded-md bg-muted/50 p-2 flex flex-col gap-0.5">
+            {installLog.map((line, i) => (
+              <span key={i} className="font-mono text-[11px] text-subtle">
+                {line}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
@@ -173,15 +200,13 @@ export function WhisperToolRow({ tool }: WhisperToolRowProps) {
                       </div>
 
                       {isDownloading && dlLogs.length > 0 && (
-                        <ScrollArea className="max-h-16 rounded bg-muted/50 p-1.5">
-                          <div className="flex flex-col gap-0.5">
-                            {dlLogs.map((line, i) => (
-                              <span key={i} className="font-mono text-[10px] text-subtle">
-                                {line}
-                              </span>
-                            ))}
-                          </div>
-                        </ScrollArea>
+                        <div className="max-h-16 overflow-y-auto rounded bg-muted/50 p-1.5 flex flex-col gap-0.5">
+                          {dlLogs.map((line, i) => (
+                            <span key={i} className="font-mono text-[10px] text-subtle">
+                              {line}
+                            </span>
+                          ))}
+                        </div>
                       )}
                     </div>
                   );

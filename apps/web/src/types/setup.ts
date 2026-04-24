@@ -44,14 +44,11 @@ export interface InstallEvent {
 
 export type ToolInstallState = 'idle' | 'installing' | 'done' | 'error';
 
-export const AUTO_INSTALL_TOOLS = ['yt-dlp', 'TwitchDownloaderCLI'] as const;
+export const AUTO_INSTALL_TOOLS = ['yt-dlp', 'TwitchDownloaderCLI', 'whisper-cli', 'ollama', 'convert', 'ffmpeg', 'gh', 'claude'] as const;
 export const PARTIAL_INSTALL_TOOLS = ['whisper'] as const;
-export const MANUAL_INSTALL_TOOLS = ['ffmpeg', 'ollama', 'convert', 'brew'] as const;
+export const MANUAL_INSTALL_TOOLS = ['brew'] as const;
 
 export const MANUAL_INSTALL_URLS: Record<string, string> = {
-  ffmpeg: 'https://ffmpeg.org/download.html',
-  ollama: 'https://ollama.com/download',
-  convert: 'https://imagemagick.org/script/download.php',
   brew: 'https://brew.sh',
 };
 

@@ -102,6 +102,29 @@ func unzipSingleBinary(zipPath, binaryName, dest string) error {
 	return fmt.Errorf("no usable entry found in %s", zipPath)
 }
 
+// copyExecutable copies src to dest and makes dest executable (0o755).
+func copyExecutable(src, dest string) error {
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return err
+	}
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	return os.Chmod(dest, 0o755)
+}
+
 func extractZipEntry(f *zip.File, dest string) error {
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return err

@@ -157,18 +157,13 @@ export function ToolRow({ tool }: ToolRowProps) {
 
       {state === 'installing' && logs.length > 0 && (
         <div className="px-5 pb-3.5">
-          <ScrollArea className="max-h-24 rounded-md bg-muted/50 p-2">
-            <div className="flex flex-col gap-0.5">
-              {logs.map((line, i) => (
-                <span
-                  key={i}
-                  className="font-mono text-[11px] text-subtle"
-                >
-                  {line}
-                </span>
-              ))}
-            </div>
-          </ScrollArea>
+          <div className="max-h-24 overflow-y-auto rounded-md bg-muted/50 p-2 flex flex-col gap-0.5">
+            {logs.map((line, i) => (
+              <span key={i} className="font-mono text-[11px] text-subtle">
+                {line}
+              </span>
+            ))}
+          </div>
         </div>
       )}
     </div>

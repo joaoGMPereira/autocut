@@ -1283,7 +1283,7 @@ export function StepMode({ historical }: StepModeProps) {
               <Label className="text-xs font-medium text-subtle">Chroma Key</Label>
               <SegmentedControl<'none' | 'green' | 'black' | 'white' | 'blue'>
                 wrap
-                value={overlayChromaKey}
+                value={overlayChromaKey ?? 'none'}
                 onChange={setOverlayChromaKey}
                 options={[
                   { value: 'none',  label: 'Nenhum' },

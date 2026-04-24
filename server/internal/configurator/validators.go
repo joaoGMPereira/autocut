@@ -1,15 +1,18 @@
 package configurator
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -120,14 +123,18 @@ func (v *FfmpegValidator) Version() string {
 	return raw
 }
 
-func (v *FfmpegValidator) Install(_ context.Context, logCh chan<- string) error {
-	logCh <- "ffmpeg requires manual installation."
-	logCh <- v.Instructions()
-	return fmt.Errorf("manual install required: %s", v.Instructions())
+func (v *FfmpegValidator) Install(ctx context.Context, logCh chan<- string) error {
+	dest, err := installViaBrew(ctx, "ffmpeg", "ffmpeg", v.binDir, logCh)
+	if err != nil {
+		return err
+	}
+	v.path = dest
+	v.source = "autocut_bin"
+	return nil
 }
 
 func (v *FfmpegValidator) Instructions() string {
-	return "Install ffmpeg via Homebrew: 'brew install ffmpeg', or visit https://ffmpeg.org/download.html"
+	return "Install ffmpeg: 'brew install ffmpeg' (https://brew.sh) or visit https://ffmpeg.org/download.html"
 }
 
 func (v *FfmpegValidator) Status() ToolStatus {
@@ -174,14 +181,18 @@ func (v *WhisperValidator) Version() string {
 	return raw
 }
 
-func (v *WhisperValidator) Install(_ context.Context, logCh chan<- string) error {
-	logCh <- "whisper-cli requires manual installation."
-	logCh <- v.Instructions()
-	return fmt.Errorf("manual install required: %s", v.Instructions())
+func (v *WhisperValidator) Install(ctx context.Context, logCh chan<- string) error {
+	dest, err := installViaBrew(ctx, "whisper-cpp", "whisper-cli", v.binDir, logCh)
+	if err != nil {
+		return err
+	}
+	v.path = dest
+	v.source = "autocut_bin"
+	return nil
 }
 
 func (v *WhisperValidator) Instructions() string {
-	return "Build whisper.cpp from source: https://github.com/ggerganov/whisper.cpp"
+	return "Install via Homebrew: 'brew install whisper-cpp' (https://brew.sh)"
 }
 
 // hasWhisperModel checks whether a ggml-*.bin model file exists in any of
@@ -248,13 +259,18 @@ func (v *ClaudeValidator) Version() string {
 	return v.versionWithArgs("--version")
 }
 
-func (v *ClaudeValidator) Install(_ context.Context, logCh chan<- string) error {
-	logCh <- v.Instructions()
-	return fmt.Errorf("manual install required: %s", v.Instructions())
+func (v *ClaudeValidator) Install(ctx context.Context, logCh chan<- string) error {
+	dest, err := installViaNpm(ctx, "@anthropic-ai/claude-code", "claude", v.binDir, logCh)
+	if err != nil {
+		return err
+	}
+	v.path = dest
+	v.source = "autocut_bin"
+	return nil
 }
 
 func (v *ClaudeValidator) Instructions() string {
-	return "Install Claude CLI: https://claude.ai/download"
+	return "Install Claude CLI: 'npm install -g @anthropic-ai/claude-code' or visit https://claude.ai/download"
 }
 
 func (v *ClaudeValidator) Status() ToolStatus {
@@ -294,13 +310,18 @@ func (v *GhValidator) Version() string {
 	return v.versionWithArgs("--version")
 }
 
-func (v *GhValidator) Install(_ context.Context, logCh chan<- string) error {
-	logCh <- v.Instructions()
-	return fmt.Errorf("manual install required: %s", v.Instructions())
+func (v *GhValidator) Install(ctx context.Context, logCh chan<- string) error {
+	dest, err := installViaBrew(ctx, "gh", "gh", v.binDir, logCh)
+	if err != nil {
+		return err
+	}
+	v.path = dest
+	v.source = "autocut_bin"
+	return nil
 }
 
 func (v *GhValidator) Instructions() string {
-	return "Install GitHub CLI: 'brew install gh' or visit https://cli.github.com"
+	return "Install GitHub CLI: 'brew install gh' (https://brew.sh) or visit https://cli.github.com"
 }
 
 func (v *GhValidator) Status() ToolStatus {
@@ -367,13 +388,18 @@ func (v *OllamaValidator) Version() string {
 	return v.versionWithArgs("--version")
 }
 
-func (v *OllamaValidator) Install(_ context.Context, logCh chan<- string) error {
-	logCh <- v.Instructions()
-	return fmt.Errorf("manual install required: %s", v.Instructions())
+func (v *OllamaValidator) Install(ctx context.Context, logCh chan<- string) error {
+	dest, err := installViaBrew(ctx, "ollama", "ollama", v.binDir, logCh)
+	if err != nil {
+		return err
+	}
+	v.path = dest
+	v.source = "autocut_bin"
+	return nil
 }
 
 func (v *OllamaValidator) Instructions() string {
-	return "Install Ollama from https://ollama.ai"
+	return "Install Ollama: 'brew install ollama' (https://brew.sh) or visit https://ollama.ai"
 }
 
 func (v *OllamaValidator) Status() ToolStatus {
@@ -524,13 +550,18 @@ func (v *ConvertValidator) Version() string {
 	return raw
 }
 
-func (v *ConvertValidator) Install(_ context.Context, logCh chan<- string) error {
-	logCh <- v.Instructions()
-	return fmt.Errorf("manual install required: %s", v.Instructions())
+func (v *ConvertValidator) Install(ctx context.Context, logCh chan<- string) error {
+	dest, err := installViaBrew(ctx, "imagemagick", "convert", v.binDir, logCh)
+	if err != nil {
+		return err
+	}
+	v.path = dest
+	v.source = "autocut_bin"
+	return nil
 }
 
 func (v *ConvertValidator) Instructions() string {
-	return "Install ImageMagick: 'brew install imagemagick' or visit https://imagemagick.org"
+	return "Install ImageMagick: 'brew install imagemagick' (https://brew.sh) or visit https://imagemagick.org"
 }
 
 func (v *ConvertValidator) Status() ToolStatus {
@@ -542,6 +573,153 @@ func (v *ConvertValidator) Status() ToolStatus {
 		s.VersionOK = &ok
 	}
 	return s
+}
+
+// ---------------------------------------------------------------------------
+// installViaBrew — shared Homebrew install helper
+// ---------------------------------------------------------------------------
+
+// installViaBrew runs `brew install <formula>`, streams brew output to logCh,
+// then copies <prefix>/bin/<binaryName> into binDir.
+// Returns the destination path on success.
+func installViaBrew(ctx context.Context, formula, binaryName, binDir string, logCh chan<- string) (string, error) {
+	if runtime.GOOS != "darwin" {
+		return "", fmt.Errorf("auto-install via Homebrew is only supported on macOS")
+	}
+
+	brewPath, err := exec.LookPath("brew")
+	if err != nil {
+		logCh <- "Homebrew not found. Install from https://brew.sh and retry."
+		return "", fmt.Errorf("homebrew not found: %w", err)
+	}
+
+	logCh <- fmt.Sprintf("Installing %s via Homebrew (this may take a few minutes)...", formula)
+
+	cmd := exec.CommandContext(ctx, brewPath, "install", formula) //nolint:gosec
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("brew stdout pipe: %w", err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", fmt.Errorf("brew stderr pipe: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("brew install start: %w", err)
+	}
+
+	var wg sync.WaitGroup
+	scan := func(r io.Reader) {
+		defer wg.Done()
+		s := bufio.NewScanner(r)
+		for s.Scan() {
+			logCh <- s.Text()
+		}
+	}
+	wg.Add(2)
+	go scan(stdout)
+	go scan(stderr)
+	wg.Wait()
+
+	if err := cmd.Wait(); err != nil {
+		return "", fmt.Errorf("brew install %s: %w", formula, err)
+	}
+
+	logCh <- fmt.Sprintf("Locating %s binary...", binaryName)
+	prefixOut, err := exec.CommandContext(ctx, brewPath, "--prefix", formula).Output() //nolint:gosec
+	if err != nil {
+		return "", fmt.Errorf("brew --prefix %s: %w", formula, err)
+	}
+
+	prefix := strings.TrimSpace(string(prefixOut))
+	src := filepath.Join(prefix, "bin", binaryName)
+	if _, err := os.Stat(src); err != nil {
+		return "", fmt.Errorf("%s not found at %s after install: %w", binaryName, src, err)
+	}
+
+	dest := filepath.Join(binDir, binaryName)
+	if err := copyExecutable(src, dest); err != nil {
+		return "", fmt.Errorf("copy %s to %s: %w", binaryName, dest, err)
+	}
+
+	slog.Info("installed via homebrew", "formula", formula, "binary", binaryName, "path", dest)
+	logCh <- fmt.Sprintf("%s installed successfully.", binaryName)
+	return dest, nil
+}
+
+// ---------------------------------------------------------------------------
+// installViaNpm — shared npm global install helper
+// ---------------------------------------------------------------------------
+
+// installViaNpm runs `npm install -g <pkg>`, streams output to logCh,
+// then copies the installed binary into binDir so it is discoverable as
+// "autocut_bin". Returns the binDir path on success.
+func installViaNpm(ctx context.Context, pkg, binaryName, binDir string, logCh chan<- string) (string, error) {
+	npmPath, err := exec.LookPath("npm")
+	if err != nil {
+		logCh <- "npm not found. Install Node.js from https://nodejs.org and retry."
+		return "", fmt.Errorf("npm not found: %w", err)
+	}
+
+	logCh <- fmt.Sprintf("Installing %s via npm (this may take a moment)...", pkg)
+
+	cmd := exec.CommandContext(ctx, npmPath, "install", "-g", pkg) //nolint:gosec
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("npm stdout pipe: %w", err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", fmt.Errorf("npm stderr pipe: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("npm install start: %w", err)
+	}
+
+	var wg sync.WaitGroup
+	scan := func(r io.Reader) {
+		defer wg.Done()
+		s := bufio.NewScanner(r)
+		for s.Scan() {
+			logCh <- s.Text()
+		}
+	}
+	wg.Add(2)
+	go scan(stdout)
+	go scan(stderr)
+	wg.Wait()
+
+	if err := cmd.Wait(); err != nil {
+		return "", fmt.Errorf("npm install %s: %w", pkg, err)
+	}
+
+	// Resolve installed binary: check PATH first, then npm prefix -g
+	var npmBinPath string
+	if p, err := exec.LookPath(binaryName); err == nil {
+		npmBinPath = p
+	} else {
+		prefixOut, err := exec.CommandContext(ctx, npmPath, "prefix", "-g").Output() //nolint:gosec
+		if err != nil {
+			return "", fmt.Errorf("%s not found in PATH and npm prefix -g failed: %w", binaryName, err)
+		}
+		candidate := filepath.Join(strings.TrimSpace(string(prefixOut)), "bin", binaryName)
+		if _, err := os.Stat(candidate); err != nil {
+			return "", fmt.Errorf("%s not found at %s after install", binaryName, candidate)
+		}
+		npmBinPath = candidate
+	}
+
+	// Copy into binDir so it is classified as "autocut_bin" on status checks.
+	dest := filepath.Join(binDir, binaryName)
+	if err := copyExecutable(npmBinPath, dest); err != nil {
+		return "", fmt.Errorf("copy %s to %s: %w", binaryName, dest, err)
+	}
+
+	slog.Info("installed via npm", "pkg", pkg, "binary", binaryName, "path", dest)
+	logCh <- fmt.Sprintf("%s installed successfully.", binaryName)
+	return dest, nil
 }
 
 // ---------------------------------------------------------------------------

@@ -14,16 +14,6 @@ import { createLogger } from '@/lib/logger';
 
 const log = createLogger('ToolsSection');
 
-// The 6 tools required by the spec
-const SETTINGS_TOOLS = [
-  'yt-dlp',
-  'ffmpeg',
-  'whisper-cli',
-  'ollama',
-  'convert',
-  'TwitchDownloaderCLI',
-] as const;
-
 export function ToolsSection() {
   const goUrl = useAppStore((s) => s.goUrl);
   const tools = useSetupStore((s) => s.tools);
@@ -32,8 +22,6 @@ export function ToolsSection() {
   const fetchStatus = useSetupStore((s) => s.fetchStatus);
   const checkUpdate = useSetupStore((s) => s.checkUpdate);
   const fetchWhisperModels = useSetupStore((s) => s.fetchWhisperModels);
-  const installStates = useSetupStore((s) => s.installStates);
-  const installLogs = useSetupStore((s) => s.installLogs);
 
   useEffect(() => {
     if (tools.length === 0) {
@@ -49,19 +37,6 @@ export function ToolsSection() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Find active install logs to show below grid
-  const activeToolName = Object.entries(installStates).find(
-    ([, state]) => state === 'installing',
-  )?.[0];
-  const activeLogs = activeToolName ? (installLogs[activeToolName] ?? []) : [];
-
-  // Build display list: prefer tools from API, fall back to spec list with installed=false
-  const displayTools = SETTINGS_TOOLS.map((name) => {
-    const found = tools.find((t) => t.name === name);
-    if (found) return found;
-    return { name, installed: false, required: false };
-  });
 
   return (
     <section className="space-y-4">
@@ -83,7 +58,7 @@ export function ToolsSection() {
       </div>
 
       <div className="rounded-xl border border-border bg-card">
-        {displayTools.map((tool, i) => (
+        {tools.map((tool, i) => (
           <div key={tool.name}>
             {i > 0 && <Separator />}
             {tool.name === 'whisper-cli' ? (
@@ -117,21 +92,6 @@ export function ToolsSection() {
           open={dialogTool !== null}
           onOpenChange={(open) => { if (!open) setDialogTool(null); }}
         />
-      )}
-
-      {activeToolName && activeLogs.length > 0 && (
-        <div className="rounded-xl border border-border bg-card px-4 py-3 space-y-2">
-          <p className="text-xs font-semibold text-subtle uppercase tracking-wide">
-            Installing {activeToolName}…
-          </p>
-          <div className="max-h-32 overflow-y-auto flex flex-col gap-0.5">
-            {activeLogs.map((line, i) => (
-              <span key={i} className="font-mono text-[11px] text-subtle">
-                {line}
-              </span>
-            ))}
-          </div>
-        </div>
       )}
     </section>
   );

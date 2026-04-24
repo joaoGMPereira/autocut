@@ -1,8 +1,10 @@
 package configurator
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -87,6 +89,21 @@ func TestWhisperValidatorNoModel(t *testing.T) {
 	}
 	if s.Source != "no_model" {
 		t.Fatalf("expected Source=%q, got %q", "no_model", s.Source)
+	}
+}
+
+func TestWhisperValidatorInstall_NonDarwin(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("non-darwin gate test skipped on macOS")
+	}
+	v := &WhisperValidator{
+		baseValidator: baseValidator{name: "whisper-cli", required: true},
+	}
+	logCh := make(chan string, 10)
+	err := v.Install(context.Background(), logCh)
+	close(logCh)
+	if err == nil {
+		t.Fatal("expected error on non-darwin platform")
 	}
 }
 
