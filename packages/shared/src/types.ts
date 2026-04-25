@@ -108,3 +108,17 @@ export interface SSEProgressEvent {
   message?: string;
   error?: string;
 }
+
+// ─── Log Viewer ───────────────────────────────────────────────────────────────
+
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+export type LogSource = 'go' | 'web';
+
+export interface LogEntry {
+  id: string;
+  ts: string;
+  level: LogLevel;
+  source: LogSource;
+  msg: string;
+  attrs?: Record<string, unknown>;
+}
