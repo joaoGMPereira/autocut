@@ -6,6 +6,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { AppSidebar } from '@/components/app-sidebar';
 import { SetupProvider } from '@/components/setup/SetupProvider';
 import { UpdateStatusProvider } from '@/components/UpdateStatusProvider';
+import { LogsProvider } from '@/components/LogsProvider';
 import './globals.css';
 
 const spaceGrotesk = Space_Grotesk({
@@ -44,6 +45,7 @@ export default function RootLayout({
                 <SetupProvider>{children}</SetupProvider>
               </main>
             </div>
+            <LogsProvider />
           </UpdateStatusProvider>
         </TooltipProvider>
       </body>

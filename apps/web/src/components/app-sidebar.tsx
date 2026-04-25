@@ -9,8 +9,10 @@ import {
   Upload,
   Users,
   Settings,
+  Terminal,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useLogStore } from '@/store/logStore';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Separator } from '@/components/ui/separator';
 
@@ -30,6 +32,8 @@ const navItems: NavItem[] = [
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const toggleOpen = useLogStore((s) => s.toggleOpen);
+  const isLogOpen = useLogStore((s) => s.open);
 
   return (
     <aside className="flex flex-col w-14 bg-sidebar border-r border-sidebar-border shrink-0 pb-3 gap-1">
@@ -72,6 +76,28 @@ export function AppSidebar() {
             </Tooltip>
           );
         })}
+
+        {/* Log viewer toggle — pinned at bottom */}
+        <div className="mt-auto pt-1">
+          <Tooltip delayDuration={200}>
+            <TooltipTrigger asChild>
+              <button
+                onClick={toggleOpen}
+                className={cn(
+                  'flex items-center justify-center h-9 w-9 rounded-md transition-colors',
+                  'hover:bg-surface hover:text-brand',
+                  isLogOpen ? 'bg-surface text-brand' : 'text-subtle',
+                )}
+              >
+                <Terminal className="h-4 w-4" />
+                <span className="sr-only">Logs</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
+              Logs
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </nav>
     </aside>
   );
