@@ -28,6 +28,9 @@ func NewLogsHandler(sink *logsink.LogSink) *LogsHandler {
 // GetHistory returns the current ring buffer as a JSON array.
 func (h *LogsHandler) GetHistory(w http.ResponseWriter, r *http.Request) {
 	entries := h.sink.History()
+	if entries == nil {
+		entries = []logsink.LogEntry{}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(entries); err != nil {
 		h.log.Error("failed to encode log history", "err", err)
@@ -69,7 +72,7 @@ func (h *LogsHandler) GetStream(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 
 		case <-ticker.C:
-			if _, err := fmt.Fprintf(w, "data: {\"ping\":true}\n\n"); err != nil {
+			if _, err := fmt.Fprintf(w, "data: {\"type\":\"ping\"}\n\n"); err != nil {
 				return
 			}
 			flusher.Flush()
