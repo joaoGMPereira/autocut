@@ -57,7 +57,11 @@ func (s *LogSink) Handle(ctx context.Context, r slog.Record) error {
 
 	attrs := make(map[string]interface{})
 	r.Attrs(func(a slog.Attr) bool {
-		attrs[a.Key] = a.Value.Any()
+		v := a.Value.Resolve().Any()
+		if err, ok := v.(error); ok {
+			v = err.Error()
+		}
+		attrs[a.Key] = v
 		return true
 	})
 	if len(attrs) == 0 {

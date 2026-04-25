@@ -24,17 +24,21 @@ export function ToolsSection() {
   const fetchWhisperModels = useSetupStore((s) => s.fetchWhisperModels);
 
   useEffect(() => {
-    if (tools.length === 0) {
-      log.info('fetching tools status on mount');
-      void fetchStatus(goUrl);
-    }
-    void fetchWhisperModels(goUrl);
-    const installedAutoTools = tools.filter(
-      (t) => t.installed && (AUTO_INSTALL_TOOLS as readonly string[]).includes(t.name),
-    );
-    for (const t of installedAutoTools) {
-      void checkUpdate(goUrl, t.name);
-    }
+    const init = async () => {
+      if (tools.length === 0) {
+        log.info('fetching tools status on mount');
+        await fetchStatus(goUrl);
+      }
+      void fetchWhisperModels(goUrl);
+      const currentTools = useSetupStore.getState().tools;
+      const installedAutoTools = currentTools.filter(
+        (t) => t.installed && (AUTO_INSTALL_TOOLS as readonly string[]).includes(t.name),
+      );
+      for (const t of installedAutoTools) {
+        void checkUpdate(goUrl, t.name);
+      }
+    };
+    void init();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -47,9 +51,15 @@ export function ToolsSection() {
           size="sm"
           className="h-7 gap-1.5 text-xs"
           disabled={loading}
-          onClick={() => {
+          onClick={async () => {
             log.info('re-checking tool status');
-            void fetchStatus(goUrl);
+            await fetchStatus(goUrl);
+            const currentTools = useSetupStore.getState().tools;
+            for (const t of currentTools) {
+              if (t.installed && (AUTO_INSTALL_TOOLS as readonly string[]).includes(t.name)) {
+                void checkUpdate(goUrl, t.name);
+              }
+            }
           }}
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />

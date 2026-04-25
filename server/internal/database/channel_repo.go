@@ -139,6 +139,18 @@ func (r *ChannelRepo) UpdateTokens(ctx context.Context, id int64, accessToken, r
 	return nil
 }
 
+// UpdateChannelInfo sets channel_title and avatar_url without touching OAuth tokens.
+func (r *ChannelRepo) UpdateChannelInfo(ctx context.Context, id int64, title, avatarURL string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE channels SET channel_title = ?, avatar_url = ?, updated_at = ? WHERE id = ?`,
+		title, avatarURL, time.Now().UnixMilli(), id,
+	)
+	if err != nil {
+		return fmt.Errorf("update channel info %d: %w", id, err)
+	}
+	return nil
+}
+
 // Kotlin ref: toggleFavorite(id: Int): Boolean
 func (r *ChannelRepo) ToggleFavorite(ctx context.Context, id int64) error {
 	_, err := r.db.ExecContext(ctx,

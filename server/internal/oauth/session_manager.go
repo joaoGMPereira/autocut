@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -140,10 +141,13 @@ func (m *SessionManager) runCallbackServer(ctx context.Context, session *OAuthSe
 		}
 
 		slog.Info("oauth tokens saved", "channel_id", session.channelID, "expires_at", token.Expiry.UnixMilli())
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(`<!DOCTYPE html><html><head><title>AutoCut</title></head><body style="font-family:sans-serif;text-align:center;padding:40px"><h1>Authorization successful</h1><p>Return to AutoCut.</p></body></html>`))
 
-		go session.cancel()
+			go m.fetchAndSaveChannelInfo(session.channelID, token.AccessToken)
+
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(`<!DOCTYPE html><html><head><title>AutoCut</title></head><body style="font-family:sans-serif;text-align:center;padding:40px"><h1>Authorization successful</h1><p>Return to AutoCut.</p></body></html>`))
+
+			go session.cancel()
 	})
 
 	srv := &http.Server{Handler: mux}
@@ -157,4 +161,61 @@ func (m *SessionManager) runCallbackServer(ctx context.Context, session *OAuthSe
 	if err := srv.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("oauth callback server error", "channel_id", session.channelID, "err", err)
 	}
+}
+
+// fetchAndSaveChannelInfo calls the YouTube Data API to get the channel title and
+// avatar URL, then persists them. Runs in a goroutine; errors are logged but not fatal.
+func (m *SessionManager) fetchAndSaveChannelInfo(channelID int64, accessToken string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		"https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true", nil)
+	if err != nil {
+		slog.Warn("channel info request build failed", "channel_id", channelID, "err", err)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		slog.Warn("channel info fetch failed", "channel_id", channelID, "err", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		slog.Warn("channel info fetch non-200", "channel_id", channelID, "status", resp.StatusCode)
+		return
+	}
+
+	var body struct {
+		Items []struct {
+			Snippet struct {
+				Title      string `json:"title"`
+				Thumbnails struct {
+					Default struct {
+						URL string `json:"url"`
+					} `json:"default"`
+				} `json:"thumbnails"`
+			} `json:"snippet"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		slog.Warn("channel info decode failed", "channel_id", channelID, "err", err)
+		return
+	}
+	if len(body.Items) == 0 {
+		slog.Warn("channel info: no items returned", "channel_id", channelID)
+		return
+	}
+
+	title := body.Items[0].Snippet.Title
+	avatarURL := body.Items[0].Snippet.Thumbnails.Default.URL
+
+	if err := m.channelRepo.UpdateChannelInfo(ctx, channelID, title, avatarURL); err != nil {
+		slog.Warn("channel info save failed", "channel_id", channelID, "err", err)
+		return
+	}
+	slog.Info("channel info saved", "channel_id", channelID, "title", title)
 }

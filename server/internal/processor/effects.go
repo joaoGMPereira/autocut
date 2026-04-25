@@ -215,7 +215,7 @@ func BuildEffectChain(log *slog.Logger, req EffectRequest) ([]string, []func()) 
 			cleanups = append(cleanups, cleanup)
 			escapedPath := strings.ReplaceAll(assPath, "\\", "\\\\")
 			escapedPath = strings.ReplaceAll(escapedPath, ":", "\\:")
-			postFilters = append(postFilters, fmt.Sprintf("subtitles=%s", escapedPath))
+			postFilters = append(postFilters, fmt.Sprintf("subtitles=filename=%s", escapedPath))
 			log.Info("effect layer: captions", "ass_path", assPath)
 		}
 	}

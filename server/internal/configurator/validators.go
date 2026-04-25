@@ -3,6 +3,7 @@ package configurator
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -108,7 +109,13 @@ func (v *FfmpegValidator) Version() string {
 }
 
 func (v *FfmpegValidator) Install(ctx context.Context, logCh chan<- string) error {
-	dest, err := installViaBrew(ctx, "ffmpeg", "ffmpeg", v.binDir, logCh)
+	// Use "upgrade" when already installed so Homebrew replaces/reinstalls the binary;
+	// "install" is a no-op on Homebrew when the formula is already present.
+	subCmd := "install"
+	if v.IsInstalled() {
+		subCmd = "upgrade"
+	}
+	dest, err := installViaBrew(ctx, "ffmpeg", "ffmpeg", v.binDir, logCh, subCmd)
 	if err != nil {
 		return err
 	}
@@ -119,6 +126,10 @@ func (v *FfmpegValidator) Install(ctx context.Context, logCh chan<- string) erro
 
 func (v *FfmpegValidator) Instructions() string {
 	return "Install ffmpeg: 'brew install ffmpeg' (https://brew.sh) or visit https://ffmpeg.org/download.html"
+}
+
+func (v *FfmpegValidator) LatestVersion(ctx context.Context) (string, error) {
+	return resolveBrewLatestVersion(ctx, "ffmpeg")
 }
 
 func (v *FfmpegValidator) Status() ToolStatus {
@@ -563,10 +574,10 @@ func (v *ConvertValidator) Status() ToolStatus {
 // installViaBrew — shared Homebrew install helper
 // ---------------------------------------------------------------------------
 
-// installViaBrew runs `brew install <formula>`, streams brew output to logCh,
-// then copies <prefix>/bin/<binaryName> into binDir.
-// Returns the destination path on success.
-func installViaBrew(ctx context.Context, formula, binaryName, binDir string, logCh chan<- string) (string, error) {
+// installViaBrew runs `brew <subCmd> <formula>` (default subCmd: "install"),
+// streams brew output to logCh, then symlinks <brewBin>/<binaryName> into binDir.
+// Pass subCmd="upgrade" to update an already-installed formula.
+func installViaBrew(ctx context.Context, formula, binaryName, binDir string, logCh chan<- string, subCmd ...string) (string, error) {
 	if runtime.GOOS != "darwin" {
 		return "", fmt.Errorf("auto-install via Homebrew is only supported on macOS")
 	}
@@ -577,9 +588,14 @@ func installViaBrew(ctx context.Context, formula, binaryName, binDir string, log
 		return "", fmt.Errorf("homebrew not found")
 	}
 
-	logCh <- fmt.Sprintf("Installing %s via Homebrew (this may take a few minutes)...", formula)
+	brewSubCmd := "install"
+	if len(subCmd) > 0 && subCmd[0] != "" {
+		brewSubCmd = subCmd[0]
+	}
 
-	cmd := exec.CommandContext(ctx, brewPath, "install", formula) //nolint:gosec
+	logCh <- fmt.Sprintf("Running brew %s %s (this may take a few minutes)...", brewSubCmd, formula)
+
+	cmd := exec.CommandContext(ctx, brewPath, brewSubCmd, formula) //nolint:gosec
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return "", fmt.Errorf("brew stdout pipe: %w", err)
@@ -590,7 +606,7 @@ func installViaBrew(ctx context.Context, formula, binaryName, binDir string, log
 	}
 
 	if err := cmd.Start(); err != nil {
-		return "", fmt.Errorf("brew install start: %w", err)
+		return "", fmt.Errorf("brew %s start: %w", brewSubCmd, err)
 	}
 
 	var wg sync.WaitGroup
@@ -607,7 +623,7 @@ func installViaBrew(ctx context.Context, formula, binaryName, binDir string, log
 	wg.Wait()
 
 	if err := cmd.Wait(); err != nil {
-		return "", fmt.Errorf("brew install %s: %w", formula, err)
+		return "", fmt.Errorf("brew %s %s: %w", brewSubCmd, formula, err)
 	}
 
 	// Resolve the brew-managed symlink path (e.g. /opt/homebrew/bin/yt-dlp).
@@ -628,6 +644,36 @@ func installViaBrew(ctx context.Context, formula, binaryName, binDir string, log
 	slog.Info("installed via homebrew", "formula", formula, "binary", binaryName, "link", dest, "target", src)
 	logCh <- fmt.Sprintf("%s installed and linked at %s → %s", binaryName, dest, src)
 	return dest, nil
+}
+
+// resolveBrewLatestVersion fetches the latest stable version for a Homebrew
+// formula from the public Homebrew formulae REST API (no auth required).
+func resolveBrewLatestVersion(ctx context.Context, formula string) (string, error) {
+	reqCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet,
+		"https://formulae.brew.sh/api/formula/"+formula+".json", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "AutoCut/1.0")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("brew formulae API: %d", resp.StatusCode)
+	}
+	var body struct {
+		Versions struct {
+			Stable string `json:"stable"`
+		} `json:"versions"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return "", err
+	}
+	return body.Versions.Stable, nil
 }
 
 // ---------------------------------------------------------------------------
