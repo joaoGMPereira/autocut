@@ -109,13 +109,26 @@ func (v *FfmpegValidator) Version() string {
 }
 
 func (v *FfmpegValidator) Install(ctx context.Context, logCh chan<- string) error {
-	// Use "upgrade" when already installed so Homebrew replaces/reinstalls the binary;
-	// "install" is a no-op on Homebrew when the formula is already present.
+	brewPath := brewBin()
+	if brewPath == "" {
+		logCh <- "Homebrew not found. Install from https://brew.sh and retry."
+		return fmt.Errorf("homebrew not found")
+	}
+
+	// The standard Homebrew ffmpeg formula omits libass (required for subtitle
+	// burn-in). homebrew-ffmpeg/ffmpeg includes it by default.
+	logCh <- "Tapping homebrew-ffmpeg/ffmpeg (includes libass for subtitle support)..."
+	tapCmd := exec.CommandContext(ctx, brewPath, "tap", "homebrew-ffmpeg/ffmpeg") //nolint:gosec
+	if out, err := tapCmd.CombinedOutput(); err != nil {
+		// Already tapped is fine; log output and continue.
+		logCh <- strings.TrimSpace(string(out))
+	}
+
 	subCmd := "install"
 	if v.IsInstalled() {
 		subCmd = "upgrade"
 	}
-	dest, err := installViaBrew(ctx, "ffmpeg", "ffmpeg", v.binDir, logCh, subCmd)
+	dest, err := installViaBrew(ctx, "homebrew-ffmpeg/ffmpeg/ffmpeg", "ffmpeg", v.binDir, logCh, subCmd)
 	if err != nil {
 		return err
 	}
@@ -125,7 +138,7 @@ func (v *FfmpegValidator) Install(ctx context.Context, logCh chan<- string) erro
 }
 
 func (v *FfmpegValidator) Instructions() string {
-	return "Install ffmpeg: 'brew install ffmpeg' (https://brew.sh) or visit https://ffmpeg.org/download.html"
+	return "Install ffmpeg with libass: 'brew tap homebrew-ffmpeg/ffmpeg && brew install homebrew-ffmpeg/ffmpeg/ffmpeg'"
 }
 
 func (v *FfmpegValidator) LatestVersion(ctx context.Context) (string, error) {
