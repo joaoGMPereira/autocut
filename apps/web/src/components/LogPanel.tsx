@@ -1,7 +1,7 @@
 // apps/web/src/components/LogPanel.tsx
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Terminal, X, Search } from 'lucide-react';
 import { useLogStore } from '@/store/logStore';
 import type { LogEntry } from '@autocut/shared';
@@ -50,16 +50,16 @@ export function LogPanel() {
 
   const [autoScroll, setAutoScroll] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const bodyRef = useRef<HTMLDivElement>(null);
 
-  const filtered = search
-    ? entries.filter(
-        (e) =>
-          e.msg.toLowerCase().includes(search.toLowerCase()) ||
-          (e.attrs &&
-            JSON.stringify(e.attrs).toLowerCase().includes(search.toLowerCase())),
-      )
-    : entries;
+  const filtered = useMemo(() => {
+    if (!search) return entries;
+    const lowerSearch = search.toLowerCase();
+    return entries.filter(
+      (e) =>
+        e.msg.toLowerCase().includes(lowerSearch) ||
+        (e.attrs && JSON.stringify(e.attrs).toLowerCase().includes(lowerSearch)),
+    );
+  }, [entries, search]);
 
   // Auto-scroll to bottom when new entries arrive
   useEffect(() => {
@@ -108,7 +108,7 @@ export function LogPanel() {
       </div>
 
       {/* Body */}
-      <div ref={bodyRef} className="flex-1 overflow-y-auto px-3 py-1 font-mono text-xs">
+      <div className="flex-1 overflow-y-auto px-3 py-1 font-mono text-xs">
         {filtered.length === 0 ? (
           <p className="text-caption py-2">No log entries.</p>
         ) : (
