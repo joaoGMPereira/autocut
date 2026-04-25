@@ -5,15 +5,18 @@ import { useEffect } from 'react';
 import { useLogStore } from '@/store/logStore';
 import type { LogEntry, LogLevel } from '@autocut/shared';
 
+// Capture originals at module level — always the real browser functions,
+// immune to React Strict Mode double-invocation stale capture.
+const _origLog = typeof console !== 'undefined' ? console.log.bind(console) : undefined;
+const _origWarn = typeof console !== 'undefined' ? console.warn.bind(console) : undefined;
+const _origError = typeof console !== 'undefined' ? console.error.bind(console) : undefined;
+const _origDebug = typeof console !== 'undefined' ? console.debug.bind(console) : undefined;
+
 export function useLogsSSE(goUrl: string) {
   const addEntry = useLogStore((s) => s.addEntry);
 
   useEffect(() => {
-    // ── Console monkey-patch ──────────────────────────────────────────────────
-    const origLog = console.log.bind(console);
-    const origWarn = console.warn.bind(console);
-    const origError = console.error.bind(console);
-    const origDebug = console.debug.bind(console);
+    if (!_origLog || !_origWarn || !_origError || !_origDebug) return;
 
     function makePatch(level: LogLevel, orig: (...a: unknown[]) => void) {
       return (...args: unknown[]) => {
@@ -28,10 +31,10 @@ export function useLogsSSE(goUrl: string) {
       };
     }
 
-    console.log = makePatch('info', origLog);
-    console.warn = makePatch('warn', origWarn);
-    console.error = makePatch('error', origError);
-    console.debug = makePatch('debug', origDebug);
+    console.log = makePatch('info', _origLog);
+    console.warn = makePatch('warn', _origWarn);
+    console.error = makePatch('error', _origError);
+    console.debug = makePatch('debug', _origDebug);
 
     // ── SSE connection with exponential backoff ────────────────────────────────
     let es: EventSource | null = null;
@@ -78,10 +81,10 @@ export function useLogsSSE(goUrl: string) {
       unmounted = true;
       if (retryTimeout) clearTimeout(retryTimeout);
       es?.close();
-      console.log = origLog;
-      console.warn = origWarn;
-      console.error = origError;
-      console.debug = origDebug;
+      console.log = _origLog!;
+      console.warn = _origWarn!;
+      console.error = _origError!;
+      console.debug = _origDebug!;
     };
   }, [goUrl, addEntry]);
 }
