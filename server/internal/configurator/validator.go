@@ -14,13 +14,45 @@ import (
 	"time"
 )
 
+// loginShellPATHDirs returns the PATH directories from the user's login shell.
+// On macOS, GUI apps launched from Finder/Dock get a restricted launchd PATH that
+// excludes Homebrew (/opt/homebrew/bin). The login shell sources ~/.zprofile which
+// runs `eval "$(brew shellenv)"`, giving us the full user-configured PATH.
+// This is the same technique used by VS Code and IntelliJ for macOS GUI launches.
+func loginShellPATHDirs() []string {
+	if runtime.GOOS != "darwin" {
+		return nil
+	}
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "/bin/zsh"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	// -l = login shell (sources ~/.zprofile, no oh-my-zsh/.zshrc overhead)
+	out, err := exec.CommandContext(ctx, shell, "-l", "-c", `printf "%s" "$PATH"`).Output()
+	if err != nil || len(out) == 0 {
+		return nil
+	}
+	var dirs []string
+	for _, d := range strings.Split(string(out), string(os.PathListSeparator)) {
+		if d != "" {
+			dirs = append(dirs, d)
+		}
+	}
+	return dirs
+}
+
 // AugmentPATH prepends well-known binary directories — plus any extraDirs — to
 // the process PATH so exec.LookPath and exec.Command find tools installed by
 // Homebrew, in /usr/local/bin, or in the app's own bin dir (~/.autocut/bin)
 // even when launched with a restricted PATH (e.g. from Electron on macOS).
 // Safe to call multiple times — deduplicates the prepended dirs.
 func AugmentPATH(extraDirs ...string) {
-	dirs := append(extraDirs, wellKnownDirs()...)
+	var dirs []string
+	dirs = append(dirs, extraDirs...)
+	dirs = append(dirs, loginShellPATHDirs()...)
+	dirs = append(dirs, wellKnownDirs()...)
 	existing := os.Getenv("PATH")
 	existingSet := make(map[string]bool)
 	for _, p := range strings.Split(existing, string(os.PathListSeparator)) {
@@ -38,6 +70,23 @@ func AugmentPATH(extraDirs ...string) {
 		return
 	}
 	os.Setenv("PATH", strings.Join(append(toAdd, existing), string(os.PathListSeparator)))
+}
+
+// FindBinary returns the absolute path of name by checking binDir then
+// well-known system directories using direct file access — no PATH lookup.
+// Works even when the process has a restricted PATH (e.g. macOS GUI app).
+func FindBinary(name, binDir string) string {
+	return discoverBinary(name, binDir)
+}
+
+// brewBin returns the absolute path to the brew binary without relying on PATH.
+func brewBin() string {
+	for _, p := range []string{"/opt/homebrew/bin/brew", "/usr/local/bin/brew"} {
+		if fi, err := os.Stat(p); err == nil && fi.Mode()&0111 != 0 {
+			return p
+		}
+	}
+	return ""
 }
 
 // discoverBinary resolves a binary by name using the following priority:
@@ -130,6 +179,9 @@ func copyToAutoCutBin(name, resolvedPath, binDir string) error {
 	if err := os.Symlink(resolvedPath, dest); err != nil {
 		return fmt.Errorf("create symlink %s -> %s: %w", dest, resolvedPath, err)
 	}
+	// Remove quarantine from the symlink — macOS may block execution of
+	// quarantined binaries when spawned from a hardened-runtime process.
+	exec.Command("xattr", "-d", "com.apple.quarantine", dest).Run() //nolint:errcheck,gosec
 	return nil
 }
 
@@ -141,9 +193,10 @@ func detectSource(name, resolvedPath, binDir string) (string, string) {
 	if resolvedPath == "" {
 		return "", ""
 	}
-	// Already in autocut bin dir
+	// Already in autocut bin dir — clear quarantine in case it was set
 	autoCutBinPath := filepath.Join(binDir, name)
 	if resolvedPath == autoCutBinPath {
+		exec.Command("xattr", "-d", "com.apple.quarantine", resolvedPath).Run() //nolint:errcheck,gosec
 		return resolvedPath, "autocut_bin"
 	}
 	// Found via system — create symlink and expose the autocut bin path
@@ -198,12 +251,12 @@ func (b *baseValidator) IsInstalled() bool {
 func (b *baseValidator) ResolvedPath() string { return b.path }
 
 // versionWithArgs runs the binary with the given args and returns trimmed output.
-// Times out after 5s; returns "unknown" on timeout or error.
+// Times out after 8s; returns "unknown" on timeout or error.
 func (b *baseValidator) versionWithArgs(args ...string) string {
 	if b.path == "" {
 		return ""
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, b.path, args...) //nolint:gosec

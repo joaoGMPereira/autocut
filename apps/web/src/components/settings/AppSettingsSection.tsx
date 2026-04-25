@@ -29,7 +29,15 @@ const LANGUAGE_OPTIONS = [
   { value: 'es', label: 'ES — Español' },
 ];
 
+function getAppVersion(): string {
+  const api = (window as unknown as Record<string, unknown>).electronAPI as
+    | { appVersion?: string }
+    | undefined;
+  return api?.appVersion ?? '';
+}
+
 export function AppSettingsSection() {
+  const appVersion = getAppVersion();
   const goUrl = useAppStore((s) => s.goUrl);
   const { settings, loading, fetchSettings, saveAllSettings, saveSetting, saving, saveError, saveSuccess } =
     useSettingsStore();
@@ -79,6 +87,9 @@ export function AppSettingsSection() {
     <section className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-foreground">App Settings</h2>
+        {appVersion && (
+          <span className="text-xs text-subtle font-mono">v{appVersion}</span>
+        )}
         {saveSuccess && (
           <Badge variant="success" className="gap-1.5 text-[11px] font-semibold">
             <CheckCircle2 className="h-3.5 w-3.5" />

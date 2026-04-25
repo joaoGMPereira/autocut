@@ -367,6 +367,31 @@ if [[ "$PARALLEL" == "true" ]]; then
   rm -f "$ROOT_DIR/apps/desktop/bin/server-arm64"
   rm -f "$ROOT_DIR/apps/desktop/bin/server-x64"
 
+  # ── Merge latest-mac.yml (arm64 + x64) ────────────────────────
+  # electron-builder uploads latest-mac.yml per-arch during parallel build;
+  # last uploader (x64) overwrites the arm64 entry on GitHub.
+  # Merge both into a combined yml and re-upload.
+  if [[ "$RESULT_ARM64" == "success" && "$RESULT_X64" == "success" ]]; then
+    step "Gerando latest-mac.yml combinado (arm64 + x64)..."
+    if "$SCRIPT_DIR/merge-mac-yml.sh" \
+        "$RELEASE_DIR/latest-mac-arm64.yml" \
+        "$RELEASE_DIR/latest-mac-x64.yml" \
+        "$RELEASE_DIR/latest-mac.yml"; then
+      if [[ -n "${GH_TOKEN:-}" ]] && [[ "$NO_PUBLISH" != "true" ]]; then
+        gh release upload "v${VERSION}" "$RELEASE_DIR/latest-mac.yml" \
+          --repo "joaoGMPereira/autocut" --clobber 2>/dev/null && \
+          success "latest-mac.yml combinado uploaded" || \
+          warn "Falha ao fazer upload de latest-mac.yml"
+      fi
+    else
+      warn "Falha ao gerar latest-mac.yml combinado"
+    fi
+  elif [[ "$RESULT_ARM64" == "success" ]]; then
+    cp "$RELEASE_DIR/latest-mac-arm64.yml" "$RELEASE_DIR/latest-mac.yml" 2>/dev/null || true
+  elif [[ "$RESULT_X64" == "success" ]]; then
+    cp "$RELEASE_DIR/latest-mac-x64.yml" "$RELEASE_DIR/latest-mac.yml" 2>/dev/null || true
+  fi
+
 else
   # ═══════════════════════════════════════════════════════════════
   # MODO SEQUENCIAL (comportamento padrão)

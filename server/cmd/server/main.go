@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/joaoGMPereira/autocut/server/internal/ai"
@@ -84,9 +83,10 @@ func main() {
 	settingRepo := database.NewAppSettingRepo(db, slog.Default())
 	channelCfgRepo := database.NewChannelConfigRepo(db, slog.Default())
 	channelAnalyticsRepo := database.NewChannelAnalyticsRepo(db)
-	ytDlpBin := "yt-dlp"
-	if p, err := exec.LookPath("yt-dlp"); err == nil {
-		ytDlpBin = p
+	ytDlpBin := configurator.FindBinary("yt-dlp", autocutDirEarly.BinDir)
+	if ytDlpBin == "" {
+		ytDlpBin = "yt-dlp"
+		slog.Warn("yt-dlp not found in known paths, falling back to bare name")
 	}
 	ytDl := downloader.NewYouTubeDownloader(ytDlpBin)
 	twDl := downloader.NewTwitchDownloader(ytDlpBin)

@@ -6,6 +6,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { AppSidebar } from '@/components/app-sidebar';
 import { SetupProvider } from '@/components/setup/SetupProvider';
 import { UpdateStatusProvider } from '@/components/UpdateStatusProvider';
+import { DispatcherBar } from '@/components/dispatcher/DispatcherBar';
 import { LogsProvider } from '@/components/LogsProvider';
 import './globals.css';
 
@@ -44,6 +45,9 @@ export default function RootLayout({
               <main className="flex-1 overflow-auto">
                 <SetupProvider>{children}</SetupProvider>
               </main>
+            </div>
+            <div className="fixed bottom-4 right-4 z-50 w-80">
+              <DispatcherBar />
             </div>
             <LogsProvider />
           </UpdateStatusProvider>

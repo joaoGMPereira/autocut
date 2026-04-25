@@ -1,10 +1,11 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, app } from 'electron';
 import type { UpdateProgress } from '@autocut/shared';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   // Platform info
   platform: process.platform,
   arch: process.arch,
+  appVersion: app.getVersion(),
 
   // Auto-update
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),

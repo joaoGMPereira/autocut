@@ -98,8 +98,12 @@ func (d *YouTubeDownloader) ExtractMetadata(rawURL string) (VideoInfo, error) {
 		if err != nil {
 			return VideoInfo{}, err
 		}
+		jsonLine := extractJSONLine(out)
+		if jsonLine == nil {
+			return VideoInfo{}, fmt.Errorf("no JSON in yt-dlp output: %s", truncate(out, 200))
+		}
 		var parsed ytDlpJSON
-		if err := json.Unmarshal(out, &parsed); err != nil {
+		if err := json.Unmarshal(jsonLine, &parsed); err != nil {
 			return VideoInfo{}, err
 		}
 		return VideoInfo{
@@ -270,7 +274,11 @@ func (d *YouTubeDownloader) Download(videoURL, outDir string) (VideoInfo, error)
 	if err != nil {
 		return VideoInfo{}, err
 	}
-	info.FilePath = filepath.Join(outDir, videoID+".mp4")
+	if actual := findDownloadedFile(outDir, videoID); actual != "" {
+		info.FilePath = actual
+	} else {
+		info.FilePath = filepath.Join(outDir, videoID+".mp4")
+	}
 	d.reporter.Report(d.jobID, progress.Event{Stage: "done", Percent: 100})
 	return info, nil
 }
@@ -348,7 +356,11 @@ func (d *YouTubeDownloader) DownloadWithContext(ctx context.Context, videoURL, o
 		return VideoInfo{}, downloadErr
 	}
 
-	info.FilePath = cachedPath
+	if actual := findDownloadedFile(outDir, videoID); actual != "" {
+		info.FilePath = actual
+	} else {
+		info.FilePath = cachedPath
+	}
 	if onProgress != nil {
 		pct := 100.0
 		onProgress(pct, nil, nil)
@@ -406,7 +418,50 @@ func (d *YouTubeDownloader) DownloadWithOptions(videoURL, outDir, quality string
 		return VideoInfo{}, downloadErr
 	}
 
-	info.FilePath = cachedPath
+	if actual := findDownloadedFile(outDir, videoID); actual != "" {
+		info.FilePath = actual
+	} else {
+		info.FilePath = cachedPath
+	}
 	d.reporter.Report(d.jobID, progress.Event{Stage: "done", Percent: 100})
 	return info, nil
+}
+
+// findDownloadedFile returns the path of the video file yt-dlp produced for videoID in dir.
+// Prefers {videoID}.mp4; falls back to any {videoID}.* file that is not a partial download.
+func findDownloadedFile(dir, videoID string) string {
+	mp4 := filepath.Join(dir, videoID+".mp4")
+	if fi, err := os.Stat(mp4); err == nil && fi.Size() > 0 {
+		return mp4
+	}
+	matches, _ := filepath.Glob(filepath.Join(dir, videoID+".*"))
+	for _, m := range matches {
+		if strings.HasSuffix(m, ".part") || strings.HasSuffix(m, ".ytdl") || strings.HasSuffix(m, ".tmp") {
+			continue
+		}
+		if fi, err := os.Stat(m); err == nil && fi.Size() > 0 {
+			return m
+		}
+	}
+	return ""
+}
+
+// extractJSONLine returns the first line in out that starts with '{'.
+// yt-dlp sometimes prefixes JSON output with WARNING/INFO lines.
+func extractJSONLine(out []byte) []byte {
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "{") {
+			return []byte(line)
+		}
+	}
+	return nil
+}
+
+func truncate(b []byte, n int) string {
+	s := strings.TrimSpace(string(b))
+	if len(s) > n {
+		return s[:n] + "..."
+	}
+	return s
 }

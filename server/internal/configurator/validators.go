@@ -41,39 +41,23 @@ func NewYtDlpValidator(dir *AutoCutDir, settings SettingRepo) *YtDlpValidator {
 }
 
 func (v *YtDlpValidator) Version() string {
-	return v.versionWithArgs("--version")
+	// --ignore-config prevents user config (e.g. --cookies-from-browser) from
+	// running during a simple version check, which can hang in restricted envs.
+	return v.versionWithArgs("--ignore-config", "--version")
 }
 
 func (v *YtDlpValidator) Install(ctx context.Context, logCh chan<- string) error {
-	logCh <- "Detecting platform for yt-dlp download..."
-
-	var downloadURL string
-	switch runtime.GOOS {
-	case "darwin":
-		downloadURL = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos"
-	case "linux":
-		downloadURL = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
-	default:
-		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
-	}
-
-	dest := v.dir.BinPath("yt-dlp")
-	logCh <- fmt.Sprintf("Downloading yt-dlp from %s ...", downloadURL)
-
-	if err := downloadFile(ctx, downloadURL, dest, logCh); err != nil {
-		return fmt.Errorf("download yt-dlp: %w", err)
-	}
-	if err := os.Chmod(dest, 0o755); err != nil {
-		return fmt.Errorf("chmod yt-dlp: %w", err)
+	dest, err := installViaBrew(ctx, "yt-dlp", "yt-dlp", v.dir.BinDir, logCh)
+	if err != nil {
+		return err
 	}
 	v.path = dest
-	slog.Info("yt-dlp installed", "path", dest)
-	logCh <- "yt-dlp installed successfully."
+	v.source = "autocut_bin"
 	return nil
 }
 
 func (v *YtDlpValidator) Instructions() string {
-	return "Visit https://github.com/yt-dlp/yt-dlp/releases to download yt-dlp, or use 'brew install yt-dlp'."
+	return "Install yt-dlp via Homebrew: 'brew install yt-dlp' (https://brew.sh)"
 }
 
 func (v *YtDlpValidator) LatestVersion(ctx context.Context) (string, error) {
@@ -587,10 +571,10 @@ func installViaBrew(ctx context.Context, formula, binaryName, binDir string, log
 		return "", fmt.Errorf("auto-install via Homebrew is only supported on macOS")
 	}
 
-	brewPath, err := exec.LookPath("brew")
-	if err != nil {
+	brewPath := brewBin()
+	if brewPath == "" {
 		logCh <- "Homebrew not found. Install from https://brew.sh and retry."
-		return "", fmt.Errorf("homebrew not found: %w", err)
+		return "", fmt.Errorf("homebrew not found")
 	}
 
 	logCh <- fmt.Sprintf("Installing %s via Homebrew (this may take a few minutes)...", formula)
@@ -626,25 +610,23 @@ func installViaBrew(ctx context.Context, formula, binaryName, binDir string, log
 		return "", fmt.Errorf("brew install %s: %w", formula, err)
 	}
 
-	logCh <- fmt.Sprintf("Locating %s binary...", binaryName)
-	prefixOut, err := exec.CommandContext(ctx, brewPath, "--prefix", formula).Output() //nolint:gosec
-	if err != nil {
-		return "", fmt.Errorf("brew --prefix %s: %w", formula, err)
-	}
-
-	prefix := strings.TrimSpace(string(prefixOut))
-	src := filepath.Join(prefix, "bin", binaryName)
+	// Resolve the brew-managed symlink path (e.g. /opt/homebrew/bin/yt-dlp).
+	// Using brew's bin dir (same dir as the brew binary) keeps us out of the
+	// Cellar so the link stays valid across `brew upgrade`.
+	brewBinDir := filepath.Dir(brewPath)
+	src := filepath.Join(brewBinDir, binaryName)
 	if _, err := os.Stat(src); err != nil {
 		return "", fmt.Errorf("%s not found at %s after install: %w", binaryName, src, err)
 	}
 
+	// Create a symlink in binDir pointing at the brew-managed path.
 	dest := filepath.Join(binDir, binaryName)
-	if err := copyExecutable(src, dest); err != nil {
-		return "", fmt.Errorf("copy %s to %s: %w", binaryName, dest, err)
+	if err := copyToAutoCutBin(binaryName, src, binDir); err != nil {
+		return "", fmt.Errorf("link %s → %s: %w", dest, src, err)
 	}
 
-	slog.Info("installed via homebrew", "formula", formula, "binary", binaryName, "path", dest)
-	logCh <- fmt.Sprintf("%s installed successfully.", binaryName)
+	slog.Info("installed via homebrew", "formula", formula, "binary", binaryName, "link", dest, "target", src)
+	logCh <- fmt.Sprintf("%s installed and linked at %s → %s", binaryName, dest, src)
 	return dest, nil
 }
 
