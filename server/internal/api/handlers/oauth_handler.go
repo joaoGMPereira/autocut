@@ -33,18 +33,20 @@ func NewOAuthHandler(db *sql.DB, channelRepo *database.ChannelRepo, sessions *in
 
 // oauthProfileResponse is the JSON shape for an OAuth profile.
 type oauthProfileResponse struct {
-	ID        int64  `json:"id"`
-	Name      string `json:"name"`
-	ProjectID string `json:"project_id"`
-	IsDefault bool   `json:"is_default"`
+	ID             int64  `json:"id"`
+	Name           string `json:"name"`
+	ProjectID      string `json:"project_id"`
+	IsDefault      bool   `json:"is_default"`
+	HasCredentials bool   `json:"has_credentials"` // false when client_id is empty (legacy migration)
 }
 
 func toProfileResponse(o database.OAuthClientSecret) oauthProfileResponse {
 	return oauthProfileResponse{
-		ID:        o.ID,
-		Name:      o.Name,
-		ProjectID: o.ProjectID,
-		IsDefault: o.IsDefault,
+		ID:             o.ID,
+		Name:           o.Name,
+		ProjectID:      o.ProjectID,
+		IsDefault:      o.IsDefault,
+		HasCredentials: o.ClientID != "",
 	}
 }
 
@@ -126,6 +128,12 @@ func (h *OAuthHandler) PostOAuthProfile(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if clientID == "" || clientSecret == "" {
+		slog.Warn("oauth profile upload: missing client_id or client_secret in JSON")
+		http.Error(w, "JSON is missing client_id or client_secret", http.StatusBadRequest)
+		return
+	}
+
 	o := &database.OAuthClientSecret{
 		Name:         name,
 		ClientID:     clientID,
@@ -151,6 +159,92 @@ func (h *OAuthHandler) PostOAuthProfile(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(toProfileResponse(*created))
+}
+
+// PatchOAuthProfile re-uploads the OAuth JSON for an existing profile (updates client_id,
+// client_secret, project_id in-place without changing the ID or breaking channel links).
+// PATCH /api/oauth/profiles/{id} — multipart: file (.json)
+func (h *OAuthHandler) PatchOAuthProfile(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	existing, err := h.repo.GetByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, "oauth profile not found", http.StatusNotFound)
+		return
+	}
+
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		http.Error(w, "invalid multipart form", http.StatusBadRequest)
+		return
+	}
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "file is required", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		http.Error(w, "failed to read file", http.StatusInternalServerError)
+		return
+	}
+
+	var oauthJSON struct {
+		Installed *struct {
+			ClientID     string `json:"client_id"`
+			ClientSecret string `json:"client_secret"`
+			ProjectID    string `json:"project_id"`
+		} `json:"installed"`
+		Web *struct {
+			ClientID     string `json:"client_id"`
+			ClientSecret string `json:"client_secret"`
+			ProjectID    string `json:"project_id"`
+		} `json:"web"`
+	}
+	if err := json.Unmarshal(data, &oauthJSON); err != nil {
+		http.Error(w, "invalid OAuth JSON", http.StatusBadRequest)
+		return
+	}
+
+	var clientID, clientSecret, projectID string
+	if oauthJSON.Installed != nil {
+		clientID = oauthJSON.Installed.ClientID
+		clientSecret = oauthJSON.Installed.ClientSecret
+		projectID = oauthJSON.Installed.ProjectID
+	} else if oauthJSON.Web != nil {
+		clientID = oauthJSON.Web.ClientID
+		clientSecret = oauthJSON.Web.ClientSecret
+		projectID = oauthJSON.Web.ProjectID
+	} else {
+		http.Error(w, "unrecognised OAuth JSON format", http.StatusBadRequest)
+		return
+	}
+
+	if clientID == "" || clientSecret == "" {
+		http.Error(w, "JSON is missing client_id or client_secret", http.StatusBadRequest)
+		return
+	}
+
+	existing.ClientID = clientID
+	existing.ClientSecret = clientSecret
+	existing.ProjectID = projectID
+
+	if err := h.repo.Update(r.Context(), existing); err != nil {
+		slog.Error("update oauth profile failed", "id", id, "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	slog.Info("oauth profile updated", "id", id, "name", existing.Name)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(toProfileResponse(*existing))
 }
 
 // DeleteOAuthProfile deletes an OAuth profile by id.
@@ -218,6 +312,12 @@ func (h *OAuthHandler) InitOAuthFlow(w http.ResponseWriter, r *http.Request) {
 	profile, err := h.repo.GetByID(r.Context(), channel.OAuthClientSecretID.Int64)
 	if err != nil {
 		http.Error(w, "oauth profile not found", http.StatusBadRequest)
+		return
+	}
+
+	if profile.ClientID == "" {
+		slog.Error("oauth profile has empty client_id", "profile_id", profile.ID, "profile_name", profile.Name, "channel_id", id)
+		http.Error(w, "oauth profile has empty client_id — please delete and re-upload the OAuth JSON file", http.StatusBadRequest)
 		return
 	}
 

@@ -8,6 +8,7 @@ export interface OAuthProfile {
   name: string;
   project_id: string;
   is_default: boolean;
+  has_credentials: boolean;
 }
 
 interface OAuthStore {
@@ -15,6 +16,7 @@ interface OAuthStore {
   loading: boolean;
   fetchProfiles: (goUrl: string) => Promise<void>;
   uploadProfile: (goUrl: string, name: string, file: File) => Promise<void>;
+  patchProfile: (goUrl: string, id: number, file: File) => Promise<void>;
   deleteProfile: (goUrl: string, id: number) => Promise<void>;
   setDefault: (goUrl: string, id: number) => Promise<void>;
   initOAuth: (goUrl: string, channelId: number) => Promise<{ auth_url: string }>;
@@ -52,6 +54,20 @@ export const useOAuthStore = create<OAuthStore>((set) => ({
       throw new Error(body.error ?? `upload failed: ${res.status}`);
     }
     log.info('oauth profile uploaded', { name });
+  },
+
+  patchProfile: async (goUrl, id, file) => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${goUrl}/api/oauth/profiles/${id}`, {
+      method: 'PATCH',
+      body: form,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(text || `patch failed: ${res.status}`);
+    }
+    log.info('oauth profile patched', { id });
   },
 
   deleteProfile: async (goUrl, id) => {

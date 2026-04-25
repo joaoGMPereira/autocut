@@ -81,6 +81,7 @@ func NewRouter(
 	// OAuth profile endpoints
 	mux.HandleFunc("GET /api/oauth/profiles", oh.GetOAuthProfiles)
 	mux.HandleFunc("POST /api/oauth/profiles", oh.PostOAuthProfile)
+	mux.HandleFunc("PATCH /api/oauth/profiles/{id}", oh.PatchOAuthProfile)
 	mux.HandleFunc("DELETE /api/oauth/profiles/{id}", oh.DeleteOAuthProfile)
 	mux.HandleFunc("POST /api/oauth/profiles/{id}/set-default", oh.PostSetDefaultProfile)
 
@@ -146,7 +147,7 @@ func cors(next http.Handler) http.Handler {
 		} else {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 		}
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
 		if r.Method == http.MethodOptions {

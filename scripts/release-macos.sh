@@ -387,10 +387,26 @@ build_go_server() {
   mkdir -p "$ROOT_DIR/apps/desktop/bin"
   rm -f "$ROOT_DIR/apps/desktop/bin/$binary_name"
 
+  # Carregar credenciais OAuth de gh variables e injetar via ldflags
+  local db_pkg="github.com/joaoGMPereira/autocut/server/internal/database"
+  local ldflags="-s -w"
+  if eval "$("$ROOT_DIR/scripts/load-credentials.sh" 2>/dev/null)"; then
+    ldflags="${ldflags} -X ${db_pkg}.seedOAuthClientIDInerd=${OAUTH_CLIENT_ID_INERD}"
+    ldflags="${ldflags} -X ${db_pkg}.seedOAuthClientSecretInerd=${OAUTH_CLIENT_SECRET_INERD}"
+    ldflags="${ldflags} -X ${db_pkg}.seedOAuthClientIDMaromba=${OAUTH_CLIENT_ID_MAROMBA}"
+    ldflags="${ldflags} -X ${db_pkg}.seedOAuthClientSecretMaromba=${OAUTH_CLIENT_SECRET_MAROMBA}"
+    ldflags="${ldflags} -X ${db_pkg}.seedOAuthClientIDReact=${OAUTH_CLIENT_ID_REACT}"
+    ldflags="${ldflags} -X ${db_pkg}.seedOAuthClientSecretReact=${OAUTH_CLIENT_SECRET_REACT}"
+    ldflags="${ldflags} -X ${db_pkg}.seedOAuthClientIDGenLang=${OAUTH_CLIENT_ID_GEN_LANG}"
+    ldflags="${ldflags} -X ${db_pkg}.seedOAuthClientSecretGenLang=${OAUTH_CLIENT_SECRET_GEN_LANG}"
+  else
+    warn "OAUTH credentials não carregadas — binary sem seed de credenciais"
+  fi
+
   # Compilar com -C (Go 1.21+) para suportar output path customizado
   CGO_ENABLED=0 GOOS=darwin GOARCH="$GOARCH" go build \
     -C "$server_src" \
-    -trimpath -ldflags="-s -w" \
+    -trimpath -ldflags="${ldflags}" \
     -o "$ROOT_DIR/apps/desktop/bin/$binary_name" \
     ./cmd/server
 

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 )
 
@@ -52,6 +53,8 @@ var allMigrations = []migration{
 	{version: 18, name: "channel_analytics", fn: migrateV18},
 	{version: 19, name: "reset_stub_uploaded", fn: migrateV19},
 	{version: 20, name: "clear_orphan_publish_at", fn: migrateV20},
+	{version: 21, name: "backfill_oauth_seed_credentials", fn: migrateV21},
+	{version: 22, name: "backfill_oauth_seed_credentials_retry", fn: migrateV22},
 }
 
 // migrateV1 creates all 11 application tables.
@@ -1030,6 +1033,38 @@ func migrateV20(tx *sql.Tx) error {
 	return err
 }
 
+// migrateV21 backfills OAuth client_id / client_secret on installs where migrateV12
+// ran with empty ldflag values (build was made without scripts/load-credentials.sh).
+// Only updates rows whose credentials are still empty AND only when the seed constant
+// has a real value, so re-running on a bad build is a no-op and rows already populated
+// (manually or by a correct migrateV12) are never overwritten.
+func migrateV21(tx *sql.Tx) error {
+	seeds := []struct {
+		name         string
+		clientID     string
+		clientSecret string
+	}{
+		{"OAuth cortes_inerd", seedOAuthClientIDInerd, seedOAuthClientSecretInerd},
+		{"OAuth cortes_maromba", seedOAuthClientIDMaromba, seedOAuthClientSecretMaromba},
+		{"OAuth cortes_react", seedOAuthClientIDReact, seedOAuthClientSecretReact},
+		{"gen-lang-client-0861870513", seedOAuthClientIDGenLang, seedOAuthClientSecretGenLang},
+	}
+	for _, s := range seeds {
+		if s.clientID == "" || s.clientSecret == "" {
+			continue
+		}
+		_, err := tx.Exec(`
+			UPDATE oauth_client_secrets
+			SET client_id = ?, client_secret = ?, updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000
+			WHERE name = ? AND (client_id = '' OR client_secret = '')
+		`, s.clientID, s.clientSecret, s.name)
+		if err != nil {
+			return fmt.Errorf("migrateV21: backfill %q: %w", s.name, err)
+		}
+	}
+	return nil
+}
+
 // migrateV19 resets uploads that were incorrectly marked 'uploaded' by stub code
 // (no real YouTube ID). Returns them to 'queued' so the upload worker processes them.
 func migrateV19(tx *sql.Tx) error {
@@ -1039,6 +1074,47 @@ func migrateV19(tx *sql.Tx) error {
 		WHERE status = 'uploaded' AND (youtube_id IS NULL OR youtube_id = '')
 	`)
 	return err
+}
+
+// migrateV22 retries the OAuth credential backfill for installs where v21 ran
+// as a no-op (binary built without load-credentials.sh ldflags). Same logic as v21.
+func migrateV22(tx *sql.Tx) error {
+	return migrateV21(tx)
+}
+
+// backfillOAuthCredentials runs at every startup (not just during migration).
+// It updates any oauth_client_secrets row whose credentials are still empty,
+// as long as the binary has the real values injected via ldflags.
+// This is idempotent and safe to run repeatedly — rows with existing credentials
+// are never overwritten.
+func backfillOAuthCredentials(db *sql.DB, log *slog.Logger) {
+	seeds := []struct {
+		name         string
+		clientID     string
+		clientSecret string
+	}{
+		{"OAuth cortes_inerd", seedOAuthClientIDInerd, seedOAuthClientSecretInerd},
+		{"OAuth cortes_maromba", seedOAuthClientIDMaromba, seedOAuthClientSecretMaromba},
+		{"OAuth cortes_react", seedOAuthClientIDReact, seedOAuthClientSecretReact},
+		{"gen-lang-client-0861870513", seedOAuthClientIDGenLang, seedOAuthClientSecretGenLang},
+	}
+	for _, s := range seeds {
+		if s.clientID == "" || s.clientSecret == "" {
+			continue
+		}
+		res, err := db.Exec(`
+			UPDATE oauth_client_secrets
+			SET client_id = ?, client_secret = ?, updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000
+			WHERE name = ? AND (client_id = '' OR client_secret = '')
+		`, s.clientID, s.clientSecret, s.name)
+		if err != nil {
+			log.Error("backfill oauth credentials failed", "name", s.name, "err", err)
+			continue
+		}
+		if n, _ := res.RowsAffected(); n > 0 {
+			log.Info("oauth credentials backfilled", "name", s.name)
+		}
+	}
 }
 
 // migrateV7 creates the video_comments table for FP-016 (Comment Sync).

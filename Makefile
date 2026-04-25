@@ -25,7 +25,7 @@ else
 endif
 
 .PHONY: help dev run migrate wolf-build wolf-build-debug wolf-build-windows \
-        release release-unsigned release-macos release-macos-arch release-windows \
+        release release-unsigned release-parallel release-macos release-macos-arch release-windows \
         bump-version publish kill clean install
 
 ## Exibe este helper com todos os targets disponíveis
@@ -80,9 +80,11 @@ run: migrate
 ## Compilar server (release, CGO_ENABLED=0)
 ## Uso: make wolf-build           (arch nativa)
 ##      make wolf-build ARCH=x64  (Intel)
+## Carrega OAUTH_* de gh variables (scripts/load-credentials.sh) e injeta via ldflags.
 wolf-build:
+	@echo "▶ Loading OAuth credentials from gh variables..."
 	@echo "▶ Building server ($(GOARCH), release)..."
-	@$(MAKE) -C server build ARCH=$(GOARCH) GOOS=darwin
+	@eval "$$(./scripts/load-credentials.sh)" && $(MAKE) -C server build ARCH=$(GOARCH) GOOS=darwin
 	@echo "✔ server ($(GOARCH)) → apps/desktop/bin/server"
 	@file apps/desktop/bin/server
 
@@ -92,9 +94,11 @@ wolf-build-debug:
 	@cd server && go build -race -o ../apps/desktop/bin/server ./cmd/server
 
 ## Compilar server para Windows (x64)
+## Carrega OAUTH_* de gh variables (scripts/load-credentials.sh) e injeta via ldflags.
 wolf-build-windows:
+	@echo "▶ Loading OAuth credentials from gh variables..."
 	@echo "▶ Building server (windows/amd64, release)..."
-	@$(MAKE) -C server build ARCH=amd64 GOOS=windows
+	@eval "$$(./scripts/load-credentials.sh)" && $(MAKE) -C server build ARCH=amd64 GOOS=windows
 	@echo "✔ server.exe (windows/amd64) → apps/desktop/bin/server.exe"
 
 # ─── Release ──────────────────────────────────────────────────────────────────
@@ -140,6 +144,22 @@ release-unsigned: install wolf-build
 	@echo ""
 	@echo "✔ Release unsigned pronto! App em apps/desktop/release/"
 
+## Release unsigned arm64 + x64 — builds ambas as arquiteturas sem assinar
+release-parallel:
+	@echo ""
+	@echo "╔══════════════════════════════════════════════════════════╗"
+	@echo "║  AutoCut — Release Unsigned — arm64 + x64                ║"
+	@echo "╚══════════════════════════════════════════════════════════╝"
+	@echo ""
+	@echo "→ arm64..."
+	@$(MAKE) release-unsigned ARCH=arm64
+	@echo ""
+	@echo "→ x64..."
+	@$(MAKE) release-unsigned ARCH=x64
+	@echo ""
+	@echo "✔ Artefatos em apps/desktop/release/"
+	@ls -1 apps/desktop/release/*.dmg 2>/dev/null | while read f; do echo "    $$(basename $$f)"; done
+
 ## Release build simples (sem sign/notarize) — igual release-unsigned mas sem abrir o app
 release: install wolf-build
 	@echo "▶ Building Next.js standalone..."
@@ -170,6 +190,17 @@ release-macos:
 	@echo ""
 	@ARCH=arm64 ./scripts/release-macos.sh
 	@ARCH=x64 ./scripts/release-macos.sh
+	@echo ""
+	@echo "→ Gerando latest-mac.yml combinado (arm64 + x64)..."
+	@./scripts/merge-mac-yml.sh apps/desktop/release/latest-mac-arm64.yml apps/desktop/release/latest-mac-x64.yml apps/desktop/release/latest-mac.yml
+	@if [ -n "$(GH_TOKEN)" ]; then \
+		VER=$$(node -p "require('./$(VERSION_FILE)').version"); \
+		echo "→ Publicando latest-mac.yml no GitHub release v$$VER..."; \
+		GH_TOKEN=$(GH_TOKEN) gh release upload "v$$VER" apps/desktop/release/latest-mac.yml --clobber; \
+		echo "✔ latest-mac.yml publicado"; \
+	else \
+		echo "  (GH_TOKEN não definido — suba apps/desktop/release/latest-mac.yml manualmente)"; \
+	fi
 	@echo ""
 	@echo "✔ Build de ambas as arquiteturas concluído!"
 	@echo "  Artefatos em apps/desktop/release/"

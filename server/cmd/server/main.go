@@ -53,6 +53,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Augment PATH early — before any exec.LookPath or exec.Command call — so
+	// tools installed in ~/.autocut/bin, /opt/homebrew/bin, or /usr/local/bin
+	// are found even when the server is spawned from Electron with a restricted PATH.
+	autocutDirEarly := configurator.NewAutoCutDirFromPath(*dir)
+	configurator.AugmentPATH(autocutDirEarly.BinDir)
+
 	db, err := database.Open(*dir, slog.Default())
 	if err != nil {
 		slog.Error("failed to open database", "err", err)
@@ -78,8 +84,12 @@ func main() {
 	settingRepo := database.NewAppSettingRepo(db, slog.Default())
 	channelCfgRepo := database.NewChannelConfigRepo(db, slog.Default())
 	channelAnalyticsRepo := database.NewChannelAnalyticsRepo(db)
-	ytDl := downloader.NewYouTubeDownloader("")
-	twDl := downloader.NewTwitchDownloader("")
+	ytDlpBin := "yt-dlp"
+	if p, err := exec.LookPath("yt-dlp"); err == nil {
+		ytDlpBin = p
+	}
+	ytDl := downloader.NewYouTubeDownloader(ytDlpBin)
+	twDl := downloader.NewTwitchDownloader(ytDlpBin)
 
 	highlightRepo := database.NewPipelineHighlightRepo(db, slog.Default())
 	clipRepo := database.NewPipelineClipRepo(db, slog.Default())
@@ -90,7 +100,7 @@ func main() {
 	downloadHandler := handlers.NewDownloadHandler(sseHub, ytDl, twDl, nil)
 	urlHistoryHandler := handlers.NewURLHistoryHandler(historyRepo)
 
-	autocutDir := configurator.NewAutoCutDirFromPath(*dir)
+	autocutDir := autocutDirEarly
 	if err := autocutDir.Ensure(); err != nil {
 		slog.Warn("failed to ensure autocut dirs", "err", err)
 	}
@@ -120,11 +130,7 @@ func main() {
 	if claudeErr != nil {
 		slog.Warn("claude CLI not available — metadata generation disabled", "err", claudeErr)
 	}
-	ytDlpPath := "yt-dlp"
-	if p, err := exec.LookPath("yt-dlp"); err == nil {
-		ytDlpPath = p
-	}
-	channelAnalyzer := ai.NewChannelAnalyzer(ytDlpPath, channelAnalyticsRepo)
+	channelAnalyzer := ai.NewChannelAnalyzer(ytDlpBin, channelAnalyticsRepo)
 	metadataGen := ai.NewMetadataGenerator(claudeCLI, repo, clipRepo, highlightRepo, channelCfgRepo, settingRepo, sseHub, channelAnalyticsRepo, channelAnalyzer)
 	metadataGen.SetChannelBaseRepo(channelRepo)
 	pipelineSvc.SetMetadataGenerator(metadataGen)

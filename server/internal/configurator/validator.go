@@ -14,6 +14,32 @@ import (
 	"time"
 )
 
+// AugmentPATH prepends well-known binary directories — plus any extraDirs — to
+// the process PATH so exec.LookPath and exec.Command find tools installed by
+// Homebrew, in /usr/local/bin, or in the app's own bin dir (~/.autocut/bin)
+// even when launched with a restricted PATH (e.g. from Electron on macOS).
+// Safe to call multiple times — deduplicates the prepended dirs.
+func AugmentPATH(extraDirs ...string) {
+	dirs := append(extraDirs, wellKnownDirs()...)
+	existing := os.Getenv("PATH")
+	existingSet := make(map[string]bool)
+	for _, p := range strings.Split(existing, string(os.PathListSeparator)) {
+		existingSet[p] = true
+	}
+	var toAdd []string
+	seen := make(map[string]bool)
+	for _, d := range dirs {
+		if d != "" && !existingSet[d] && !seen[d] {
+			toAdd = append(toAdd, d)
+			seen[d] = true
+		}
+	}
+	if len(toAdd) == 0 {
+		return
+	}
+	os.Setenv("PATH", strings.Join(append(toAdd, existing), string(os.PathListSeparator)))
+}
+
 // discoverBinary resolves a binary by name using the following priority:
 //  1. Extra paths (BinDir) — tools explicitly placed in ~/.autocut/bin win
 //  2. Default ~/.autocut/bin fallback — finds production binaries when running

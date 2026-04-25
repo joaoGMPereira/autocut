@@ -38,6 +38,8 @@ func Open(dir string, log *slog.Logger) (*sql.DB, error) {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
+	backfillOAuthCredentials(db, log)
+
 	log.Info("database opened", "path", path)
 	return db, nil
 }
