@@ -27,6 +27,7 @@ func NewRouter(
 	mh *handlers.MetadataHandler,
 	qh *handlers.QueueHandler,
 	cch *handlers.ChannelConfigHandler,
+	lh *handlers.LogsHandler,
 ) http.Handler {
 	mux := http.NewServeMux()
 
@@ -126,6 +127,10 @@ func NewRouter(
 
 	// Stats endpoint
 	mux.HandleFunc("GET /api/stats", sth.GetStats)
+
+	// In-app log viewer endpoints
+	mux.HandleFunc("GET /api/logs/stream", lh.GetStream)
+	mux.HandleFunc("GET /api/logs/history", lh.GetHistory)
 
 	// Health check (both paths — Electron polls /health, web uses /api/health)
 	health := func(w http.ResponseWriter, r *http.Request) {

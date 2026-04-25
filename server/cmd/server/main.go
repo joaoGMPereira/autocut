@@ -17,6 +17,7 @@ import (
 	"github.com/joaoGMPereira/autocut/server/internal/database"
 	"github.com/joaoGMPereira/autocut/server/internal/downloader"
 	"github.com/joaoGMPereira/autocut/server/internal/hub"
+	"github.com/joaoGMPereira/autocut/server/internal/logsink"
 	internaloauth "github.com/joaoGMPereira/autocut/server/internal/oauth"
 	"github.com/joaoGMPereira/autocut/server/internal/pipeline"
 	"github.com/joaoGMPereira/autocut/server/internal/stats"
@@ -44,9 +45,8 @@ func main() {
 		}
 	}
 
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	})))
+	sink := logsink.New(os.Stderr)
+	slog.SetDefault(slog.New(sink))
 
 	if err := os.MkdirAll(*dir, 0o755); err != nil {
 		slog.Error("failed to create data directory", "dir", *dir, "err", err)
@@ -136,6 +136,7 @@ func main() {
 	pipelineSvc.SetMetadataGenerator(metadataGen)
 	metadataHandler := handlers.NewMetadataHandler(repo, clipRepo, metadataGen, sseHub)
 	channelConfigHandler := handlers.NewChannelConfigHandler(channelCfgRepo)
+	logsHandler := handlers.NewLogsHandler(sink)
 
 	router := api.NewRouter(
 		pipelineHandler,
@@ -153,6 +154,7 @@ func main() {
 		metadataHandler,
 		queueHandler,
 		channelConfigHandler,
+		logsHandler,
 	)
 
 	// Start YouTube upload worker (uploads scheduled items when publish_at is reached)
